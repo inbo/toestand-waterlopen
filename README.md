@@ -4,7 +4,7 @@
 ![GitHub repo size](https://img.shields.io/github/repo-size/inbo/toestand-waterlopen)
 <!-- badges: end -->
 
-# toestand-waterlopen
+# Analyse toestand waterlopen Vlaanderen (VMM monitoringsdata)
 
 [De Lombaerde, Emiel![ORCID logo](https://info.orcid.org/wp-content/uploads/2019/11/orcid_16x16.png)](https://orcid.org/0000-0002-0050-2735)[^aut][^cre][^inbo.be]
 Research Institute for Nature and Forest (INBO)[^cph][^fnd]
