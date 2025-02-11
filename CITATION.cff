@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: If you use this software, please cite it using these metadata.
+title: "Analyse toestand waterlopen Vlaanderen (VMM monitoringsdata)"
+authors:
+- given-names: Emiel
+  family-names: De Lombaerde
+  affiliation: Instituut voor Natuur- en Bosonderzoek (INBO)
+  orcid: 0000-0002-0050-2735
+keywords:
+- vmm monitoringsdata
+- krw
+- ecologische toestand
+contact:
+- given-names: Emiel
+  family-names: De Lombaerde
+  affiliation: Instituut voor Natuur- en Bosonderzoek (INBO)
+  orcid: 0000-0002-0050-2735
+doi: ~
+license: CC-BY-4.0
+repository-code: https://github.com/inbo/toestand-waterlopen/
+type: software
+abstract: "Replace this with a short description of the project.\nIt becomes the abstract
+  of the project in the citation information.\nAnd the project description at https://zenodo.org"
