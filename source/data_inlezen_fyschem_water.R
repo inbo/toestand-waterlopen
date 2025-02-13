@@ -1,20 +1,13 @@
-# packages inlezen ----
-library(tidyverse)
-library(openxlsx2)
-library(readxl)
-library(inbodb)
-library(here)
-library(sf)
-
 # Analyseresultaten ----
 
-# List all sheet names
+# meetresultaten inlezen ----
 sheet_names <- excel_sheets(here(
   "data",
   "241024_Analyseresultaten per meetplaats_2010_2024.xlsx"
 ))
 
-# Limit to the first 8 sheets (if there are fewer than 8 sheets, adjust accordingly)
+# Limit to the first 8 sheets (if there are fewer than 8 sheets,
+# adjust accordingly)
 sheets_to_read <- sheet_names[1:8]
 
 # Read all sheets into a list of dataframes

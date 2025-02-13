@@ -1,14 +1,3 @@
-# packages inlezen ----
-library(tidyverse)
-library(openxlsx2)
-library(readxl)
-library(inbodb)
-library(here)
-library(sf)
-conflicted::conflict_prefer("select", "dplyr")
-conflicted::conflict_prefer("read_xlsx", "readxl")
-conflicted::conflicts_prefer(dplyr::filter)
-
 # data macro-invertebraten inlezen ----
 sheetnames <- excel_sheets(here("data", "macroinvertebraten 2010-2023.xlsx"))
 vmm_mi <- lapply(sheetnames[1:5], read_excel,
