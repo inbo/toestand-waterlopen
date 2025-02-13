@@ -81,50 +81,9 @@ mi_deelmaatlatten0 <- vmm_mi$bbi_en_mmif_deelmaatlatten %>%
 
 # weglaten alle meren, vijvers, geisoleerde waterlichamen, meren +
 # toevoegen groep (rivier, beek, kempen, polder)
-mi_deelmaatlatten1 <- mi_deelmaatlatten0 %>%
+mi_data0 <- mi_deelmaatlatten0 %>%
   filter(waterlooptype != "Geïsoleerd water" &
            !(waterlichaamcategorie %in% c("meer", "overgangswater"))) %>%
-
-# aantal uniek meetplaatsen per statuut (onafh van jaar)
-mi_deelmaatlatten1 %>%
-  distinct(statuut, meetplaats) %>% # Rem. duplicate meetplaats within statuut
-  group_by(statuut) %>%
-  summarise(unique_meetplaats_count = n())
-
-# recentste jaar telkens per meetplaats
-
-mi_deelmaatlatten1 %>%
-  group_by(meetplaats) %>%
-  filter(jaar == max(jaar))
-
-# vroegste jaar telkens per meetplaats
-mi_deelmaatlatten1 %>%
-  group_by(meetplaats) %>%
-  filter(jaar == min(jaar))
-
-# meetplaatsen na 2019
-mi_deelmaatlatten1 %>%
-  filter(jaar >= 2019) %>%
-  select(meetplaats) %>%
-  unique() %>%
-  plot()
-
-# plot trend mmif per statuut
-
-mi_deelmaatlatten1 %>%
-  group_by(meetplaats) %>%
-  ggplot(aes(jaar, mmif)) +
-  geom_smooth(method = "gam") +
-  facet_wrap(~statuut)
-
-mi_deelmaatlatten1 %>%
-  ggplot() +
-  # geom_line(aes(jaar, mmif, group = meetplaats)) +
-  geom_smooth(aes(jaar, mmif), method = "gam") +
-  facet_wrap(~statuut)
-
-mi_deelmaatlatten1 %>%
-  ggplot() +
-  # geom_line(aes(jaar, mmif, group = meetplaats)) +
-  geom_smooth(aes(jaar, mmif), method = "gam") +
-  facet_wrap(~statuut)
+  left_join(waterlopen_groep, by = "type")
+mi_data <- janitor::clean_names(mi_data0)
+  save(mi_data, file = "source/mi_data.rdata")
