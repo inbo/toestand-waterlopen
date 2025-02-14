@@ -46,7 +46,9 @@ mi_deelmaatlatten0 <- vmm_mi$bbi_en_mmif_deelmaatlatten %>%
         statuut,
         type,
         waterlooptype,
-        waterlichaamcategorie
+        waterlichaamcategorie,
+        categorie,
+        bekken
       ),
     by = "meetplaats"
   ) %>%
