@@ -78,3 +78,30 @@ mi_data0 <- mi_deelmaatlatten0 %>%
   left_join(waterlopen_groep, by = "type")
 mi_data <- janitor::clean_names(mi_data0)
   save(mi_data, file = "source/mi_data.rdata")
+
+# soortendata ----
+mi_soorten <- vmm_mi$bemonsteringen %>%
+    # mutate(datum_monstername = as.Date(datum_monstername, "%Y-%m-%d")) %>%
+    arrange(meetplaats, datum_monstername) %>%
+    left_join(
+      vmm_mi$meetplaatsen %>%
+        select(
+          meetplaats,
+          lambert72_x,
+          lambert72_y,
+          waterlichaam,
+          bekken,
+          vhag,
+          waterloop,
+          categorie,
+          statuut,
+          type,
+          waterlooptype,
+          waterlichaamcategorie,
+          categorie,
+          bekken
+        ),
+      by = "meetplaats"
+    )
+save(mi_soorten, file = "source/mi_soorten.rdata")
+

@@ -108,7 +108,27 @@ plot_waterlopen_statuut("Kunstmatig", "Kunstmatige waterlopen")
 
 plot_waterlopen_statuut("Default", "Niet toegewezen")
 
-lmer(data = mi_data, mmif ~ o2 + jaar + groep + (1 | meetplaats))
+conflicted::conflicts_prefer(lmerTest::lmer)
+model <- lmer(data = mi_data %>%
+       filter(statuut == "Natuurlijk"),
+     mmif ~ o2 + jaar + groep + (1 | meetplaats))
+
+pred <- ggpredict(model, terms = "jaar")
+
+# Plot
+ggplot(pred, aes(x = x, y = predicted)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2) +
+  labs(x = "Jaar", y = "MMIF", title = "Conditional Effect of Jaar")
+
+pred <- ggpredict(model, terms = "groep")
+
+ggplot(pred, aes(x = x, y = predicted)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2) +
+  labs(x = "Statuut", y = "Predicted Reaction Time", title = "Conditional Effects of Days") +
+  theme_minimal()
+
 
 # Overzichtkaartjes ----
 
