@@ -80,7 +80,7 @@ mi_data <- janitor::clean_names(mi_data0)
   save(mi_data, file = "source/mi_data.rdata")
 
 # soortendata ----
-mi_soorten <- vmm_mi$bemonsteringen %>%
+mi_soorten0 <- vmm_mi$bemonsteringen %>%
     # mutate(datum_monstername = as.Date(datum_monstername, "%Y-%m-%d")) %>%
     arrange(meetplaats, datum_monstername) %>%
     left_join(
@@ -103,5 +103,9 @@ mi_soorten <- vmm_mi$bemonsteringen %>%
         ),
       by = "meetplaats"
     )
+mi_soorten <- mi_soorten0 %>%
+    filter(waterlooptype != "Geïsoleerd water" &
+             !(waterlichaamcategorie %in% c("meer", "overgangswater"))) %>%
+    left_join(waterlopen_groep, by = "type")
 save(mi_soorten, file = "source/mi_soorten.rdata")
 
