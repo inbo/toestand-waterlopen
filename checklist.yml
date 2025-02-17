@@ -7,7 +7,6 @@ required:
 - checklist
 - filename conventions
 - folder conventions
-- lintr
 spelling:
   default: nl-BE
   ignore:
