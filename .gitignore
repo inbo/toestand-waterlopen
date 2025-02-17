@@ -16,8 +16,8 @@
 .Rproj.user
 .Ruserdata
 .httr-oauth
+data
 docs
 libs
 output
 renv/library
-data
