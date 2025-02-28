@@ -48,7 +48,8 @@ mi_deelmaatlatten0 <- vmm_mi$bbi_en_mmif_deelmaatlatten %>%
         waterlooptype,
         waterlichaamcategorie,
         categorie,
-        bekken
+        bekken,
+        stroming
       ),
     by = "meetplaats"
   ) %>%
@@ -73,8 +74,8 @@ mi_deelmaatlatten0 <- vmm_mi$bbi_en_mmif_deelmaatlatten %>%
 # weglaten alle meren, vijvers, geisoleerde waterlichamen, meren +
 # toevoegen groep (rivier, beek, kempen, polder)
 mi_data0 <- mi_deelmaatlatten0 %>%
-  filter(waterlooptype != "Geïsoleerd water" &
-           !(waterlichaamcategorie %in% c("meer", "overgangswater"))) %>%
+  # filter(waterlooptype != "Geïsoleerd water" &
+  #          !(waterlichaamcategorie %in% c("meer", "overgangswater"))) %>%
   left_join(waterlopen_groep, by = "type")
 mi_data <- janitor::clean_names(mi_data0)
   save(mi_data, file = "source/mi_data.rdata")
@@ -99,13 +100,14 @@ mi_soorten0 <- vmm_mi$bemonsteringen %>%
           waterlooptype,
           waterlichaamcategorie,
           categorie,
-          bekken
+          bekken,
+          stroming
         ),
       by = "meetplaats"
     )
 mi_soorten <- mi_soorten0 %>%
-    filter(waterlooptype != "Geïsoleerd water" &
-             !(waterlichaamcategorie %in% c("meer", "overgangswater"))) %>%
+    # filter(waterlooptype != "Geïsoleerd water" &
+    #          !(waterlichaamcategorie %in% c("meer", "overgangswater"))) %>%
     left_join(waterlopen_groep, by = "type")
 save(mi_soorten, file = "source/mi_soorten.rdata")
 

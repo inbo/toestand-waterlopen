@@ -2,6 +2,21 @@
 source(here::here("source", "inladen_packages.R"))
 load(here("source", "mi_data.rdata"))
 
+# meetpunten macroinvertebraten voor landgebruik
+
+mi_data %>%
+  distinct(categorie, waterlooptype)
+
+mi_data_analyse <- mi_data %>%
+  filter(categorie != "Vijver") %>%
+  filter(waterlooptype != "Geïsoleerd water") %>%
+  filter(waterlichaamcategorie != "meer") %>%
+  mutate(meetplaats = paste0("OW", meetplaats)) %>%
+  select(meetplaats) %>%
+  unique()
+
+st_write(mi_data_analyse, dsn = here("data", "meetpunten", "mi_meetpunten.shp"))
+
 # aantal uniek meetplaatsen per statuut (onafh van jaar)
 mi_data %>%
   distinct(statuut, meetplaats) %>% # Rem. duplicate meetplaats within statuut
@@ -44,8 +59,8 @@ mi_data %>%
 # welk type waterlopen zijn de defaults
 mi_data %>%
   st_drop_geometry() %>%
-  filter(statuut == "Default") %>%
-  group_by(categorie, waterlooptype) %>%
+  filter(statuut == "Default") %>% View
+  group_by(categorie, waterlooptype, groep) %>%
   summarise(n())
 
 # plots van de mmif en deelmaatlatten de verschillende types ----
