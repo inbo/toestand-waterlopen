@@ -6,62 +6,43 @@ source(here::here("source", "inladen_packages.R"))
 # Go to preferences in QGIS select processing select whitebox and fill in path
 # by searching for whitebox_tools.exe file
 
-qgis_algorithms() %>% View
+# Help functies voor qgis process
+
+qgis_algorithms() %>% View # algoritmes bekijken
+qgis_show_help("native:zonalhistogram") # argumenten bekijken
 
 # afstroomgebieden voor alle meetpunten bepalen ----
 dtm_hydro_breached <- rast(here("data", "dem", "DHMVIIDTMRAS025mto50m_breachedDTM.tif"))
 plot(dtm_hydro_breached)
 
-dtm_h
-
-# Define the bounding box for Ghent and surroundings (in Belgian Lambert 72)
-# Approximate bounding box for Ghent in EPSG:31370
-xmin <- 99500   # Minimum X coordinate
-xmax <- 110500  # Maximum X coordinate
-ymin <- 185000  # Minimum Y coordinate
-ymax <- 197000  # Maximum Y coordinate
-
-# Create a SpatExtent object
-ghent_extent <- ext(xmin, xmax, ymin, ymax)
-
-# Crop the DEM raster
-dtm_cropped <- crop(dtm_hydro, ghent_extent)
-
-qgis_run_algorithm(
-  "wbt:Hillshade",
-  dem = dtm_cropped,
-  output = here("data", "dem", "ghent_hillshade.tif"),
-  azimuth = 115
-)
-
-hillshade <- rast(here("data", "dem", "ghent_hillshade.tif"))
-
-tmap_mode("view")
-tm_shape(hillshade) +
-  tm_raster(style = "cont", palette = "-Greys", legend.show = FALSE) +
-  tm_scale_bar()
-
 # flow accumulation
 #qgis_arguments("wbt:D8FlowAccumulation")
-d8_flow <- qgis_run_algorithm(
-  "wbt:D8FlowAccumulation",
-  input = here("data", "dem", "DHMVIIDTMRAS025mto50m_breachedDTM.tif"),
-  output = here("data", "dem", "dhmvii_dtm_50m_d8_flow.tif"),
-  .quiet = TRUE)
+if (!file.exists(here("data", "dem", "dhmvii_dtm_50m_d8_flow.tif"))) {
+  d8_flow <- qgis_run_algorithm(
+    "wbt:D8FlowAccumulation",
+    input = here("data", "dem", "DHMVIIDTMRAS025mto50m_breachedDTM.tif"),
+    output = here("data", "dem", "dhmvii_dtm_50m_d8_flow.tif"),
+    .quiet = TRUE)
+}
 
 plot(rast(here("data", "dem", "dhmvii_dtm_50m_d8_flow.tif")))
 
 # d8 pointer
 #qgis_arguments("wbt:D8Pointer")
+if (!file.exists(here("data", "dem", "dhmvii_dtm_50m_d8_pointer.tif"))) {
 d8_pointer <- qgis_run_algorithm(
   "wbt:D8Pointer",
   dem = here("data", "dem", "DHMVIIDTMRAS025mto50m_breachedDTM.tif"),
   output = here("data", "dem", "dhmvii_dtm_50m_d8_pointer.tif"),
   .quiet = TRUE)
+}
 
 # extract streams
 #qgis_arguments("wbt:ExtractStreams")
 threshold <- 100
+if (!file.exists(here("data", "dem",
+                      paste0("dhmvii_dtm_50m_streams_t",
+                             threshold,".tif")))) {
 streams <- qgis_run_algorithm(
   "wbt:ExtractStreams",
   flow_accum = here("data", "dem", "dhmvii_dtm_50m_d8_flow.tif"),
@@ -71,17 +52,13 @@ streams <- qgis_run_algorithm(
                        threshold,".tif")),
   .quiet = TRUE
 )
+}
 
 #plot(rast(here("data", "dem", paste0("dhmvii_dtm_50m_streams_t", threshold,".tif"))), maxcell = 2500000, col = "black")
 # setting pour points
-# The tool only wants a file name, which must be a shape file
-st_write(vmm_meetnet %>%
-           group_by(meetplaats) %>%
-           summarise(),
-         here("data", "vmm", "vmm_macroinvertebraten_meetplaatsen.shp"),
-         append = FALSE)
 
 #qgis_arguments("wbt:JensonSnapPourPoints")
+if (!file.exists(here("data", "meetpunten", "mi_meetpunten_snapped_to_streams.shp"))) {
 snapped <- qgis_run_algorithm(
   "wbt:JensonSnapPourPoints",
   pour_pts = here("data", "meetpunten", "mi_meetpunten.shp"),
@@ -91,44 +68,213 @@ snapped <- qgis_run_algorithm(
   output = here("data", "meetpunten", "mi_meetpunten_snapped_to_streams.shp"),
   .quiet = TRUE
 )
+}
 
 # delineate watersheds
-# note, using wbt:WaterSheds can give rise to nested watersheds
+# om nested watersheds te krijgen -> realistischer dan unnested
 #qgis_arguments("wbt:UnnestBasins")
-watersheds <- qgis_run_algorithm(
+if (!file.exists(here("data", "meetpunten", "mi_meetpunten_watersheds_nested_1.tif"))){
+  watersheds_nested <- qgis_run_algorithm(
   "wbt:UnnestBasins",
   d8_pntr = here("data", "dem", "dhmvii_dtm_50m_d8_pointer.tif"),
   pour_pts =
     here("data", "meetpunten", "mi_meetpunten_snapped_to_streams.shp"),
-  output = here("data", "meetpunten", "mi_meetpunten_watersheds.tif"),
+  output = here("data", "meetpunten", "mi_meetpunten_watersheds_nested.tif"),
   .quiet = TRUE
 )
+}
+# Generate file paths dynamically
+watershed_files <- paste0("mi_meetpunten_watersheds_nested_", 1:36, ".tif")
 
-watersheds_1 <- rast(
-  here("data", "vmm", "vmm_macroinvertebraten_watersheds_1.tif")) %>%
-  as.polygons() %>%
-  st_as_sf() %>%
-  rename(rowname = vmm_macroinvertebraten_watersheds_1)
-watersheds_2 <- rast(
-  here("data", "vmm", "vmm_macroinvertebraten_watersheds_2.tif")) %>%
-  as.polygons() %>%
-  st_as_sf() %>%
-  rename(rowname = vmm_macroinvertebraten_watersheds_2)
-watersheds_3 <- rast(
-  here("data", "vmm", "vmm_macroinvertebraten_watersheds_3.tif")) %>%
-  as.polygons() %>%
-  st_as_sf() %>%
-  rename(rowname = vmm_macroinvertebraten_watersheds_3)
+# Convert raster watersheds to polygons in a loop
+watersheds_list <- map(watershed_files, ~ {
+  rast(here("data", "meetpunten", .x)) %>%
+    as.polygons() %>%
+    st_as_sf() %>%
+    rename(rowname = !!rlang::sym(tools::file_path_sans_ext(.x)))  # Rename column dynamically
+})
 
-locations <- read_sf(here(
-  "data", "vmm", "vmm_macroinvertebraten_snapped_to_streams.shp"))
+# Combine all watersheds into one dataframe
+watersheds_nested <- bind_rows(watersheds_list)
+
+# Load locations
+locations <- read_sf(here("data", "meetpunten", "mi_meetpunten_snapped_to_streams.shp"))
+
+# Join locations to watersheds
+watersheds_nested <- watersheds_nested %>%
+  inner_join(
+    locations %>%
+      rownames_to_column() %>%
+      st_drop_geometry() %>%
+      mutate(rowname = as.integer(rowname))
+  )
+
+if (!file.exists(here("data", "meetpunten", "mi_meetpunten_watersheds_nested_all.gpkg"))){
+st_write(watersheds_nested, here("data", "meetpunten", "mi_meetpunten_watersheds_nested_all.gpkg"))
+}
+
+# met Watershed tool ----
+# # dit is minder realistische om dat hier geen geneste watersheds uit voortkomen bij punten die sequentieel in een waterloop liggen
+# watersheds2 <- qgis_run_algorithm(
+#   "wbt:Watershed",
+#   d8_pntr = here("data", "dem", "dhmvii_dtm_50m_d8_pointer.tif"),
+#   pour_pts =
+#     here("data", "meetpunten", "mi_meetpunten_snapped_to_streams.shp"),
+#   output = here("data", "meetpunten", "watersheds", "mi_meetpunten_watersheds.tif"),
+#   .quiet = TRUE
+# )
+#
+# rast(here("data", "meetpunten", "watersheds", "mi_meetpunten_watersheds.tif")) %>% plot
+#
+# watersheds_vector <- rast(
+#   here("data", "meetpunten", "watersheds", "mi_meetpunten_watersheds.tif")) %>%
+#   as.polygons() %>%
+#   st_as_sf() %>%
+#   rename(rowname = mi_meetpunten_watersheds)
+# watersheds_vector
+#
+# locations <- read_sf(here(
+#   "data", "meetpunten", "mi_meetpunten_snapped_to_streams.shp"))
+#
+#
+# watersheds <- watersheds_vector %>%
+#   inner_join(locations %>%
+#                rownames_to_column() %>%
+#                st_drop_geometry() %>%
+#                mutate(rowname = as.integer(rowname)))
+
+# plot afstroomgebied bij een random meetplaats
+random_meetplaats <- "OW101500"
+ws <- watersheds_nested %>%
+  filter(meetplaats == random_meetplaats)
+tt <- rast(here("data", "dem", "dhmvii_dtm_50m_d8_pointer.tif")) %>%
+  crop(vect(ws %>% st_buffer(dist = 200))) %>%
+  raster::raster() %>%
+  raster::ratify()
+
+my_palette <- cm.colors(9)
+
+locs <- locations %>%
+  filter(meetplaats == random_meetplaats)
+
+#qgis_arguments("wbt:RasterStreamsToVector")
+qgis_run_algorithm(
+  "wbt:RasterStreamsToVector",
+  streams = here("data", "dem", paste0("dhmvii_dtm_50m_streams_t",
+                                       threshold,".tif")),
+  d8_pntr = here("data", "dem", "dhmvii_dtm_50m_d8_pointer.tif"),
+  output = here("data", "meetpunten", "hydro_dtm_stream_network.shp"),
+  .quiet = TRUE)
+
+streams_sf <- read_sf(here("data", "meetpunten", "hydro_dtm_stream_network.shp"))
+st_crs(streams_sf) <- "EPSG:31370"
+
+mapview(locs, zcol = "meetplaats") +
+  mapview(ws, zcol = "meetplaats", alpha.regions = 0) +
+  mapview(tt, col.regions = my_palette)
+
+dtm <- rast(here("data", "dem", "DHMVIIDTMRAS5m.tif"))
+dt <- dtm %>%
+  crop(vect(ws %>% st_buffer(dist = 200))) %>%
+  raster::raster()
+
+streams_crop <- streams_sf %>%
+  st_crop(ws %>% st_buffer(dist = 200))
+
+mapview(locs, zcol = "meetplaats") +
+  mapview(ws, zcol = "meetplaats", alpha.regions = 0) +
+  mapview(dt) +
+  mapview(streams_crop)
+
+# plot alle meetplaatsen en afstroomgebieden
+
+locs_orig <- read_sf(
+  here("data", "meetpunten", "mi_meetpunten.shp"))
+
+bekkens_sf <- read_sf(here("data", "bekkens", "Wsbekken.shp"))
+
+vha_bekkens <- bekkens_sf %>%
+  st_cast("GEOMETRYCOLLECTION") %>%
+  st_collection_extract()
+
+# mapview(vha_bekkens, alpha.regions = 0, legend = FALSE) +
+#   mapview(locations, legend = FALSE) +
+#   mapview(locs_orig, legend = FALSE) +
+#   mapview(watersheds, zcol = "meetplaats", legend = FALSE) +
+#   mapview(streams_sf, alpha = 0.3, hide = TRUE)
+
+mapview(vha_bekkens, alpha.regions = 0, legend = FALSE) +
+  mapview(locations, legend = FALSE) +
+  mapview(locs_orig, legend = FALSE) +
+  mapview(watersheds_nested, zcol = "meetplaats", legend = FALSE) +
+  mapview(streams_sf, alpha = 0.3, hide = TRUE)
+
+# landgebruik binnen afstroomgebied
+
+landuse_raster <- rast(here("data", "landgebruik", "niveau1_vla_2022_v3.tif"))
+
+plot(landuse_raster)
+
+# Define input and output paths
+output_table <- here("data", "landgebruik", "zonal_histogram_landgebruik_afstroomgebieden.gpkg")
+
+# Run the zonal histogram algorithm
+
+landuse_raster[landuse_raster < 1 | landuse_raster > 25] <- NA # om vreemde grote waarde als outputkolom te voorkomen
+if (!file.exists(output_table)) {
+
+qgis_run_algorithm("native:zonalhistogram",
+                   INPUT_RASTER = landuse_raster,
+                   INPUT_VECTOR = watersheds_nested,
+                   RASTER_BAND = 1,
+                   COLUMN_PREFIX = "LU_",  # Prefix for land-use classes
+                   OUTPUT = output_table)
+}
+
+watershed_landuse <- st_read(output_table)
+print(watershed_landuse)
 
 
-watersheds <- bind_rows(
-  watersheds_1,
-  watersheds_2,
-  watersheds_3) %>%
-  inner_join(locations %>%
-               rownames_to_column() %>%
-               st_drop_geometry() %>%
-               mutate(rowname = as.integer(rowname)))
+# pixels omzetten naar percentages
+
+# Calculate total pixels per watershed
+watershed_landuse$total_pixels <- rowSums(watershed_landuse[, -c(1:2)] %>%
+                                            st_drop_geometry(), na.rm = TRUE)
+
+# Convert pixel counts to percentages
+watershed_landuse <- watershed_landuse %>%
+  # st_drop_geometry() %>%  # Drop spatial geometry to avoid issues
+  mutate(
+    total_pixels = rowSums(across(starts_with("LU_")), na.rm = TRUE),  # Sum land-use pixels
+    across(starts_with("LU_"), ~ .x / total_pixels * 100, .names = "{.col}_pct")  # Convert to percentages
+  )
+
+# Save the final dataset
+st_write(watershed_landuse, here("data", "landgebruik","finale_watershed_landgebruik.gpkg"), delete_dsn = TRUE)
+
+# aantal overstorten in een afstroomgebied ----
+
+overstorten_basis_locaties <- read_sf(here("data", "overstorten", "P_OS_basis.shp"))
+watersheds_nested <- st_read(here("data", "meetpunten", "mi_meetpunten_watersheds_nested_all.gpkg"))
+
+# Perform spatial join: Assign points to watersheds
+points_in_watersheds <- st_join(overstorten_basis_locaties, watersheds_nested, left = FALSE)
+
+# Count points per watershed
+watershed_point_counts <- points_in_watersheds %>%
+  count(meetplaats) %>%
+  rename(aantal_overstorten = n)
+
+# Merge counts back into watersheds
+watersheds_aantal_overstorten <- watersheds_nested %>%
+  left_join(watershed_point_counts %>%
+              st_drop_geometry(),
+            by = "meetplaats") %>%
+  mutate(n = replace_na(aantal_overstorten, 0))
+
+
+# Save the output
+st_write(watersheds_aantal_overstorten, here("data", "meetpunten", "mi_meetpunten_watersheds_nested_all_aantal_overstorten.gpkg"))
+
+
+
