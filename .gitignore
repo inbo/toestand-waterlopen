@@ -16,7 +16,7 @@
 .Rproj.user
 .Ruserdata
 .httr-oauth
-data
+data/ruw
 docs
 libs
 output

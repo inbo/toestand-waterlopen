@@ -212,6 +212,7 @@ mapview(vha_bekkens, alpha.regions = 0, legend = FALSE) +
 # landgebruik binnen afstroomgebied
 
 landuse_raster <- rast(here("data", "landgebruik", "niveau1_vla_2022_v3.tif"))
+watersheds_nested <- st_read(here("data", "meetpunten", "mi_meetpunten_watersheds_nested_all.gpkg"))
 
 plot(landuse_raster)
 
@@ -227,31 +228,34 @@ qgis_run_algorithm("native:zonalhistogram",
                    INPUT_RASTER = landuse_raster,
                    INPUT_VECTOR = watersheds_nested,
                    RASTER_BAND = 1,
-                   COLUMN_PREFIX = "LU_",  # Prefix for land-use classes
+                   COLUMN_PREFIX = "VALUE_",  # Prefix for land-use classes
                    OUTPUT = output_table)
 }
 
-watershed_landuse <- st_read(output_table)
-print(watershed_landuse)
+watershed_landuse0 <- st_read(output_table)
+landuse_oever0 <- read_excel(path = here("data", "landgebruik", "mi_meetpunten_lu_buffer.xlsx"))
+landuse_oever0[["VALUE_13"]] <- 0
+landuse_buffer0 <- read_excel(path = here("data", "landgebruik", "mi_meetpunten_lu_cirk_min50m.xlsx"))
 
 
-# pixels omzetten naar percentages
+convert_pixels_to_percentages <- function(data) {
+  data <- data %>%
+    mutate(
+      total_pixels = rowSums(across(starts_with("VALUE_")), na.rm = TRUE),
+      across(starts_with("VALUE_"), ~ .x / total_pixels * 100, .names = "{.col}_pct")
+    )
 
-# Calculate total pixels per watershed
-watershed_landuse$total_pixels <- rowSums(watershed_landuse[, -c(1:2)] %>%
-                                            st_drop_geometry(), na.rm = TRUE)
+  return(data)
+}
 
-# Convert pixel counts to percentages
-watershed_landuse <- watershed_landuse %>%
-  # st_drop_geometry() %>%  # Drop spatial geometry to avoid issues
-  mutate(
-    total_pixels = rowSums(across(starts_with("LU_")), na.rm = TRUE),  # Sum land-use pixels
-    across(starts_with("LU_"), ~ .x / total_pixels * 100, .names = "{.col}_pct")  # Convert to percentages
-  )
+watershed_landuse <- convert_pixels_to_percentages(data = watershed_landuse0)
 
-# Save the final dataset
+landuse_oever <- convert_pixels_to_percentages(data = landuse_oever0)
+landuse_buffer <- convert_pixels_to_percentages(data = landuse_buffer0)
+
 st_write(watershed_landuse, here("data", "landgebruik","finale_watershed_landgebruik.gpkg"), delete_dsn = TRUE)
-
+save(landuse_oever, file = here("data", "landgebruik","landgebruik_oever.Rdata"))
+save(landuse_buffer, file = here("data", "landgebruik","landgebruik_buffer.Rdata"))
 # aantal overstorten in een afstroomgebied ----
 
 overstorten_basis_locaties <- read_sf(here("data", "overstorten", "P_OS_basis.shp"))
@@ -276,5 +280,31 @@ watersheds_aantal_overstorten <- watersheds_nested %>%
 # Save the output
 st_write(watersheds_aantal_overstorten, here("data", "meetpunten", "mi_meetpunten_watersheds_nested_all_aantal_overstorten.gpkg"))
 
+# Reclassen van landgebruik ----
 
+watershed_landuse <- st_read(here("data", "landgebruik","finale_watershed_landgebruik.gpkg"))
 
+landuse_reclass <- function(data, suffix) {
+data <- data %>%
+  mutate(!!sym(paste0("water_", suffix)) := VALUE_24_pct,
+         !!sym(paste0("verharding_", suffix)) := VALUE_19_pct + VALUE_22_pct + VALUE_23_pct + VALUE_25_pct,
+         !!sym(paste0("natte_natuur_", suffix)) := VALUE_5_pct + VALUE_9_pct + VALUE_10_pct,
+         !!sym(paste0("landbouw_intens_", suffix)) := VALUE_11_pct + VALUE_18_pct + VALUE_14_pct + VALUE_15_pct,
+         !!sym(paste0("hooggroen_", suffix)) := VALUE_2_pct + VALUE_3_pct + VALUE_4_pct + VALUE_16_pct + VALUE_21_pct,
+         !!sym(paste0("laaggroen_", suffix)) := VALUE_1_pct + VALUE_6_pct + VALUE_7_pct + VALUE_8_pct + VALUE_20_pct,
+         !!sym(paste0("landbouw_extensief_", suffix)) := VALUE_13_pct + VALUE_17_pct
+  ) %>%
+  select(meetplaats, starts_with("water_"), starts_with("verharding_"), starts_with("natte_natuur_"),
+         starts_with("landbouw_intens_"), starts_with("hooggroen_"),
+         starts_with("laaggroen_"), starts_with("landbouw_extensief_")) %>%
+  st_drop_geometry()
+
+return(data)
+}
+
+watershed_landuse_reclass <- landuse_reclass(watershed_landuse, "afstroomgebied")
+save(watershed_landuse_reclass, file  = here("data" , "landgebruik", "landgebruik_afstroomgebied.Rdata"))
+buffer_landuse_reclass <- landuse_reclass(landuse_buffer, "buffer")
+save(buffer_landuse_reclass , file  = here("data" , "landgebruik", "landgebruik_buffer.Rdata"))
+oever_landuse_reclass <- landuse_reclass(landuse_oever, "oever")
+save(oever_landuse_reclass, file  = here("data" , "landgebruik", "landgebruik_oever.Rdata"))

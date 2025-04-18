@@ -1,3 +1,5 @@
+source(here::here("source", "inladen_packages.R"))
+
 # data macro-invertebraten inlezen ----
 sheetnames <- excel_sheets(here("data", "macroinvertebraten 2010-2023.xlsx"))
 vmm_mi <- lapply(sheetnames[1:5], read_excel,

@@ -175,3 +175,4 @@ mapviewdata %>%
 mapviewdata %>%
   mapview(zcol = "recentste_jaar")  +
   mapview(vha_bekkens, alpha.regions = 0)
+
