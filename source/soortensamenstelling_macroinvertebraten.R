@@ -1,26 +1,35 @@
 # inladen packages en data ----
 source(here::here("source", "inladen_packages.R"))
-load(here("source", "mi_data.rdata"))
-load(here("source", "mi_soorten.rdata"))
+load(here("data", "verwerkt", "mi_data.rdata"))
+load(here("data", "verwerkt", "mi_soorten.rdata"))
 # soortendata NMDS ----
 
 data_wide <- mi_soorten %>%
-  select(macroinvertebraat, aantal, deelmonster_id, datum_monstername, meetplaats, statuut, groep) %>%
+  filter(categorie != "Vijver") %>%
+  filter(waterlooptype != "Geïsoleerd water") %>%
+  filter(waterlichaamcategorie != "meer") %>%
+  select(macroinvertebraat, ind, aantal, deelmonster_id, datum_monstername, meetplaats, statuut, groep) %>%
+  drop_na(ind) %>%
+  filter(!macroinvertebraat %in% c("Vis", "Salamander", "Lege schelpen", "Lege kokers")) %>%
   group_by(meetplaats) %>%
   filter(datum_monstername == max(datum_monstername)) %>%
+  filter(datum_monstername > as.POSIXct("2009-12-31")) %>%
   ungroup() %>%
+  select(-ind) %>%
   pivot_wider(names_from = macroinvertebraat, values_from = aantal, values_fill = 0) %>%
-  filter(!is.na(groep))
+  na.omit()
+
 species_matrix <- data_wide %>%
   select(-deelmonster_id, -datum_monstername, -meetplaats, -statuut, -groep)
 
-nmds0 <- metaMDS(species_matrix, distance = "bray", k = 2, trymax = 5)
+nmds0 <- metaMDS(species_matrix, distance = "bray", k = 2, trymax = 10)
 plot(nmds0, type = "t")  # Basic NMDS plot
 
-data_wide <- data_wide[-570, ] # outliers uithalen voor visualisatie
+data_wide <- data_wide[-541, ] # outliers uithalen voor visualisatie
 species_matrix <- data_wide %>%
-  select(-deelmonster_id, -datum_monstername, -meetplaats, -statuut, -groep) %>%
-  select(-Heleobia, -Melitidae)
+  select(-deelmonster_id, -datum_monstername, -meetplaats, -statuut, -groep)
+# %>%
+#   select(-Heleobia, -Melitidae)
 
 nmds <- metaMDS(species_matrix, distance = "bray", k = 2, trymax = 5)
 plot(nmds, type = "t")  # Basic NMDS plot

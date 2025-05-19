@@ -1,6 +1,6 @@
 # inladen packages en data ----
 source(here::here("source", "inladen_packages.R"))
-load(here("source", "mi_data.rdata"))
+load(here("data", "verwerkt", "mi_data.rdata"))
 
 # meetpunten macroinvertebraten voor landgebruik
 
@@ -10,32 +10,27 @@ mi_data %>%
 mi_data_analyse <- mi_data %>%
   filter(categorie != "Vijver") %>%
   filter(waterlooptype != "Geïsoleerd water") %>%
-  filter(waterlichaamcategorie != "meer") %>%
-  mutate(meetplaats = paste0("OW", meetplaats)) %>%
-  select(meetplaats) %>%
-  unique()
-
-st_write(mi_data_analyse, dsn = here("data", "meetpunten", "mi_meetpunten.shp"))
+  filter(waterlichaamcategorie != "meer")
 
 # aantal uniek meetplaatsen per statuut (onafh van jaar)
-mi_data %>%
+mi_data_analyse %>%
   distinct(statuut, meetplaats) %>% # Rem. duplicate meetplaats within statuut
   group_by(statuut) %>%
   summarise(unique_meetplaats_count = n())
 
 # recentste jaar telkens per meetplaats
 
-mi_data %>%
+mi_data_analyse %>%
   group_by(meetplaats) %>%
   filter(jaar == max(jaar))
 
 # vroegste jaar telkens per meetplaats
-mi_data %>%
+mi_data_analyse %>%
   group_by(meetplaats) %>%
   filter(jaar == min(jaar))
 
 # meetplaatsen na 2019
-mi_data %>%
+mi_data_analyse %>%
   filter(jaar >= 2019) %>%
   select(meetplaats) %>%
   unique() %>%
@@ -43,13 +38,13 @@ mi_data %>%
 
 # plot trend mmif per statuut
 
-mi_data %>%
+mi_data_analyse %>%
   group_by(meetplaats) %>%
   ggplot(aes(jaar, mmif)) +
   geom_smooth(method = "gam") +
   facet_wrap(~statuut)
 
-mi_data %>%
+mi_data_analyse %>%
   ggplot() +
   geom_line(aes(jaar, mmif, group = meetplaats), alpha = 0.25) +
   geom_smooth(aes(jaar, mmif), method = "gam",
@@ -57,17 +52,18 @@ mi_data %>%
   facet_grid(statuut ~ groep)
 
 # welk type waterlopen zijn de defaults
-mi_data %>%
+mi_data_analyse %>%
   st_drop_geometry() %>%
-  filter(statuut == "Default") %>% View
+  filter(statuut == "Default") %>%
   group_by(categorie, waterlooptype, groep) %>%
-  summarise(n())
+  summarise(n()) %>%
+  View
 
 # plots van de mmif en deelmaatlatten de verschillende types ----
 
 plot_waterlopen_statuut <- function(statuut_input, titel_input) {
 
-  data_filtered <- mi_data %>%
+  data_filtered <- mi_data_analyse %>%
     filter(statuut == statuut_input) %>%
     mutate(across(c("ept", "swd", "nst", "tax", "mts"), ~ .x / 4)) %>%
     pivot_longer(
@@ -147,7 +143,7 @@ ggplot(pred, aes(x = x, y = predicted)) +
 
 # Overzichtkaartjes ----
 
-mapviewdata <- mi_data %>%
+mapviewdata <- mi_data_analyse %>%
   filter(statuut == "Natuurlijk" | statuut == "Sterk Veranderd") %>%
   group_by(bekken, meetplaats) %>%
   summarize(jaren = paste(jaar, collapse = ", "),
@@ -157,7 +153,7 @@ mapviewdata <- mi_data %>%
             .groups = "drop")
 
 bekkens_sf <- read_sf(
-  here("data", "bekkens", "Wsbekken.shp")
+  here("data", "ruw", "bekkens", "Wsbekken.shp")
 )
 
 vha_bekkens <- bekkens_sf %>%

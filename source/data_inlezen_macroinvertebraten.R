@@ -1,13 +1,13 @@
 source(here::here("source", "inladen_packages.R"))
 
 # data macro-invertebraten inlezen ----
-sheetnames <- excel_sheets(here("data", "macroinvertebraten 2010-2023.xlsx"))
+locatie <- here("data", "ruw", "macroinvertebraten", "macroinvertebraten OW tot 2023.xlsx")
+sheetnames <- excel_sheets(locatie)
 vmm_mi <- lapply(sheetnames[1:5], read_excel,
-                 path = here("data", "macroinvertebraten 2010-2023.xlsx"))
-waterlopen_groep <- read.csv(here("data", "type_waterlichamen.csv"),
+                 path = locatie)
+waterlopen_groep <- read.csv(here("data", "ruw", "type_waterlichamen.csv"),
                              sep = ";") %>%
   select(type, groep)
-
 
 vmm_mi <- setNames(vmm_mi, sheetnames[1:5] %>% janitor::make_clean_names())
 vmm_mi <- lapply(vmm_mi, janitor::clean_names)
@@ -71,16 +71,22 @@ mi_deelmaatlatten0 <- vmm_mi$bbi_en_mmif_deelmaatlatten %>%
            crs = 31370) %>%
   mutate(jaar = parse_number(jaar),
          bbi = parse_number(bbi),
-         mmif = parse_number(mmif))
+         mmif = parse_number(mmif),
+         meetplaats = paste0("OW", meetplaats)) %>%
+  rename(monsternamedatum = datum_monstername)
 
-# weglaten alle meren, vijvers, geisoleerde waterlichamen, meren +
 # toevoegen groep (rivier, beek, kempen, polder)
 mi_data0 <- mi_deelmaatlatten0 %>%
   # filter(waterlooptype != "Geïsoleerd water" &
   #          !(waterlichaamcategorie %in% c("meer", "overgangswater"))) %>%
   left_join(waterlopen_groep, by = "type")
 mi_data <- janitor::clean_names(mi_data0)
-  save(mi_data, file = "source/mi_data.rdata")
+  save(mi_data, file = here("data", "verwerkt", "mi_data.rdata"))
+
+mi_meetpunten <- mi_data %>%
+  select(meetplaats, monsternamedatum, geometry)
+st_write(mi_meetpunten, dsn = here("data", "ruw", "macroinvertebraten", "mi_meetpunten.gpkg"), delete_dsn = T)
+
 
 # soortendata ----
 mi_soorten0 <- vmm_mi$bemonsteringen %>%
@@ -111,5 +117,5 @@ mi_soorten <- mi_soorten0 %>%
     # filter(waterlooptype != "Geïsoleerd water" &
     #          !(waterlichaamcategorie %in% c("meer", "overgangswater"))) %>%
     left_join(waterlopen_groep, by = "type")
-save(mi_soorten, file = "source/mi_soorten.rdata")
+save(mi_soorten, file = here("data", "verwerkt", "mi_soorten.rdata"))
 

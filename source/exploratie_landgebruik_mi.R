@@ -1,12 +1,12 @@
 # inladen packages en data ----
 source(here::here("source", "inladen_packages.R"))
-load(here("source", "mi_data.rdata"))
+load(here("data", "verwerkt", "mi_data.rdata"))
 
 # Linken LU aan macroinvertebraten ----
 
-load(file  = here("data" , "landgebruik", "landgebruik_afstroomgebied.Rdata"))
-load(file = here("data" , "landgebruik", "landgebruik_oever.Rdata"))
-load(file = here("data" , "landgebruik", "landgebruik_buffer.Rdata"))
+load(file  = here("data", "verwerkt", "landgebruik", "landgebruik_afstroomgebied.Rdata"))
+load(file = here("data", "verwerkt", "landgebruik", "landgebruik_oever.Rdata"))
+load(file = here("data", "verwerkt", "landgebruik", "landgebruik_buffer.Rdata"))
 
 mi_data_analyse <- mi_data %>%
   group_by(meetplaats) %>%
@@ -15,7 +15,6 @@ mi_data_analyse <- mi_data %>%
   filter(categorie != "Vijver") %>%
   filter(waterlooptype != "Geïsoleerd water") %>%
   filter(waterlichaamcategorie != "meer") %>%
-  mutate(meetplaats = paste0("OW", meetplaats)) %>%
   left_join(watershed_landuse_reclass, by = "meetplaats") %>%
   left_join(oever_landuse_reclass, by = "meetplaats") %>%
   left_join(buffer_landuse_reclass, by = "meetplaats") %>%
@@ -115,8 +114,8 @@ mi_data_analyse %>%
 
 mi_data_analyse %>%
   ggplot() +
-  geom_point(aes(log(natte_natuur), mmif)) +
-  geom_smooth(aes(log(natte_natuur), mmif), method = "lm") +
+  geom_point(aes(log(natte_natuur_afstroomgebied), mmif)) +
+  geom_smooth(aes(log(natte_natuur_afstroomgebied), mmif), method = "lm") +
   facet_grid(~statuut)
 
 mi_data_analyse %>%

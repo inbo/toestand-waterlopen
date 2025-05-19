@@ -9,63 +9,77 @@ source(here::here("source", "inladen_packages.R"))
 # Help functies voor qgis process
 
 qgis_algorithms() %>% View # algoritmes bekijken
-qgis_show_help("native:zonalhistogram") # argumenten bekijken
+qgis_show_help("native:snapgeometries") # argumenten bekijken
 
 # afstroomgebieden voor alle meetpunten bepalen ----
-dtm_hydro_breached <- rast(here("data", "dem", "DHMVIIDTMRAS025mto50m_breachedDTM.tif"))
-plot(dtm_hydro_breached)
+dtm_hydro_breached <- rast(here("data", "ruw", "dem", "DHMVIIDTMRAS025mto50m_breachedDTM.tif"))
 
 # flow accumulation
 #qgis_arguments("wbt:D8FlowAccumulation")
-if (!file.exists(here("data", "dem", "dhmvii_dtm_50m_d8_flow.tif"))) {
+if (!file.exists(here("data", "verwerkt", "hydrologisch", "dhmvii_dtm_50m_d8_flow.tif"))) {
   d8_flow <- qgis_run_algorithm(
     "wbt:D8FlowAccumulation",
-    input = here("data", "dem", "DHMVIIDTMRAS025mto50m_breachedDTM.tif"),
-    output = here("data", "dem", "dhmvii_dtm_50m_d8_flow.tif"),
+    input = here("data", "ruw", "dem", "DHMVIIDTMRAS025mto50m_breachedDTM.tif"),
+    output = here("data", "verwerkt", "hydrologisch", "dhmvii_dtm_50m_d8_flow.tif"),
     .quiet = TRUE)
 }
 
-plot(rast(here("data", "dem", "dhmvii_dtm_50m_d8_flow.tif")))
-
 # d8 pointer
 #qgis_arguments("wbt:D8Pointer")
-if (!file.exists(here("data", "dem", "dhmvii_dtm_50m_d8_pointer.tif"))) {
+if (!file.exists(here("data", "verwerkt", "hydrologisch", "dhmvii_dtm_50m_d8_pointer.tif"))) {
 d8_pointer <- qgis_run_algorithm(
   "wbt:D8Pointer",
-  dem = here("data", "dem", "DHMVIIDTMRAS025mto50m_breachedDTM.tif"),
-  output = here("data", "dem", "dhmvii_dtm_50m_d8_pointer.tif"),
+  dem = here("data", "ruw", "dem", "DHMVIIDTMRAS025mto50m_breachedDTM.tif"),
+  output = here("data", "verwerkt", "hydrologisch", "dhmvii_dtm_50m_d8_pointer.tif"),
   .quiet = TRUE)
 }
 
 # extract streams
 #qgis_arguments("wbt:ExtractStreams")
 threshold <- 100
-if (!file.exists(here("data", "dem",
+if (!file.exists(here("data", "verwerkt", "hydrologisch",
                       paste0("dhmvii_dtm_50m_streams_t",
                              threshold,".tif")))) {
 streams <- qgis_run_algorithm(
   "wbt:ExtractStreams",
-  flow_accum = here("data", "dem", "dhmvii_dtm_50m_d8_flow.tif"),
+  flow_accum = here("data", "verwerkt", "hydrologisch", "dhmvii_dtm_50m_d8_flow.tif"),
   threshold = threshold,
-  output = here("data", "dem",
+  output = here("data", "verwerkt", "hydrologisch",
                 paste0("dhmvii_dtm_50m_streams_t",
                        threshold,".tif")),
   .quiet = TRUE
 )
 }
 
+raster(here("data", "verwerkt", "hydrologisch",
+            paste0("dhmvii_dtm_50m_streams_t",
+                   threshold,".tif"))) %>% mapview()
+
+# omzetten raster streams tot een streamsvector
+#qgis_arguments("wbt:RasterStreamsToVector")
+qgis_run_algorithm(
+  "wbt:RasterStreamsToVector",
+  streams = here("data", "verwerkt", "hydrologisch", paste0("dhmvii_dtm_50m_streams_t",
+                                              threshold,".tif")),
+  d8_pntr = here("data", "verwerkt", "hydrologisch", "dhmvii_dtm_50m_d8_pointer.tif"),
+  output = here("data", "verwerkt", "hydrologisch", "hydro_dtm_stream_network.shp"),
+  .quiet = TRUE)
+
+streams_sf <- st_read(here("data", "verwerkt", "hydrologisch", "hydro_dtm_stream_network.shp"))
+st_crs(streams_sf) <- "EPSG:31370"
+
 #plot(rast(here("data", "dem", paste0("dhmvii_dtm_50m_streams_t", threshold,".tif"))), maxcell = 2500000, col = "black")
 # setting pour points
 
 #qgis_arguments("wbt:JensonSnapPourPoints")
-if (!file.exists(here("data", "meetpunten", "mi_meetpunten_snapped_to_streams.shp"))) {
+if (!file.exists(here("data", "verwerkt", "hydrologisch", "mi_meetpunten_snapped_to_streams.shp"))) {
 snapped <- qgis_run_algorithm(
   "wbt:JensonSnapPourPoints",
-  pour_pts = here("data", "meetpunten", "mi_meetpunten.shp"),
-  streams = here("data", "dem", paste0("dhmvii_dtm_50m_streams_t",
+  pour_pts = here("data", "ruw", "macroinvertebraten", "mi_meetpunten.shp"),
+  streams = here("data", "verwerkt", "hydrologisch", paste0("dhmvii_dtm_50m_streams_t",
                                        threshold,".tif")),
   snap_dist = 300,
-  output = here("data", "meetpunten", "mi_meetpunten_snapped_to_streams.shp"),
+  output = here("data", "verwerkt", "hydrologisch", "mi_meetpunten_snapped_to_streams.shp"),
   .quiet = TRUE
 )
 }
@@ -73,22 +87,23 @@ snapped <- qgis_run_algorithm(
 # delineate watersheds
 # om nested watersheds te krijgen -> realistischer dan unnested
 #qgis_arguments("wbt:UnnestBasins")
-if (!file.exists(here("data", "meetpunten", "mi_meetpunten_watersheds_nested_1.tif"))){
+
+if (!file.exists(here("data", "verwerkt", "hydrologisch", "mi_meetpunten_watersheds_nested_1.tif"))){
   watersheds_nested <- qgis_run_algorithm(
   "wbt:UnnestBasins",
-  d8_pntr = here("data", "dem", "dhmvii_dtm_50m_d8_pointer.tif"),
+  d8_pntr = here("data", "verwerkt", "hydrologisch", "dhmvii_dtm_50m_d8_pointer.tif"),
   pour_pts =
-    here("data", "meetpunten", "mi_meetpunten_snapped_to_streams.shp"),
-  output = here("data", "meetpunten", "mi_meetpunten_watersheds_nested.tif"),
+    here("data", "verwerkt", "hydrologisch", "mi_meetpunten_snapped_to_streams.shp"),
+  output = here("data", "verwerkt", "hydrologisch", "mi_meetpunten_watersheds_nested.tif"),
   .quiet = TRUE
 )
 }
 # Generate file paths dynamically
-watershed_files <- paste0("mi_meetpunten_watersheds_nested_", 1:36, ".tif")
+watershed_files <- paste0("mi_meetpunten_watersheds_nested_", 1:60, ".tif")
 
 # Convert raster watersheds to polygons in a loop
 watersheds_list <- map(watershed_files, ~ {
-  rast(here("data", "meetpunten", .x)) %>%
+  rast(here("data", "verwerkt", "hydrologisch", .x)) %>%
     as.polygons() %>%
     st_as_sf() %>%
     rename(rowname = !!rlang::sym(tools::file_path_sans_ext(.x)))  # Rename column dynamically
@@ -98,7 +113,7 @@ watersheds_list <- map(watershed_files, ~ {
 watersheds_nested <- bind_rows(watersheds_list)
 
 # Load locations
-locations <- read_sf(here("data", "meetpunten", "mi_meetpunten_snapped_to_streams.shp"))
+locations <- read_sf(here("data", "verwerkt", "hydrologisch", "mi_meetpunten_snapped_to_streams.shp"))
 
 # Join locations to watersheds
 watersheds_nested <- watersheds_nested %>%
@@ -109,9 +124,12 @@ watersheds_nested <- watersheds_nested %>%
       mutate(rowname = as.integer(rowname))
   )
 
-if (!file.exists(here("data", "meetpunten", "mi_meetpunten_watersheds_nested_all.gpkg"))){
-st_write(watersheds_nested, here("data", "meetpunten", "mi_meetpunten_watersheds_nested_all.gpkg"))
+if (!file.exists(here("data", "verwerkt", "hydrologisch", "mi_meetpunten_watersheds_nested_all.gpkg"))){
+st_write(watersheds_nested, here("data", "verwerkt", "hydrologisch", "mi_meetpunten_watersheds_nested_all.gpkg"), delete_dsn = T)
 }
+
+watersheds_nested <- st_read(here("data", "verwerkt", "hydrologisch", "mi_meetpunten_watersheds_nested_all.gpkg"))
+
 
 # met Watershed tool ----
 # # dit is minder realistische om dat hier geen geneste watersheds uit voortkomen bij punten die sequentieel in een waterloop liggen
@@ -147,7 +165,7 @@ st_write(watersheds_nested, here("data", "meetpunten", "mi_meetpunten_watersheds
 random_meetplaats <- "OW101500"
 ws <- watersheds_nested %>%
   filter(meetplaats == random_meetplaats)
-tt <- rast(here("data", "dem", "dhmvii_dtm_50m_d8_pointer.tif")) %>%
+tt <- rast(here("data", "verwerkt", "hydrologisch", "dhmvii_dtm_50m_d8_pointer.tif")) %>%
   crop(vect(ws %>% st_buffer(dist = 200))) %>%
   raster::raster() %>%
   raster::ratify()
@@ -157,23 +175,12 @@ my_palette <- cm.colors(9)
 locs <- locations %>%
   filter(meetplaats == random_meetplaats)
 
-#qgis_arguments("wbt:RasterStreamsToVector")
-qgis_run_algorithm(
-  "wbt:RasterStreamsToVector",
-  streams = here("data", "dem", paste0("dhmvii_dtm_50m_streams_t",
-                                       threshold,".tif")),
-  d8_pntr = here("data", "dem", "dhmvii_dtm_50m_d8_pointer.tif"),
-  output = here("data", "meetpunten", "hydro_dtm_stream_network.shp"),
-  .quiet = TRUE)
-
-streams_sf <- read_sf(here("data", "meetpunten", "hydro_dtm_stream_network.shp"))
-st_crs(streams_sf) <- "EPSG:31370"
 
 mapview(locs, zcol = "meetplaats") +
   mapview(ws, zcol = "meetplaats", alpha.regions = 0) +
   mapview(tt, col.regions = my_palette)
 
-dtm <- rast(here("data", "dem", "DHMVIIDTMRAS5m.tif"))
+dtm <- rast(here("data", "ruw", "dem", "DHMVIIDTMRAS5m.tif"))
 dt <- dtm %>%
   crop(vect(ws %>% st_buffer(dist = 200))) %>%
   raster::raster()
@@ -189,9 +196,9 @@ mapview(locs, zcol = "meetplaats") +
 # plot alle meetplaatsen en afstroomgebieden
 
 locs_orig <- read_sf(
-  here("data", "meetpunten", "mi_meetpunten.shp"))
+  here("data", "ruw", "macroinvertebraten", "mi_meetpunten.shp"))
 
-bekkens_sf <- read_sf(here("data", "bekkens", "Wsbekken.shp"))
+bekkens_sf <- read_sf(here("data", "ruw", "bekkens", "Wsbekken.shp"))
 
 vha_bekkens <- bekkens_sf %>%
   st_cast("GEOMETRYCOLLECTION") %>%
@@ -207,17 +214,18 @@ mapview(vha_bekkens, alpha.regions = 0, legend = FALSE) +
   mapview(locations, legend = FALSE) +
   mapview(locs_orig, legend = FALSE) +
   mapview(watersheds_nested, zcol = "meetplaats", legend = FALSE) +
-  mapview(streams_sf, alpha = 0.3, hide = TRUE)
+  mapview(streams_sf) +
+  mapview(wlas, color = "red")
 
 # landgebruik binnen afstroomgebied
 
-landuse_raster <- rast(here("data", "landgebruik", "niveau1_vla_2022_v3.tif"))
-watersheds_nested <- st_read(here("data", "meetpunten", "mi_meetpunten_watersheds_nested_all.gpkg"))
-
+landuse_raster <- raster::raster(here("data", "ruw", "landgebruik", "niveau1_vla_2022_v3.tif"))
+watersheds_nested <- st_read(here("data", "verwerkt", "hydrologisch", "mi_meetpunten_watersheds_nested_all.gpkg"))
+watersheds_nested <- st_transform(watersheds_nested, crs = crs(landuse_raster))
 plot(landuse_raster)
 
 # Define input and output paths
-output_table <- here("data", "landgebruik", "zonal_histogram_landgebruik_afstroomgebieden.gpkg")
+output_table <- here("data", "verwerkt", "landgebruik", "zonal_histogram_landgebruik_afstroomgebieden.gpkg")
 
 # Run the zonal histogram algorithm
 
@@ -233,9 +241,9 @@ qgis_run_algorithm("native:zonalhistogram",
 }
 
 watershed_landuse0 <- st_read(output_table)
-landuse_oever0 <- read_excel(path = here("data", "landgebruik", "mi_meetpunten_lu_buffer.xlsx"))
+landuse_oever0 <- read_excel(path = here("data", "ruw", "landgebruik", "mi_meetpunten_lu_buffer.xlsx"))
 landuse_oever0[["VALUE_13"]] <- 0
-landuse_buffer0 <- read_excel(path = here("data", "landgebruik", "mi_meetpunten_lu_cirk_min50m.xlsx"))
+landuse_buffer0 <- read_excel(path = here("data", "ruw", "landgebruik", "mi_meetpunten_lu_cirk_min50m.xlsx"))
 
 
 convert_pixels_to_percentages <- function(data) {
@@ -253,13 +261,14 @@ watershed_landuse <- convert_pixels_to_percentages(data = watershed_landuse0)
 landuse_oever <- convert_pixels_to_percentages(data = landuse_oever0)
 landuse_buffer <- convert_pixels_to_percentages(data = landuse_buffer0)
 
-st_write(watershed_landuse, here("data", "landgebruik","finale_watershed_landgebruik.gpkg"), delete_dsn = TRUE)
-save(landuse_oever, file = here("data", "landgebruik","landgebruik_oever.Rdata"))
-save(landuse_buffer, file = here("data", "landgebruik","landgebruik_buffer.Rdata"))
+st_write(watershed_landuse, here("data", "verwerkt", "landgebruik","finale_watershed_landgebruik.gpkg"), delete_dsn = TRUE)
+save(landuse_oever, file = here("data", "verwerkt", "landgebruik","landgebruik_oever.Rdata"))
+save(landuse_buffer, file = here("data", "verwerkt", "landgebruik","landgebruik_buffer.Rdata"))
+
 # aantal overstorten in een afstroomgebied ----
 
-overstorten_basis_locaties <- read_sf(here("data", "overstorten", "P_OS_basis.shp"))
-watersheds_nested <- st_read(here("data", "meetpunten", "mi_meetpunten_watersheds_nested_all.gpkg"))
+overstorten_basis_locaties <- read_sf(here("data", "ruw", "overstorten", "P_OS_basis.shp"))
+watersheds_nested <- st_read(here("data", "verwerkt", "hydrologisch", "mi_meetpunten_watersheds_nested_all.gpkg"))
 
 # Perform spatial join: Assign points to watersheds
 points_in_watersheds <- st_join(overstorten_basis_locaties, watersheds_nested, left = FALSE)
@@ -278,11 +287,12 @@ watersheds_aantal_overstorten <- watersheds_nested %>%
 
 
 # Save the output
-st_write(watersheds_aantal_overstorten, here("data", "meetpunten", "mi_meetpunten_watersheds_nested_all_aantal_overstorten.gpkg"))
+st_write(watersheds_aantal_overstorten, here("data", "verwerkt", "overstorten", "mi_meetpunten_watersheds_nested_all_aantal_overstorten.gpkg"),
+         delete_dsn = TRUE)
 
 # Reclassen van landgebruik ----
 
-watershed_landuse <- st_read(here("data", "landgebruik","finale_watershed_landgebruik.gpkg"))
+watershed_landuse <- st_read(here("data", "verwerkt", "landgebruik","finale_watershed_landgebruik.gpkg"))
 
 landuse_reclass <- function(data, suffix) {
 data <- data %>%
@@ -303,8 +313,11 @@ return(data)
 }
 
 watershed_landuse_reclass <- landuse_reclass(watershed_landuse, "afstroomgebied")
-save(watershed_landuse_reclass, file  = here("data" , "landgebruik", "landgebruik_afstroomgebied.Rdata"))
+save(watershed_landuse_reclass, file  = here("data", "verwerkt", "landgebruik", "landgebruik_afstroomgebied.Rdata"))
 buffer_landuse_reclass <- landuse_reclass(landuse_buffer, "buffer")
-save(buffer_landuse_reclass , file  = here("data" , "landgebruik", "landgebruik_buffer.Rdata"))
+save(buffer_landuse_reclass , file  = here("data", "verwerkt", "landgebruik", "landgebruik_buffer.Rdata"))
 oever_landuse_reclass <- landuse_reclass(landuse_oever, "oever")
-save(oever_landuse_reclass, file  = here("data" , "landgebruik", "landgebruik_oever.Rdata"))
+save(oever_landuse_reclass, file  = here("data", "verwerkt", "landgebruik", "landgebruik_oever.Rdata"))
+
+load( file  = here("data", "verwerkt", "landgebruik", "landgebruik_afstroomgebied.Rdata"))
+
