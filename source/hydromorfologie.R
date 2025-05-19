@@ -25,14 +25,14 @@ nearest_river_index %>%
   length
 
 # Extract river attribute (e.g. 'river_value')
-meetpunten$EKC_hydromorf <- as.numeric(hydromorf$EKC[nearest_river_index])
-meetpunten$bedding <- as.numeric(hydromorf$B[nearest_river_index])
-meetpunten$profiel <- as.numeric(hydromorf$P[nearest_river_index])
-meetpunten$stroming <- as.numeric(hydromorf$S[nearest_river_index])
-meetpunten$oever <- as.numeric(hydromorf$O[nearest_river_index])
-meetpunten$latcon <- as.numeric(hydromorf$LaC[nearest_river_index])
-meetpunten$loncon <- as.numeric(hydromorf$LoC[nearest_river_index])
-meetpunten$alluproc <- as.numeric(hydromorf$AP[nearest_river_index])
+mi_meetpunten$EKC_hydromorf <- as.numeric(hydromorf$EKC[nearest_river_index])
+mi_meetpunten$bedding <- as.numeric(hydromorf$B[nearest_river_index])
+mi_meetpunten$profiel <- as.numeric(hydromorf$P[nearest_river_index])
+mi_meetpunten$stroming <- as.numeric(hydromorf$S[nearest_river_index])
+mi_meetpunten$oever <- as.numeric(hydromorf$O[nearest_river_index])
+mi_meetpunten$latcon <- as.numeric(hydromorf$LaC[nearest_river_index])
+mi_meetpunten$loncon <- as.numeric(hydromorf$LoC[nearest_river_index])
+mi_meetpunten$alluproc <- as.numeric(hydromorf$AP[nearest_river_index])
 
 load(here("data", "verwerkt", "mi_data.rdata"))
 mi_data_analyse <- mi_data %>%
@@ -40,7 +40,7 @@ mi_data_analyse <- mi_data %>%
   filter(waterlooptype != "Geïsoleerd water") %>%
   filter(waterlichaamcategorie != "meer") %>%
   mutate(meetplaats = paste0("OW", meetplaats)) %>%
-  left_join(., meetpunten %>% st_drop_geometry(), by = "meetplaats")
+  left_join(., mi_meetpunten %>% st_drop_geometry(), by = "meetplaats")
 
 
 conflicted::conflicts_prefer(lmerTest::lmer)
@@ -83,8 +83,8 @@ dharma_residuals(object = fit, simu)
 tolerance <- 20
 
 # Calculate distance to nearest river for each point
-nearest_river_index <- st_nearest_feature(meetpunten, hydromorf2)
-distances <- st_distance(meetpunten, hydromorf2[nearest_river_index, ], by_element = TRUE)
+nearest_river_index <- st_nearest_feature(mi_meetpunten, hydromorf2)
+distances <- st_distance(mi_meetpunten, hydromorf2[nearest_river_index, ], by_element = TRUE)
 
 # Assign NA for points further than tolerance
 nearest_river_index[as.numeric(distances) > tolerance] <- NA
@@ -92,8 +92,8 @@ nearest_river_index %>%
   na.omit() %>%
   length
 
-meetpunten$EKC_hydromorf <- as.numeric(hydromorf2$ekc_r[nearest_river_index])
-hist(meetpunten$EKC_hydromorf)
+mi_meetpunten$EKC_hydromorf <- as.numeric(hydromorf2$ekc_r[nearest_river_index])
+hist(mi_meetpunten$EKC_hydromorf)
 
 model <- lmer(data = mi_data_analyse,
               sw_dw ~ EKC_hydromorf + jaar + groep + statuut + (1 | meetplaats))
