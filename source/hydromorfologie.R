@@ -7,8 +7,20 @@ hydromorf3 <- st_read(here("data", "ruw", "hydromorfologie", "trajectenlaag_deta
 hydromorf4 <- st_read(here("data", "ruw", "hydromorfologie", "trajectenlaag_vmm_29jan2025_ruw.shp"))
 
 hydromorf_velddata <- read_excel(here("data", "ruw", "hydromorfologie", "Opname Resultaten Hydormorfologie v2.0 T11_25_02.xlsx"), sheet = "Opnames Resultaten")
-stroomsnelheid_breedte_diepte <- read_excel(here("data", "ruw", "hydromorfologie", "stroomsnelheid_traject.xlsx"))
-sinuositeit <- read_excel(here("data", "ruw", "hydromorfologie", "Opname Resultaten Hydormorfologie v2.0 T11_25_02.xlsx"), sheet = "trajecten", skip = 1)
+stroomsnelheid_breedte_diepte <- read_excel(here("data", "ruw",
+                                                 "hydromorfologie", "stroomsnelheid_traject.xlsx")) %>%
+  select(traj_code, owl, avg_depth, width_used, stroomsnelheid_kmu)
+
+hydromorf_oud_nieuw <- read_excel(here("data", "ruw", "hydromorfologie", "oude_nieuwe_trajecten_velddata.xlsx"),
+                                  sheet = "Sheet1") %>%
+  janitor::clean_names()
+
+wider <- hydromorf_velddata %>%
+  janitor::clean_names() %>%
+  pivot_wider(., names_from = profieltype_naam, values_from = `resultaatwaarde_naam`)
+
+oeververdediging <- hydromorf_velddata %>% filter(`Resultaatwaarde Groep Naam` == "Oeververdediging")
+
 
 # waldo::compare(hydromorf2, hydromorf3)
 
@@ -24,30 +36,37 @@ nearest_river_index %>%
   na.omit() %>%
   length
 
+hydmo_variabelen <- hydromorf_nieuw %>%
+  inner_join(., stroomsnelheid_breedte_diepte, by = "traj_code")
+
+sinuositeit$traject_code %>% unique() %>% length()
+hydromorf_nieuw$traj_code %>% unique() %>% length()
+
+test2 <- hydromorf_nieuw %>%
+  inner_join(., hydromorf_oud_nieuw, by = c("traj_code" = "corr_traject"))
+
 # Extract river attribute (e.g. 'river_value')
-mi_meetpunten$EKC_hydromorf <- as.numeric(hydromorf$EKC[nearest_river_index])
-mi_meetpunten$bedding <- as.numeric(hydromorf$B[nearest_river_index])
-mi_meetpunten$profiel <- as.numeric(hydromorf$P[nearest_river_index])
-mi_meetpunten$stroming <- as.numeric(hydromorf$S[nearest_river_index])
-mi_meetpunten$oever <- as.numeric(hydromorf$O[nearest_river_index])
-mi_meetpunten$latcon <- as.numeric(hydromorf$LaC[nearest_river_index])
-mi_meetpunten$loncon <- as.numeric(hydromorf$LoC[nearest_river_index])
-mi_meetpunten$alluproc <- as.numeric(hydromorf$AP[nearest_river_index])
+mi_meetpunten$EKC2 <- as.numeric(hydmo_variabelen$ekc_r[nearest_river_index])
+mi_meetpunten$sinuositeit <- as.numeric(hydmo_variabelen$sin_s3[nearest_river_index])
+mi_meetpunten$verstuwing <- as.numeric(hydmo_variabelen$opst_sco_t[nearest_river_index])
+mi_meetpunten$stroomsnelheid <- as.numeric(hydmo_variabelen$stroomsnelheid_kmu[nearest_river_index])
+mi_meetpunten$diepte <- as.numeric(hydmo_variabelen$avg_depth[nearest_river_index])
+mi_meetpunten$breedte <- as.numeric(hydmo_variabelen$width_used[nearest_river_index])
+
 
 load(here("data", "verwerkt", "mi_data.rdata"))
 mi_data_analyse <- mi_data %>%
   filter(categorie != "Vijver") %>%
   filter(waterlooptype != "Geïsoleerd water") %>%
   filter(waterlichaamcategorie != "meer") %>%
-  mutate(meetplaats = paste0("OW", meetplaats)) %>%
   left_join(., mi_meetpunten %>% st_drop_geometry(), by = "meetplaats")
 
 
 conflicted::conflicts_prefer(lmerTest::lmer)
 model <- lmer(data = mi_data_analyse,
-              mmif ~ EKC_hydromorf + bedding + stroming.y + oever + latcon + loncon + alluproc + jaar + groep + statuut + (1 | meetplaats))
-
-pred <- ggpredict(model, terms = "alluproc")
+              mmif ~ stroomsnelheid + jaar + groep + statuut + (1 | meetplaats))
+summary(model)
+pred <- ggpredict(model, terms = "stroomsnelheid")
 
 # Plot
 ggplot(pred, aes(x = x, y = predicted)) +
