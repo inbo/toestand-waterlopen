@@ -1,0 +1,35 @@
+---
+title: "Macro-invertebraten"
+author: "Emiel De Lombaerde"
+date: "2025-04-18"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+source(here::here("source", "inladen_packages.R"))
+load(here("data", "verwerkt", "mi_data.rdata"))
+
+# weglaten vijvers, meren, geisoleerd water
+mi_data_analyse <- mi_data %>%
+  filter(categorie != "Vijver") %>%
+  filter(waterlooptype != "Geïsoleerd water") %>%
+  filter(waterlichaamcategorie != "meer")
+
+```
+
+## Verkennen
+
+```{r}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
