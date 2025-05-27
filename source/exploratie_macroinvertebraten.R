@@ -120,16 +120,19 @@ plot_waterlopen_statuut("Kunstmatig", "Kunstmatige waterlopen")
 plot_waterlopen_statuut("Default", "Niet toegewezen")
 
 conflicted::conflicts_prefer(lmerTest::lmer)
-model <- lmer(data = mi_data %>%
+model <- lmer(data = mi_data_analyse %>%
        filter(statuut == "Natuurlijk"),
      mmif ~ o2 + jaar + groep + (1 | meetplaats))
-
-pred <- ggpredict(model, terms = "jaar")
+summary(model)
+pred <- ggpredict(model, terms = "o2")
 
 # Plot
 ggplot(pred, aes(x = x, y = predicted)) +
   geom_line() +
   geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2) +
+  geom_point(data = mi_data %>%
+               filter(statuut == "Natuurlijk"),
+             aes(o2, mmif)) +
   labs(x = "Jaar", y = "MMIF", title = "Conditional Effect of Jaar")
 
 pred <- ggpredict(model, terms = "groep")

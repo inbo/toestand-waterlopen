@@ -1,6 +1,6 @@
 source(here::here("source", "inladen_packages.R"))
 # Analyseresultaten ----
-
+if(!file.exists(here("data", "verwerkt", "fc_data.rdata"))){
 # meetresultaten inlezen ----
 sheet_names <- excel_sheets(here(
   "data",
@@ -44,9 +44,11 @@ fc_data <- anaresult %>%
   left_join(., anaresult_locations, by = "sample_point")
 
 save(fc_data, file = here("data", "verwerkt", "fc_data.rdata"))
+}
 
 load(file = here("data", "verwerkt", "fc_data.rdata"))
 
+if (!file.exists(here("data", "ruw", "fys_chem", "fc_meetpunten.gpkg"))) {
 fc_meetpunten <- fc_data %>%
   select(sample_point, sample_datum_monstername, lambert_x, lambert_y) %>%
   drop_na(lambert_x) %>%
@@ -57,7 +59,7 @@ fc_meetpunten <- fc_data %>%
            crs = 31370)
 rm(anaresult)
 st_write(fc_meetpunten, dsn = here("data", "ruw", "fys_chem", "fc_meetpunten.gpkg"), delete_dsn = T)
-
+}
 
 
 # unieke stoffen
@@ -87,7 +89,7 @@ selectie <- fc_data %>%
                                                 ))
 
 temperatuur <- fc_data %>%
-  filter(parameter_omschrijving %in% c("Fosfor, totaal"))
+  filter(parameter_omschrijving %in% c("Temperatuur"))
 
 totaal_stikstof <- selectie %>%
   filter(parameter_symbool == "N t")

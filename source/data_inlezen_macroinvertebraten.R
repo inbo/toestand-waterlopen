@@ -62,7 +62,7 @@ mi_deelmaatlatten0 <- vmm_mi$bbi_en_mmif_deelmaatlatten %>%
         deelmonster_id = as.character(deelmonster_id)
       ) %>%
       select(-teken, -eenheid, -meetnet) %>%
-      filter(parameter %in% c("T", "pH", "O2", "O2 verz", "EC 20", "EC 25")) %>%
+      filter(parameter %in% c("T", "pH", "O2", "O2 verz", "EC 20", "EC 25", "Secchi")) %>%
       pivot_wider(names_from = parameter, values_from = resultaat) %>%
       rename(datum_monstername = monsternamedatum),
     by = c("meetplaats", "datum_monstername", "deelmonster_id")
