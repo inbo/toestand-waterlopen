@@ -75,7 +75,7 @@ st_crs(streams_sf) <- "EPSG:31370"
 if (!file.exists(here("data", "verwerkt", "hydrologisch", "mi_meetpunten_snapped_to_streams.shp"))) {
 snapped <- qgis_run_algorithm(
   "wbt:JensonSnapPourPoints",
-  pour_pts = here("data", "ruw", "macroinvertebraten", "mi_meetpunten.shp"),
+  pour_pts = here("data", "ruw", "macroinvertebraten", "mi_meetpunten.gpkg"),
   streams = here("data", "verwerkt", "hydrologisch", paste0("dhmvii_dtm_50m_streams_t",
                                        threshold,".tif")),
   snap_dist = 300,
@@ -123,13 +123,14 @@ watersheds_nested <- watersheds_nested %>%
       st_drop_geometry() %>%
       mutate(rowname = as.integer(rowname))
   )
+watersheds_nested <- watersheds_nested %>%
+  mutate(oppervlakte = st_area(geom))
 
 if (!file.exists(here("data", "verwerkt", "hydrologisch", "mi_meetpunten_watersheds_nested_all.gpkg"))){
 st_write(watersheds_nested, here("data", "verwerkt", "hydrologisch", "mi_meetpunten_watersheds_nested_all.gpkg"), delete_dsn = T)
 }
 
 watersheds_nested <- st_read(here("data", "verwerkt", "hydrologisch", "mi_meetpunten_watersheds_nested_all.gpkg"))
-
 
 # met Watershed tool ----
 # # dit is minder realistische om dat hier geen geneste watersheds uit voortkomen bij punten die sequentieel in een waterloop liggen
@@ -267,11 +268,13 @@ save(landuse_buffer, file = here("data", "verwerkt", "landgebruik","landgebruik_
 
 # aantal overstorten in een afstroomgebied ----
 
-overstorten_basis_locaties <- read_sf(here("data", "ruw", "overstorten", "P_OS_basis.shp"))
+overstorten_basis_locaties <- st_read(here("data", "ruw", "overstorten", "P_OS_basis.shp"))
+overstorten_uitlaat_vha <- st_read(here("data", "ruw", "overstorten", "P_OS_uitlaat_VHA.shp"))
+
 watersheds_nested <- st_read(here("data", "verwerkt", "hydrologisch", "mi_meetpunten_watersheds_nested_all.gpkg"))
 
 # Perform spatial join: Assign points to watersheds
-points_in_watersheds <- st_join(overstorten_basis_locaties, watersheds_nested, left = FALSE)
+points_in_watersheds <- st_join(overstorten_uitlaat_vha, watersheds_nested, left = FALSE)
 
 # Count points per watershed
 watershed_point_counts <- points_in_watersheds %>%
@@ -283,12 +286,12 @@ watersheds_aantal_overstorten <- watersheds_nested %>%
   left_join(watershed_point_counts %>%
               st_drop_geometry(),
             by = "meetplaats") %>%
-  mutate(n = replace_na(aantal_overstorten, 0))
+  mutate(aantal_overstorten = replace_na(aantal_overstorten, 0)) %>%
+  st_drop_geometry()
 
 
 # Save the output
-st_write(watersheds_aantal_overstorten, here("data", "verwerkt", "overstorten", "mi_meetpunten_watersheds_nested_all_aantal_overstorten.gpkg"),
-         delete_dsn = TRUE)
+save(watersheds_aantal_overstorten, file = here("data", "verwerkt", "overstorten", "mi_meetpunten_aantal_overstorten_afstroomgebied.rdata"))
 
 # Reclassen van landgebruik ----
 
@@ -312,12 +315,15 @@ data <- data %>%
 return(data)
 }
 
-watershed_landuse_reclass <- landuse_reclass(watershed_landuse, "afstroomgebied")
+watershed_landuse_reclass <- landuse_reclass(watershed_landuse, "afstroomgebied") %>%
+  inner_join(., watersheds_nested %>%
+               select(meetplaats, oppervlakte))
+
 save(watershed_landuse_reclass, file  = here("data", "verwerkt", "landgebruik", "landgebruik_afstroomgebied.Rdata"))
 buffer_landuse_reclass <- landuse_reclass(landuse_buffer, "buffer")
-save(buffer_landuse_reclass , file  = here("data", "verwerkt", "landgebruik", "landgebruik_buffer.Rdata"))
+save(buffer_landuse_reclass, file  = here("data", "verwerkt", "landgebruik", "landgebruik_buffer.Rdata"))
 oever_landuse_reclass <- landuse_reclass(landuse_oever, "oever")
 save(oever_landuse_reclass, file  = here("data", "verwerkt", "landgebruik", "landgebruik_oever.Rdata"))
 
-load( file  = here("data", "verwerkt", "landgebruik", "landgebruik_afstroomgebied.Rdata"))
+load(file  = here("data", "verwerkt", "landgebruik", "landgebruik_afstroomgebied.Rdata"))
 

@@ -57,7 +57,12 @@ mafy_data0 <- mafy_deelmaatlatten0 %>%
 mafy_data <- janitor::clean_names(mafy_data0)
 save(mafy_data, file = here("data", "verwerkt", "mafy_data.rdata"))
 
-mafy_meetpunten <- mafy_data %>%
+mafy_meetpunten_datum <- mafy_data %>%
   select(meetplaats, monsternamedatum, geometry) %>%
+  unique
+st_write(mafy_meetpunten_datum, dsn = here("data", "ruw", "macrofyten", "mafy_meetpunten_datum.gpkg"), delete_dsn = T)
+
+mafy_meetpunten <- mafy_data %>%
+  select(meetplaats, geometry) %>%
   unique
 st_write(mafy_meetpunten, dsn = here("data", "ruw", "macrofyten", "mafy_meetpunten.gpkg"), delete_dsn = T)

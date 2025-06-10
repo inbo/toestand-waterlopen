@@ -118,4 +118,3 @@ mi_soorten <- mi_soorten0 %>%
     #          !(waterlichaamcategorie %in% c("meer", "overgangswater"))) %>%
     left_join(waterlopen_groep, by = "type")
 save(mi_soorten, file = here("data", "verwerkt", "mi_soorten.rdata"))
-

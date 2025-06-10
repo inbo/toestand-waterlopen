@@ -1,6 +1,8 @@
 source(here::here("source", "inladen_packages.R"))
 
-mi_meetpunten <- st_read(here("data", "ruw", "macroinvertebraten", "mi_meetpunten.gpkg"))
+hm_data <- st_read(here("data", "ruw", "macroinvertebraten", "mi_meetpunten.gpkg")) %>%
+  select(-monsternamedatum) %>%
+  unique()
 hydromorf <- st_read(here("data", "ruw", "hydromorfologie", "deelmaatlatten_wlniveau_OUD.shp"))
 hydromorf_nieuw <- st_read(here("data", "ruw", "hydromorfologie", "trajectenlaag_detail_afgerond.shp"))
 hydromorf3 <- st_read(here("data", "ruw", "hydromorfologie", "trajectenlaag_detail.shp"))
@@ -39,27 +41,28 @@ nearest_river_index %>%
 hydmo_variabelen <- hydromorf_nieuw %>%
   inner_join(., stroomsnelheid_breedte_diepte, by = "traj_code")
 
-sinuositeit$traject_code %>% unique() %>% length()
-hydromorf_nieuw$traj_code %>% unique() %>% length()
-
 test2 <- hydromorf_nieuw %>%
   inner_join(., hydromorf_oud_nieuw, by = c("traj_code" = "corr_traject"))
 
 # Extract river attribute (e.g. 'river_value')
-mi_meetpunten$EKC2 <- as.numeric(hydmo_variabelen$ekc_r[nearest_river_index])
-mi_meetpunten$sinuositeit <- as.numeric(hydmo_variabelen$sin_s3[nearest_river_index])
-mi_meetpunten$verstuwing <- as.numeric(hydmo_variabelen$opst_sco_t[nearest_river_index])
-mi_meetpunten$stroomsnelheid <- as.numeric(hydmo_variabelen$stroomsnelheid_kmu[nearest_river_index])
-mi_meetpunten$diepte <- as.numeric(hydmo_variabelen$avg_depth[nearest_river_index])
-mi_meetpunten$breedte <- as.numeric(hydmo_variabelen$width_used[nearest_river_index])
+hm_data$EKC2 <- as.numeric(hydmo_variabelen$ekc_r[nearest_river_index])
+hm_data$sinuositeit <- as.numeric(hydmo_variabelen$sin_s3[nearest_river_index])
+hm_data$verstuwing <- as.numeric(hydmo_variabelen$opst_sco_t[nearest_river_index])
+hm_data$stroomsnelheid <- as.numeric(hydmo_variabelen$stroomsnelheid_kmu[nearest_river_index])
+hm_data$diepte <- as.numeric(hydmo_variabelen$avg_depth[nearest_river_index])
+hm_data$breedte <- as.numeric(hydmo_variabelen$width_used[nearest_river_index])
 
+hm_data <- hm_data %>%
+  st_drop_geometry()
+
+save(hm_data, file = here("data", "verwerkt", "hm_data.rdata"))
 
 load(here("data", "verwerkt", "mi_data.rdata"))
 mi_data_analyse <- mi_data %>%
   filter(categorie != "Vijver") %>%
   filter(waterlooptype != "Geïsoleerd water") %>%
   filter(waterlichaamcategorie != "meer") %>%
-  left_join(., mi_meetpunten %>% st_drop_geometry(), by = "meetplaats")
+  left_join(., hm_data %>% st_drop_geometry(), by = "meetplaats")
 
 
 conflicted::conflicts_prefer(lmerTest::lmer)
@@ -102,8 +105,8 @@ dharma_residuals(object = fit, simu)
 tolerance <- 20
 
 # Calculate distance to nearest river for each point
-nearest_river_index <- st_nearest_feature(mi_meetpunten, hydromorf2)
-distances <- st_distance(mi_meetpunten, hydromorf2[nearest_river_index, ], by_element = TRUE)
+nearest_river_index <- st_nearest_feature(hm_data, hydromorf2)
+distances <- st_distance(hm_data, hydromorf2[nearest_river_index, ], by_element = TRUE)
 
 # Assign NA for points further than tolerance
 nearest_river_index[as.numeric(distances) > tolerance] <- NA
@@ -111,8 +114,8 @@ nearest_river_index %>%
   na.omit() %>%
   length
 
-mi_meetpunten$EKC_hydromorf <- as.numeric(hydromorf2$ekc_r[nearest_river_index])
-hist(mi_meetpunten$EKC_hydromorf)
+hm_data$EKC_hydromorf <- as.numeric(hydromorf2$ekc_r[nearest_river_index])
+hist(hm_data$EKC_hydromorf)
 
 model <- lmer(data = mi_data_analyse,
               sw_dw ~ EKC_hydromorf + jaar + groep + statuut + (1 | meetplaats))

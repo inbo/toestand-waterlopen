@@ -68,7 +68,8 @@ fc_data %>%
   unique() %>%
   View()
 
-selectie <- fc_data %>%
+# selectie van interessante stoffen ----
+fc_selectie <- fc_data %>%
   filter(parameter_omschrijving %in% c("Chemisch zuurstofverbruik",
                                        "pH",
                                        "Fosfor, totaal",
@@ -85,30 +86,24 @@ selectie <- fc_data %>%
                                        "Ammonium",
                                        "Zuurstof, verzadiging",
                                        "Biochemisch zuurstofverbruik na 5d.",
-                                       "Sulfaat"
-                                                ))
+                                       "Sulfaat",
+                                       "Orthofosfaat",
+                                       "Zwevende stoffen"
+                                       ))
 
-temperatuur <- fc_data %>%
-  filter(parameter_omschrijving %in% c("Temperatuur"))
+save(fc_selectie, file = here("data", "verwerkt", "fc_selectie.rdata"))
 
-totaal_stikstof <- selectie %>%
-  filter(parameter_symbool == "N t")
-totaal_fosfor <- selectie %>%
-  filter(parameter_symbool == "P t")
+# overschrijdingen polluenten ----
+overschrijdingen_aantal <- read_excel(here("data", "ruw", "fys_chem", "250326_Beoordeling GS per SP met norm_2007_2024.xlsx"), sheet = "MPGemMaxLijst") %>%
+  janitor::clean_names() %>%
+  rename(meetplaats = sample_point_naam) %>%
+  select(-x, -y)
 
-zuurstof <- selectie %>%
-  filter(parameter_symbool %in% c("O2")) %>%
-  filter(resultaat < 45) %>%
-  mutate(year = format(sample_datum_monstername, "%Y")) %>%
-  group_by(year, sample_point) %>%
-  summarise(mean_02 = mean(resultaat, na.rm = T))
+overschrijdingen_parameters <- read_excel(here("data", "ruw", "fys_chem", "250326_Beoordeling GS per SP met norm_2007_2024.xlsx"), sheet = "OverschrijdingMPPar") %>%
+  janitor::clean_names() %>%
+  rename(meetplaats = sample_point_naam) %>%
+  select(-x, -y)
 
-ggplot(zuurstof, aes(year, mean_02)) +
-  geom_point() +
-  geom_smooth(method = "lm")
-
-summary(test$resultaat)
-
-
-test <- anaresult %>% mutate(sample_point2 = stringr::str_replace(sample_point, "OW", ""))
-test %>% filter(sample_point2 == "21225470")
+overschrijdingen <- overschrijdingen_aantal %>%
+  left_join(., overschrijdingen_parameters, by = c("jaar", "meetplaats"))
+save(overschrijdingen, file = here("data", "verwerkt", "overschrijdingen.rdata"))
