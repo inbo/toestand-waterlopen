@@ -38,9 +38,9 @@ save(fybe_data, file = here("data", "verwerkt", "fybe_data.rdata"))
 fybe_meetpunten_datum <- fybe_data %>%
   select(meetplaats, monsternamedatum, geometry) %>%
   unique
-st_write(fybe_meetpunten_datum, dsn = here("data", "ruw", "macrofyten", "fybe_meetpunten_datum.gpkg"), delete_dsn = T)
+st_write(fybe_meetpunten_datum, dsn = here("data", "ruw", "fytobenthos", "fybe_meetpunten_datum.gpkg"), delete_dsn = T)
 
 fybe_meetpunten <- fybe_data %>%
   select(meetplaats, geometry) %>%
   unique
-st_write(fybe_meetpunten, dsn = here("data", "ruw", "macrofyten", "fybe_meetpunten.gpkg"), delete_dsn = T)
+st_write(fybe_meetpunten, dsn = here("data", "ruw", "fytobenthos", "fybe_meetpunten.gpkg"), delete_dsn = T)
