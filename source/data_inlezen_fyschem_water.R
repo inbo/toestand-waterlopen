@@ -1,4 +1,5 @@
 source(here::here("source", "inladen_packages.R"))
+
 # Analyseresultaten ----
 if(!file.exists(here("data", "verwerkt", "fc_data.rdata"))){
 # meetresultaten inlezen ----
@@ -41,8 +42,8 @@ rm(combined_dataframe)
 rm(list_of_dataframes)
 
 fc_data <- anaresult %>%
-  left_join(., anaresult_locations, by = "sample_point")
-
+  left_join(., anaresult_locations, by = "sample_point") %>% # toevoegen kolom met aangepast resultaat met detectielimiet /2
+  mutate(resultaat_detectielimiet = ifelse(teken == "<", resultaat/2, resultaat))
 save(fc_data, file = here("data", "verwerkt", "fc_data.rdata"))
 }
 
