@@ -11,30 +11,28 @@ library(igraph)
 library(lubridate)
 library(mapview)
 
-dem <- rast(here("data", "ruw", "dem", "DHMVIIDTMRAS025mto50m_breachedDTM.tif")) #hydrologisch dem
-dem_1m <- rast(here("data", "ruw", "dem", "DHMVIIDTMRAS1m.tif"))
-rivers <- st_read(here("data", "ruw", "waterlopen", "wlas_network.shp"))
+fd <- st_read(here("data", "ruw", "netwerk", "Flow_direction_coordinates.shp"))
 nodes <- st_read(here("data", "ruw", "waterlopen", "vha_network_junctions.shp"))
 
-# flow_acc <- rast(here("data", "verwerkt", "hydrologisch", "dhmvii_dtm_50m_d8_flow.tif"))
-# flow_dir <- rast(here("data", "verwerkt", "hydrologisch", "dhmvii_dtm_50m_d8_pointer.tif"))
+# Calculate from_node and to_node based on Start and End coordinates
+# Convert the Start and End coordinates into POINT geometries
+start_points <- st_as_sf(data.frame(
+  x = fd$StartX,
+  y = fd$StartY
+), coords = c("x", "y"), crs = st_crs(fd))
 
-start_pts <- st_line_sample(rivers, sample = 0)  # start point
-end_pts <- st_line_sample(rivers, sample = 1)    # end point
+end_points <- st_as_sf(data.frame(
+  x = fd$EndX,
+  y = fd$EndY
+), coords = c("x", "y"), crs = st_crs(fd))
 
-start_node_id <- st_nearest_feature(start_pts, nodes)
-end_node_id <- st_nearest_feature(end_pts, nodes)
-rivers$from_node <- start_node_id
-rivers$to_node <- end_node_id
+# Find the nearest network node for start and end points
+fd$from_node <- st_nearest_feature(start_points, nodes)
+fd$to_node <- st_nearest_feature(end_points, nodes)
 
-start_elev <- terra::extract(dem, vect(start_pts))[[2]]
-end_elev <- terra::extract(dem, vect(end_pts))[[2]]
+# Assign flow direction based on these nodes (optional: store as string)
+fd$flow_dir <- "start_to_end"  # All flows are from Start -> End as defined in coords
 
-start_elev_1m <- terra::extract(dem_1m, vect(start_pts))[[2]]
-end_elev_1m <- terra::extract(dem_1m, vect(end_pts))[[2]]
-
-
-rivers$flow_dir <- ifelse(start_elev_1m > end_elev_1m, "start_to_end", "end_to_start") #in se niks meer mee gedaan
 
 # find nearest fc point for mafy point in space upstream and in time ----
 
@@ -60,7 +58,7 @@ qgis_run_algorithm(
   "native:snapgeometries",
   INPUT = mafy_meetpunten_datum,
   TOLERANCE = 100,
-  REFERENCE_LAYER = rivers,
+  REFERENCE_LAYER = fd,
   OUTPUT = here("data", "verwerkt", "hydrologisch", "mafy_snapped.gpkg"),
   .quiet = TRUE
 )
@@ -79,7 +77,7 @@ qgis_run_algorithm(
   "native:snapgeometries",
   INPUT = fc_meetpunten_meetplaats,
   TOLERANCE = 100,
-  REFERENCE_LAYER = rivers,
+  REFERENCE_LAYER = fd,
   OUTPUT = here("data", "verwerkt", "hydrologisch", "fc_snapped.gpkg"),
   .quiet = TRUE
 )
@@ -96,27 +94,23 @@ mapview(mafy_snapped, color = "red", legend = FALSE) +
   # mapview(mafy_meetpunten_meetplaats, color = "green", legend = F) +
   mapview(fc_snapped_meetplaats, color = "yellow", legend = F) +
   mapview(nodes, color = "blue", legend = F) +
-  mapview(st_simplify(rivers))
+  mapview(st_simplify(fd))
 
 # Assign each snapped point to nearest river segment
-mafy_snapped$segment_id <- st_nearest_feature(mafy_snapped, rivers)
-fc_snapped$segment_id <- st_nearest_feature(fc_snapped, rivers)
+mafy_snapped$segment_id <- st_nearest_feature(mafy_snapped, fd)
+fc_snapped$segment_id <- st_nearest_feature(fc_snapped, fd)
 
-# Map river segments to from_node (based on direction)
-segment_to_node <- setNames(rivers$from_node, seq_len(nrow(rivers)))
+# Map river segments to from_node (start) and assign to snapped points
+segment_to_node_from <- setNames(fd$from_node, seq_len(nrow(fd)))
+mafy_snapped$node <- segment_to_node_from[mafy_snapped$segment_id]
+fc_snapped$node <- segment_to_node_from[fc_snapped$segment_id]
 
-mafy_snapped$node <- segment_to_node[mafy_snapped$segment_id]
-fc_snapped$node <- segment_to_node[fc_snapped$segment_id]
-
-# Build river network graph
+# Build river network graph using from_node and to_node directly
 edges <- data.frame(
-  from = ifelse(start_elev_1m > end_elev_1m, start_node_id, end_node_id),
-  to   = ifelse(start_elev_1m > end_elev_1m, end_node_id, start_node_id),
-  segment_id = seq_len(nrow(rivers))
+  from = as.character(fd$from_node),
+  to = as.character(fd$to_node),
+  segment_id = seq_len(nrow(fd))
 )
-
-edges$from <- as.character(edges$from)
-edges$to <- as.character(edges$to)
 
 g <- graph_from_data_frame(edges, directed = TRUE)
 
@@ -133,21 +127,31 @@ for (i in seq_len(nrow(mafy_snapped))) {
   upstream_nodes <- subcomponent(g, v = mnode, mode = "in") %>% names()
 
   #geen within segment filtering -> maar is niet erg dat er een downstream fc punt wordt genomen, gezien het op hetzelfde segment ligt en dus waarschijnlijk dichtbij
+
   candidates <- fc_snapped %>%
     filter(
       as.character(node) %in% upstream_nodes,
-      abs(difftime(monsternamedatum, mdate, units = "days")) <= 30
+      {
+        days_before <- as.numeric(difftime(mdate, monsternamedatum, units = "days"))
+        days_before >= 30 & days_before <= 90
+      }
     )
+
+  # candidates <- fc_snapped %>% #code voor 30 dagen voor en na mafy meting
+  #   filter(
+  #     as.character(node) %in% upstream_nodes,
+  #     abs(difftime(monsternamedatum, mdate, units = "days")) <= 30
+  #   )
 
   if (nrow(candidates) > 0) {
     # Compute distances
     dists <- st_distance(mpt, candidates)
 
-    # Set distance threshold (5000 meters)
+    # Set distance threshold (x meters)
     within_threshold <- which(as.numeric(dists) <= 5000)
 
     if (length(within_threshold) > 0) {
-      # Find the closest candidate within 5000 meters
+      # Find the closest candidate within x meters
       closest_idx <- within_threshold[which.min(dists[within_threshold])]
       match <- candidates[closest_idx, ]
     } else {
@@ -216,6 +220,7 @@ matched_quality <- do.call(rbind, lapply(results, function(x) {
 # Optionally combine into one data frame
 matched_df <- bind_cols(st_drop_geometry(matched_mafy), st_drop_geometry(matched_quality)) %>%
   mutate(monsternamedatum...6 = as.Date(monsternamedatum...6))
-matched_sf <- st_sf(matched_df, geometry = st_geometry(matched_mafy))
-matched_sf %>%
-summarize_all(~sum(is.na(.)))
+matched_sf_fd <- st_sf(matched_df, geometry = st_geometry(matched_mafy))
+matched_sf_fd %>%
+  drop_na(meetplaats...5) %>% nrow()
+

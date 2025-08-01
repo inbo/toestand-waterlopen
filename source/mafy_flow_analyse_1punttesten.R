@@ -1,4 +1,4 @@
-i <- 2859
+i <- 3117
 
 mpt <- mafy_snapped[i, ]
 mdate <- mpt$monsternamedatum
@@ -10,7 +10,7 @@ upstream_nodes <- subcomponent(g, v = mnode, mode = "in") %>% names()
 candidates <- fc_snapped %>%
   filter(
     as.character(node) %in% upstream_nodes,
-    abs(difftime(monsternamedatum, mdate, units = "days")) <= 90
+    abs(difftime(monsternamedatum, mdate, units = "days")) <= 600
   )
 #
 # #dit nog eerst eens testen
