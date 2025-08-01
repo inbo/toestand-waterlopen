@@ -116,5 +116,8 @@ mi_soorten0 <- vmm_mi$bemonsteringen %>%
 mi_soorten <- mi_soorten0 %>%
     # filter(waterlooptype != "Geïsoleerd water" &
     #          !(waterlichaamcategorie %in% c("meer", "overgangswater"))) %>%
-    left_join(waterlopen_groep, by = "type")
+  mutate(meetplaats = paste0("OW", deelmonster_id)) %>%
+    left_join(waterlopen_groep, by = "type") %>%
+  mutate(datum_monstername = as.Date(datum_monstername, "%Y-%m-%d")) %>%
+  rename(monsternamedatum = datum_monstername)
 save(mi_soorten, file = here("data", "verwerkt", "mi_soorten.rdata"))
