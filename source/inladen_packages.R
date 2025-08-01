@@ -18,6 +18,7 @@ library(purrr)
 library(sdmTMB)
 library(ape)
 library(raster)
+library(FD)
 
 conflicted::conflict_prefer("select", "dplyr")
 conflicted::conflict_prefer("read_xlsx", "readxl")
