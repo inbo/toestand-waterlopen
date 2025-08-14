@@ -8,26 +8,26 @@ data_wide <- mi_soorten %>%
   filter(categorie != "Vijver") %>%
   filter(waterlooptype != "Geïsoleerd water") %>%
   filter(waterlichaamcategorie != "meer") %>%
-  select(macroinvertebraat, ind, aantal, deelmonster_id, datum_monstername, meetplaats, statuut, groep) %>%
+  select(macroinvertebraat, ind, aantal, deelmonster_id, monsternamedatum, meetplaats, statuut, groep) %>%
   drop_na(ind) %>%
   filter(!macroinvertebraat %in% c("Vis", "Salamander", "Lege schelpen", "Lege kokers")) %>%
   group_by(meetplaats) %>%
-  filter(datum_monstername == max(datum_monstername)) %>%
-  filter(datum_monstername > as.POSIXct("2009-12-31")) %>%
+  filter(monsternamedatum == max(monsternamedatum)) %>%
+  filter(monsternamedatum > as.POSIXct("2010-12-31")) %>%
   ungroup() %>%
   select(-ind) %>%
   pivot_wider(names_from = macroinvertebraat, values_from = aantal, values_fill = 0) %>%
   na.omit()
 
 species_matrix <- data_wide %>%
-  select(-deelmonster_id, -datum_monstername, -meetplaats, -statuut, -groep)
+  select(-deelmonster_id, -monsternamedatum, -meetplaats, -statuut, -groep)
 
 nmds0 <- metaMDS(species_matrix, distance = "bray", k = 2, trymax = 10)
 plot(nmds0, type = "t")  # Basic NMDS plot
 
 data_wide <- data_wide[-541, ] # outliers uithalen voor visualisatie
 species_matrix <- data_wide %>%
-  select(-deelmonster_id, -datum_monstername, -meetplaats, -statuut, -groep)
+  select(-deelmonster_id, -monsternamedatum, -meetplaats, -statuut, -groep)
 # %>%
 #   select(-Heleobia, -Melitidae)
 

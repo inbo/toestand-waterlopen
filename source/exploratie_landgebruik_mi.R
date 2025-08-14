@@ -15,10 +15,14 @@ mi_data_analyse <- mi_data %>%
   filter(categorie != "Vijver") %>%
   filter(waterlooptype != "Geïsoleerd water") %>%
   filter(waterlichaamcategorie != "meer") %>%
+  filter(!meetplaats %in% c("OW113500", "OW12000", "OW179000", "OW536050", "OW669032", "OW690015", "OW917000", "OW981010", "OW981200")) %>% #weglaten punten buiten Vlaanderen
   left_join(watershed_landuse_reclass, by = "meetplaats") %>%
+  # left_join(landgebruik_koppeling, by = c("meetplaats", "monsternamedatum")) %>%
   left_join(oever_landuse_reclass, by = "meetplaats") %>%
   left_join(buffer_landuse_reclass, by = "meetplaats") %>%
-  st_drop_geometry()
+  st_drop_geometry() %>%
+  filter(jaar >2006)
+mi_data_analyse$mmif_scaled <- mi_data_analyse$mmif * 20
 
 # correlations ----
 library(GGally)
@@ -31,16 +35,15 @@ pairwise_correlation_plot <- function(data, columns) {
 }
 
 # Example usage:
-pairwise_correlation_plot(mi_data_analyse, c(34:47))
+pairwise_correlation_plot(mi_data_analyse, c(35:41, 44:57))
 pairwise_correlation_plot(mi_data_analyse, c(41:54))
 
 
 # Load necessary libraries
-install.packages("corrplot")  # If not installed
 library(corrplot)
 
 # Compute the correlation matrix
-cor_data <- mi_data_analyse[, c(34:54)] %>%
+cor_data <- mi_data_analyse[, c(35:41, 44:57)] %>%
   na.omit()
 
 cor_matrix <- cor(cor_data)
@@ -73,7 +76,7 @@ corrplot(masked_cor_matrix,
          tl.srt = 45,           # Rotate labels
          number.cex = 0.7,      # Adjust coefficient text size
          diag = FALSE,          # Hide diagonal
-         order = "hclust",      # Cluster similar variables
+         # order = "hclust",      # Cluster similar variables
          na.label = " ")        # Set NA values (low correlations) to appear as white
 
 corrplot(cor_matrix,
@@ -171,3 +174,14 @@ mi_data_analyse %>%
   geom_point(aes(hooggroen_buffer, ep_tw)) +
   geom_smooth(aes(hooggroen_buffer, ep_tw), method = "lm") +
   facet_grid(~groep)
+
+glmmtmb_model <- glmmTMB(cbind(mmif_scaled, 20 - mmif_scaled) ~
+                           scale(jaar) + scale(verharding) + scale(verharding_oever) + groep +
+                           (1|bekken/meetplaats),
+                         data = mi_data_analyse %>% filter(statuut == "Natuurlijk"),
+                         family = binomial(link = "logit"))
+summary(glmmtmb_model)
+plot_model(glmmtmb_model, type = "pred", terms="jaar [all]")
+plot_model(glmmtmb_model, type = "pred", terms="verharding [all]")
+plot_model(glmmtmb_model, type = "pred", terms="landbouw_intens [all]")
+plot_model(glmmtmb_model, type = "pred", terms = c("landbouw_intens_afstroomgebied", "groep"))

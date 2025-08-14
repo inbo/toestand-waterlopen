@@ -1,16 +1,16 @@
-# --- 1. Gegevens inlezen ---
 source(here::here("source", "inladen_packages.R"))
 
+# --- 1. Gegevens inlezen ---
 load(file = here("data", "verwerkt", "mi_soorten.rdata"))
 
 comm_data_raw <- mi_soorten %>%
   select(meetplaats, monsternamedatum, macroinvertebraat, aantal) %>%
   pivot_wider(., names_from = macroinvertebraat, values_from = aantal, values_fill = 0)
-write.csv(comm_data, file = here("data", "ruw", "macroinvertebraten", "traits", "comm_data.csv"))
+# write.csv(comm_data, file = here("data", "ruw", "macroinvertebraten", "traits", "comm_data.csv"))
 
 trait_data_raw <- read_excel(here("data", "ruw", "macroinvertebraten", "traits", "tachet_traits_mi.xlsx")) %>%
   janitor::clean_names()
-write.csv(trait_data_raw, file = here("data", "ruw", "macroinvertebraten", "traits", "trait_data.csv"))
+# write.csv(trait_data_raw, file = here("data", "ruw", "macroinvertebraten", "traits", "trait_data.csv"))
 
 
 # Lees de eerder gegenereerde taxonlijst met taxonomisch niveau in
@@ -22,7 +22,7 @@ trait_data0 <- trait_data_raw
 
 # Stap A: Maak een 'Taxon_Consolidated_Key' die 'sp.', '[Fam:X]', ' Ad.', ' Lv.', ' gen.' verwijdert
 # Deze key zal gebruikt worden om rijen te groeperen die tot hetzelfde taxon behoren.
-trait_data <- trait_data0 %>%
+trait_data1 <- trait_data0 %>%
   mutate(
     # Aangepast om ' gen.' te verwijderen in Taxon_Consolidated_Key
     Taxon_Consolidated_Key = tolower(str_replace_all(taxon, " sp\\.| Ad\\.| Lv\\.| Gen\\.", "")),
@@ -31,10 +31,17 @@ trait_data <- trait_data0 %>%
     Taxagroup_Clean = tolower(taxagroup)
   )
 
+selected_trait_groups <- c("saprobity_", "dispersal_", "reproduction_", "locomotion_",
+                           "substrate_", "current_velocity_", "trophic_status_", "temperature_")
+
+
+trait_data <- trait_data1 %>%
+  select(taxon, family, taxagroup, Taxon_Consolidated_Key, Family_Clean, Taxagroup_Clean, starts_with(selected_trait_groups))
+
 # Identificeer de kolommen die de daadwerkelijke traits bevatten
 # Dit zijn alle kolommen na de eerste 4 (Taxagroup, Family, Subfamily, Taxon)
 # En exclusief de nieuw aangemaakte 'Clean' en 'Consolidated_Key' kolommen
-trait_cols <- names(trait_data)[5:(ncol(trait_data) - 3)] # Past zich aan als er meer 'clean' kolommen komen
+trait_cols <- names(trait_data)[7:(ncol(trait_data))] # Past zich aan als er meer 'clean' kolommen komen
 
 # Stap B: Consolidateer trait data door te groeperen op Taxon_Consolidated_Key
 # Als er meerdere rijen zijn per geconsolideerde taxon (b.v. Ad. en Lv.), dan gemiddelde traits.
@@ -240,4 +247,67 @@ fd_results <- dbFD(
   corr = "cailliez",        # Correctie voor negatieve eigenvalues
   m = "min"                 # Minimale aantal PCoA dimensies
 )
+
+# Bereken de Trait Coverage per sampling event ---
+
+# Bereid een dataframe voor met de totale abundanties van de oorspronkelijke data
+total_raw_abundances_df <- comm_data_raw %>%
+  mutate(
+    monsternamedatum_str = format(as.Date(monsternamedatum), "%Y-%m-%d"),
+    unique_id = paste(meetplaats, monsternamedatum_str, sep = "_")
+  ) %>%
+  # Selecteer alle taxa-kolommen en de unieke ID
+  select(-meetplaats, -monsternamedatum, -monsternamedatum_str) %>%
+  # Bereken de rij-som voor elke unieke ID
+  mutate(total_raw_abundance = rowSums(select(., c(-unique_id)))) %>%
+  select(unique_id, total_raw_abundance)
+
+# Haal de unieke sampling IDs uit de comm_matrix
+sampling_ids <- rownames(comm_matrix)
+
+# Maak een dataframe met de totale abundanties van de gematchte taxa
+total_matched_abundances_df <- tibble(
+  unique_id = sampling_ids,
+  total_matched_abundance = rowSums(comm_matrix, na.rm = TRUE)
+)
+
+# Bereken de trait coverage door de twee dataframes samen te voegen
+trait_coverage_df <- total_matched_abundances_df %>%
+  left_join(total_raw_abundances_df, by = "unique_id") %>%
+  mutate(
+    trait_coverage_percentage = (total_matched_abundance / total_raw_abundance) * 100
+  ) %>%
+  # Vervang NaN's (deling door nul) en oneindige waarden met 0
+  mutate(trait_coverage_percentage = replace_na(trait_coverage_percentage, 0)) %>%
+  mutate(trait_coverage_percentage = ifelse(is.infinite(trait_coverage_percentage), 0, trait_coverage_percentage)) %>%
+  select(unique_id, trait_coverage_percentage)
+
+# filter samples met trait coverage lager dan x%
+trait_coverage_df %>%
+  filter(trait_coverage_percentage > 80) %>%
+  nrow
+
+fdisp_mi <- fd_results$FDis %>%
+  as.data.frame %>%
+  rownames_to_column(var = "unique_id") %>%
+  rename(fdisp = ".") %>%
+  left_join(.,
+            trait_coverage_df,
+            by = "unique_id") %>%
+  left_join(.,
+            comm_data_raw %>%
+              mutate(
+                monsternamedatum_str = format(as.Date(monsternamedatum), "%Y-%m-%d"),
+                unique_id = paste(meetplaats, monsternamedatum_str, sep = "_")) %>%
+              select(monsternamedatum, meetplaats, unique_id),
+            by = "unique_id")
+save(fdisp_mi, file = here("data", "verwerkt", "mi_fd.rdata"))
+
+ggplot(fdisp_mi
+       %>%
+         filter(monsternamedatum > '2007/12/31'), aes(monsternamedatum, fdisp)) +
+  # geom_point() +
+  geom_smooth()
+
+
 

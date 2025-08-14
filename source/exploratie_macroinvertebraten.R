@@ -1,6 +1,12 @@
 # inladen packages en data ----
 source(here::here("source", "inladen_packages.R"))
-load(here("data", "verwerkt", "mi_data.rdata"))
+load(here("data", "verwerkt", "mi_data.rdata")) # data macro-invertebraten
+load(here("data", "verwerkt", "fc_selectie.rdata")) # analysedata fys-chem
+load(file  = here("data", "verwerkt", "landgebruik", "landgebruik_afstroomgebied.Rdata")) # landgebruik afstroomgebieden
+load(file = here("data", "verwerkt", "landgebruik", "landgebruik_oever.Rdata")) # landgebruik langs oevers
+load(file = here("data", "verwerkt", "landgebruik", "landgebruik_buffer.Rdata")) # landgebruik cirkel
+load(file = here("data", "verwerkt", "overstorten", "mi_meetpunten_aantal_overstorten_afstroomgebied.rdata"))# aantal overstorten in afstroomgebied
+load(file = here("data", "verwerkt", "overschrijdingen.rdata")) # data overschrijdingen vervuilende stoffen
 
 # meetpunten macroinvertebraten voor landgebruik
 
@@ -10,7 +16,8 @@ mi_data %>%
 mi_data_analyse <- mi_data %>%
   filter(categorie != "Vijver") %>%
   filter(waterlooptype != "Geïsoleerd water") %>%
-  filter(waterlichaamcategorie != "meer")
+  filter(waterlichaamcategorie != "meer") %>%
+  filter(!meetplaats %in% c("OW113500", "OW12000", "OW179000", "OW536050", "OW669032", "OW690015", "OW917000", "OW981010", "OW981200")) #weglaten punten buiten Vlaanderen
 
 # aantal uniek meetplaatsen per statuut (onafh van jaar)
 mi_data_analyse %>%
