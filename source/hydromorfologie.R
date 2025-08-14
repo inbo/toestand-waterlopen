@@ -1,30 +1,30 @@
 source(here::here("source", "inladen_packages.R"))
 
-hm_data <- st_read(here("data", "ruw", "macroinvertebraten", "mi_meetpunten.gpkg")) %>%
+mi_meetpunten <- st_read(here("data", "ruw", "macroinvertebraten", "mi_meetpunten.gpkg")) %>%
   select(-monsternamedatum) %>%
   unique()
-hydromorf <- st_read(here("data", "ruw", "hydromorfologie", "deelmaatlatten_wlniveau_OUD.shp"))
-hydromorf_nieuw <- st_read(here("data", "ruw", "hydromorfologie", "trajectenlaag_detail_afgerond.shp"))
-hydromorf3 <- st_read(here("data", "ruw", "hydromorfologie", "trajectenlaag_detail.shp"))
-hydromorf4 <- st_read(here("data", "ruw", "hydromorfologie", "trajectenlaag_vmm_29jan2025_ruw.shp"))
+hydromorf <- st_read(here("data", "ruw", "hydromorfologie", "deelmaatlatten_wlniveau_OUD.shp")) # de oude hydromorfologielaag met oude EKC en deelmaatlatten
+hydromorf_nieuw <- st_read(here("data", "ruw", "hydromorfologie", "trajectenlaag_detail_afgerond.shp")) # de nieuwe hydromorfologielaag: de ze bevat zowel variabelen, deelmaatlatten en EKC2
+hydromorf3 <- st_read(here("data", "ruw", "hydromorfologie", "trajectenlaag_detail.shp")) # geen idee wat het verschil is met vorige laag.
+hydromorf4 <- st_read(here("data", "ruw", "hydromorfologie", "trajectenlaag_vmm_29jan2025_ruw.shp")) # ruwe data voor nieuwe hydmolaag
 
-hydromorf_velddata <- read_excel(here("data", "ruw", "hydromorfologie", "Opname Resultaten Hydormorfologie v2.0 T11_25_02.xlsx"), sheet = "Opnames Resultaten")
+hydromorf_velddata <- read_excel(here("data", "ruw", "hydromorfologie", "Opname Resultaten Hydormorfologie v2.0 T11_25_02.xlsx"), sheet = "Opnames Resultaten") # veldmetingen -> hier kan info over bvb oevers uitgehaald worden -> moeilijke structuur (zeer long)
 stroomsnelheid_breedte_diepte <- read_excel(here("data", "ruw",
                                                  "hydromorfologie", "stroomsnelheid_traject.xlsx")) %>%
-  select(traj_code, owl, avg_depth, width_used, stroomsnelheid_kmu)
+  select(traj_code, owl, avg_depth, width_used, stroomsnelheid_kmu) # data over stroomsnelheid en breede en diepte op basis van PEGASE model
 
 hydromorf_oud_nieuw <- read_excel(here("data", "ruw", "hydromorfologie", "oude_nieuwe_trajecten_velddata.xlsx"),
                                   sheet = "Sheet1") %>%
-  janitor::clean_names()
+  janitor::clean_names() #file met koppeling tussen nieuwe en oude trajecten?
 
 wider <- hydromorf_velddata %>%
   janitor::clean_names() %>%
   pivot_wider(., names_from = profieltype_naam, values_from = `resultaatwaarde_naam`)
 
-oeververdediging <- hydromorf_velddata %>% filter(`Resultaatwaarde Groep Naam` == "Oeververdediging")
+oeververdediging <- hydromorf_velddata %>% filter(`Resultaatwaarde Groep Naam` == "Oeververdediging") # oeververdediging uit velddata halen -> met L en R oever
 
 
-# waldo::compare(hydromorf2, hydromorf3)
+# linken meetpunten macroinvertebraten met trajecten hydromorfologie ----
 
 tolerance <- 20
 
@@ -42,7 +42,9 @@ hydmo_variabelen <- hydromorf_nieuw %>%
   inner_join(., stroomsnelheid_breedte_diepte, by = "traj_code")
 
 test2 <- hydromorf_nieuw %>%
-  inner_join(., hydromorf_oud_nieuw, by = c("traj_code" = "corr_traject"))
+  inner_join(., hydromorf_oud_nieuw, by = c("traj_code" = "corr_traject")) # even geen idee meer wat dit bekijken, dit was om de koppeling van oude en nieuwe trajecten te checken?
+
+hm_data <- mi_meetpunten
 
 # Extract river attribute (e.g. 'river_value')
 hm_data$EKC2 <- as.numeric(hydmo_variabelen$ekc_r[nearest_river_index])
@@ -56,6 +58,10 @@ hm_data <- hm_data %>%
   st_drop_geometry()
 
 save(hm_data, file = here("data", "verwerkt", "hm_data.rdata"))
+
+# kijken welke NA waarden want neemt snel af met verstuwing!
+
+#testje
 
 load(here("data", "verwerkt", "mi_data.rdata"))
 mi_data_analyse <- mi_data %>%
@@ -77,53 +83,3 @@ ggplot(pred, aes(x = x, y = predicted)) +
   geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2) +
   labs(x = "Jaar", y = "MMIF", title = "Conditional Effect of Jaar")
 
-# Testen sdmTMB----
-
-data <- mi_data_analyse %>%
-  mutate(
-    X = st_coordinates(.)[,1]/1000,
-    Y = st_coordinates(.)[,2]/1000
-  ) %>%
-  st_drop_geometry()
-
-inv_dist <- as.matrix(dist(data[, c("X", "Y")]))
-diag(inv_dist) <- 0
-Moran.I(data$mmif, inv_dist, na.rm = T)
-
-mesh <- make_mesh(data, xy_cols = c("X", "Y"), n_knots = 100)
-plot(mesh)
-fit <- sdmTMB(formula = mmif ~ s(EKC_hydromorf, k=3) + jaar + groep + statuut + (1 | meetplaats),
-       data = data %>%
-         mutate(meetplaats = as.factor(meetplaats)) %>%
-         na.omit(),
-       mesh = mesh,
-       spatial = "off")
-r.squaredGLMM(fit)
-dharma_residuals(object = fit, simu)
-
-# Hydromorfologie 2.0 ----
-tolerance <- 20
-
-# Calculate distance to nearest river for each point
-nearest_river_index <- st_nearest_feature(hm_data, hydromorf2)
-distances <- st_distance(hm_data, hydromorf2[nearest_river_index, ], by_element = TRUE)
-
-# Assign NA for points further than tolerance
-nearest_river_index[as.numeric(distances) > tolerance] <- NA
-nearest_river_index %>%
-  na.omit() %>%
-  length
-
-hm_data$EKC_hydromorf <- as.numeric(hydromorf2$ekc_r[nearest_river_index])
-hist(hm_data$EKC_hydromorf)
-
-model <- lmer(data = mi_data_analyse,
-              sw_dw ~ EKC_hydromorf + jaar + groep + statuut + (1 | meetplaats))
-summary(model)
-pred <- ggpredict(model, terms = "EKC_hydromorf")
-r.squaredGLMM(model)
-# Plot
-ggplot(pred, aes(x = x, y = predicted)) +
-  geom_line() +
-  geom_ribbon(aes(ymin = conf.low, ymax = conf.high), alpha = 0.2) +
-  labs(x = "Jaar", y = "MMIF", title = "Conditional Effect of Jaar")
