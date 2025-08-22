@@ -1,8 +1,7 @@
 source(here::here("source", "inladen_packages.R"))
 
-mi_meetpunten <- st_read(here("data", "ruw", "macroinvertebraten", "mi_meetpunten.gpkg")) %>%
-  select(-monsternamedatum) %>%
-  unique()
+mi_meetpunten <- st_read(here("data", "ruw", "macroinvertebraten", "mi_meetpunten.gpkg"))
+
 hydromorf <- st_read(here("data", "ruw", "hydromorfologie", "deelmaatlatten_wlniveau_OUD.shp")) # de oude hydromorfologielaag met oude EKC en deelmaatlatten
 hydromorf_nieuw <- st_read(here("data", "ruw", "hydromorfologie", "trajectenlaag_detail_afgerond.shp")) # de nieuwe hydromorfologielaag: de ze bevat zowel variabelen, deelmaatlatten en EKC2
 hydromorf3 <- st_read(here("data", "ruw", "hydromorfologie", "trajectenlaag_detail.shp")) # geen idee wat het verschil is met vorige laag.
@@ -26,7 +25,7 @@ oeververdediging <- hydromorf_velddata %>% filter(`Resultaatwaarde Groep Naam` =
 
 # linken meetpunten macroinvertebraten met trajecten hydromorfologie ----
 
-tolerance <- 20
+tolerance <- 100 #varieert niet zoveel met afstand
 
 # Calculate distance to nearest river for each point
 nearest_river_index <- st_nearest_feature(mi_meetpunten, hydromorf_nieuw)
@@ -34,7 +33,7 @@ distances <- st_distance(mi_meetpunten, hydromorf[nearest_river_index, ], by_ele
 
 # Assign NA for points further than tolerance
 nearest_river_index[as.numeric(distances) > tolerance] <- NA
-nearest_river_index %>%
+nearest_river_index %>% #4095
   na.omit() %>%
   length
 
@@ -47,11 +46,11 @@ test2 <- hydromorf_nieuw %>%
 hm_data <- mi_meetpunten
 
 # Extract river attribute (e.g. 'river_value')
-hm_data$EKC2 <- as.numeric(hydmo_variabelen$ekc_r[nearest_river_index])
-hm_data$sinuositeit <- as.numeric(hydmo_variabelen$sin_s3[nearest_river_index])
-hm_data$verstuwing <- as.numeric(hydmo_variabelen$opst_sco_t[nearest_river_index])
-hm_data$stroomsnelheid <- as.numeric(hydmo_variabelen$stroomsnelheid_kmu[nearest_river_index])
-hm_data$diepte <- as.numeric(hydmo_variabelen$avg_depth[nearest_river_index])
+hm_data$EKC2 <- as.numeric(hydmo_variabelen$ekc_r[nearest_river_index]) # 3650 meetpunten
+hm_data$sinuositeit <- as.numeric(hydmo_variabelen$sin_s3[nearest_river_index]) #4069
+hm_data$verstuwing <- as.numeric(hydmo_variabelen$opst_sco_t[nearest_river_index]) # 2763 -> veel NA's!
+hm_data$stroomsnelheid <- as.numeric(hydmo_variabelen$stroomsnelheid_kmu[nearest_river_index]) #4070
+hm_data$diepte <- as.numeric(hydmo_variabelen$avg_depth[nearest_river_index]) # 4074
 hm_data$breedte <- as.numeric(hydmo_variabelen$width_used[nearest_river_index])
 
 hm_data <- hm_data %>%

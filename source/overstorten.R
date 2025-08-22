@@ -111,6 +111,8 @@ cum_vuilvracht_watershed <- watersheds_nested %>%
   select(-weighted_cumulative_BZV) %>%
   st_drop_geometry()
 
+save(cum_vuilvracht_watershed, file = here("data", "verwerkt", "overstorten", "mi_meetpunten_vuilvracht_bzv.rdata"))
+
 # visualisatie
 plot <- watersheds_nested %>% filter(meetplaats == "OW100000")
 plot2 <- watersheds_buffered %>% filter(meetplaats == "OW100000")
@@ -134,4 +136,3 @@ mapview(afstroomgebied_full) +
   mapview(overstorten_vuilvracht, col.regions = "green") +
   mapview(overstorten_uitlaat)
 
-save(cum_vuilvracht_watershed, file = here("data", "verwerkt", "overstorten", "mi_meetpunten_vuilvracht_bzv.rdata"))

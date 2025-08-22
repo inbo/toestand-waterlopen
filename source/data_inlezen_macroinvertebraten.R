@@ -62,7 +62,7 @@ mi_deelmaatlatten0 <- vmm_mi$bbi_en_mmif_deelmaatlatten %>%
         deelmonster_id = as.character(deelmonster_id)
       ) %>%
       select(-teken, -eenheid, -meetnet) %>%
-      filter(parameter %in% c("T", "pH", "O2", "O2 verz", "EC 20", "EC 25", "Secchi")) %>%
+      filter(parameter %in% c("T", "pH", "O2", "O2 verz", "EC 20", "EC 25", "Secchi")) %>% # van deze variabelen enkel secchi soms een niet = teken (detectielimiet), dus hier niet aangepast.
       pivot_wider(names_from = parameter, values_from = resultaat) %>%
       rename(datum_monstername = monsternamedatum),
     by = c("meetplaats", "datum_monstername", "deelmonster_id")
@@ -80,11 +80,27 @@ mi_data0 <- mi_deelmaatlatten0 %>%
   # filter(waterlooptype != "Geïsoleerd water" &
   #          !(waterlichaamcategorie %in% c("meer", "overgangswater"))) %>%
   left_join(waterlopen_groep, by = "type")
-mi_data <- janitor::clean_names(mi_data0)
-  save(mi_data, file = here("data", "verwerkt", "mi_data.rdata"))
+mi_data <- janitor::clean_names(mi_data0) %>%
+  group_by(meetplaats, monsternamedatum) %>% #dubbele samples uitmiddelen
+  summarise(
+    across(
+      where(is.numeric), \(x) if(all(is.na(x))) NA else max(x, na.rm = TRUE) # enkel numerische kolommen om de max te pakken
+    ), # voor niet numerische waarden gewoon de eerste string nemen om te behouden
+    across(
+      where(is.factor) | where(is.character),
+      ~ first(.)
+    ),
+    .groups = "drop" # Drop the grouping at the end
+  )
+save(mi_data, file = here("data", "verwerkt", "mi_data.rdata"))
+
+mi_meetpunten_datum <- mi_data %>%
+  select(meetplaats, monsternamedatum, geometry)
+st_write(mi_meetpunten_datum, dsn = here("data", "ruw", "macroinvertebraten", "mi_meetpunten_datum.gpkg"), delete_dsn = T)
 
 mi_meetpunten <- mi_data %>%
-  select(meetplaats, monsternamedatum, geometry)
+  select(meetplaats, geometry) %>%
+  unique()
 st_write(mi_meetpunten, dsn = here("data", "ruw", "macroinvertebraten", "mi_meetpunten.gpkg"), delete_dsn = T)
 
 

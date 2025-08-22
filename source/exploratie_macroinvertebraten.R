@@ -1,14 +1,8 @@
 # inladen packages en data ----
 source(here::here("source", "inladen_packages.R"))
 load(here("data", "verwerkt", "mi_data.rdata")) # data macro-invertebraten
-load(here("data", "verwerkt", "fc_selectie.rdata")) # analysedata fys-chem
-load(file  = here("data", "verwerkt", "landgebruik", "landgebruik_afstroomgebied.Rdata")) # landgebruik afstroomgebieden
-load(file = here("data", "verwerkt", "landgebruik", "landgebruik_oever.Rdata")) # landgebruik langs oevers
-load(file = here("data", "verwerkt", "landgebruik", "landgebruik_buffer.Rdata")) # landgebruik cirkel
-load(file = here("data", "verwerkt", "overstorten", "mi_meetpunten_aantal_overstorten_afstroomgebied.rdata"))# aantal overstorten in afstroomgebied
-load(file = here("data", "verwerkt", "overschrijdingen.rdata")) # data overschrijdingen vervuilende stoffen
 
-# meetpunten macroinvertebraten voor landgebruik
+# meetpunten macroinvertebraten
 
 mi_data %>%
   distinct(categorie, waterlooptype)
@@ -17,19 +11,37 @@ mi_data_analyse <- mi_data %>%
   filter(categorie != "Vijver") %>%
   filter(waterlooptype != "Geïsoleerd water") %>%
   filter(waterlichaamcategorie != "meer") %>%
-  filter(!meetplaats %in% c("OW113500", "OW12000", "OW179000", "OW536050", "OW669032", "OW690015", "OW917000", "OW981010", "OW981200")) #weglaten punten buiten Vlaanderen
+  filter(!meetplaats %in% c("OW113500", "OW12000", "OW179000", "OW536050", "OW669032", "OW690015", "OW917000", "OW981010", "OW981200")) %>%
+  filter(jaar > 2006) #weglaten punten buiten Vlaanderen
 
-# aantal uniek meetplaatsen per statuut (onafh van jaar)
+# aantal meetplaatsen per jaar
 mi_data_analyse %>%
-  distinct(statuut, meetplaats) %>% # Rem. duplicate meetplaats within statuut
-  group_by(statuut) %>%
-  summarise(unique_meetplaats_count = n())
+  st_drop_geometry() %>%
+  group_by(jaar) %>%
+  summarise(aantal_meetplaatsen = n()) %>%
+  ggplot(aes(jaar, aantal_meetplaatsen)) +
+  geom_col()
 
-# recentste jaar telkens per meetplaats
+# aantal meetplaatsen met x aantal herhalingen
+mi_data_analyse %>%
+  # filter(jaar > 2006) %>%
+  st_drop_geometry() %>%
+  group_by(meetplaats) %>%
+  summarise(aantal_herhalingen = n()) %>%
+  group_by(aantal_herhalingen) %>%
+  summarise(aantal_meetplaatsen_met_aantal_herhalingen = n()) %>%
+  ggplot(aes(factor(aantal_herhalingen), aantal_meetplaatsen_met_aantal_herhalingen)) +
+  geom_col()
+
+
+# aantal meetplaatsen met recentste meting na 2019
 
 mi_data_analyse %>%
   group_by(meetplaats) %>%
-  filter(jaar == max(jaar))
+  filter(jaar == max(jaar)) %>%
+  filter(jaar > 2019) %>%
+  nrow()
+
 
 # vroegste jaar telkens per meetplaats
 mi_data_analyse %>%
@@ -38,10 +50,16 @@ mi_data_analyse %>%
 
 # meetplaatsen na 2019
 mi_data_analyse %>%
-  filter(jaar >= 2019) %>%
+  filter(jaar > 2019) %>%
   select(meetplaats) %>%
   unique() %>%
-  plot()
+  nrow
+
+# aantal uniek meetplaatsen per statuut (onafh van jaar)
+mi_data_analyse %>%
+  distinct(statuut, meetplaats) %>% # Rem. duplicate meetplaats within statuut
+  group_by(statuut) %>%
+  summarise(unique_meetplaats_count = n())
 
 # plot trend mmif per statuut
 
@@ -52,13 +70,26 @@ mi_data_analyse %>%
   facet_wrap(~statuut)
 
 mi_data_analyse %>%
+  group_by(meetplaats) %>%
+  ggplot(aes(jaar, mmif)) +
+  geom_smooth(method = "lm") +
+  facet_wrap(~statuut)
+
+mi_data_analyse %>%
   ggplot() +
   geom_line(aes(jaar, mmif, group = meetplaats), alpha = 0.25) +
   geom_smooth(aes(jaar, mmif), method = "gam",
               formula = y ~ s(x, k = 3)) +
   facet_grid(statuut ~ groep)
 
-# welk type waterlopen zijn de defaults
+mi_data_analyse %>%
+  ggplot() +
+  geom_line(aes(jaar, mmif, group = meetplaats), alpha = 0.25) +
+  geom_smooth(aes(jaar, mmif), method = "gam",
+              formula = y ~ s(x, k = 3)) +
+  facet_grid(groep ~ statuut)
+
+# welk type waterlopen zijn de defaults -> op basis van dit nog aanpassen indeling?
 mi_data_analyse %>%
   st_drop_geometry() %>%
   filter(statuut == "Default") %>%
@@ -127,12 +158,13 @@ plot_waterlopen_statuut("Kunstmatig", "Kunstmatige waterlopen")
 plot_waterlopen_statuut("Default", "Niet toegewezen")
 
 conflicted::conflicts_prefer(lmerTest::lmer)
+
 model <- lmer(data = mi_data_analyse %>%
        filter(statuut == "Natuurlijk"),
-     mmif ~ o2 + jaar + groep + (1 | meetplaats))
+     mmif ~ o2*groep + jaar + (1 | meetplaats) + (1 | bekken))
 summary(model)
 pred <- ggpredict(model, terms = "o2")
-
+plot_model(model, type = "int")
 # Plot
 ggplot(pred, aes(x = x, y = predicted)) +
   geom_line() +
@@ -149,6 +181,13 @@ ggplot(pred, aes(x = x, y = predicted)) +
   geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2) +
   labs(x = "Statuut", y = "Predicted Reaction Time", title = "Conditional Effects of Days") +
   theme_minimal()
+
+model <- lmer(data = mi_data_analyse %>%
+                filter(statuut == "Sterk Veranderd"),
+              mmif ~ p_h*groep + jaar + (1 | meetplaats) + (1 | bekken))
+summary(model)
+pred <- ggpredict(model, terms = "o2")
+plot_model(model, type = "int")
 
 
 # Overzichtkaartjes ----
@@ -182,3 +221,11 @@ mapviewdata %>%
   mapview(zcol = "recentste_jaar")  +
   mapview(vha_bekkens, alpha.regions = 0)
 
+# ander data
+
+load(here("data", "verwerkt", "fc_selectie.rdata")) # analysedata fys-chem
+load(file  = here("data", "verwerkt", "landgebruik", "landgebruik_afstroomgebied.Rdata")) # landgebruik afstroomgebieden
+load(file = here("data", "verwerkt", "landgebruik", "landgebruik_oever.Rdata")) # landgebruik langs oevers
+load(file = here("data", "verwerkt", "landgebruik", "landgebruik_buffer.Rdata")) # landgebruik cirkel
+load(file = here("data", "verwerkt", "overstorten", "mi_meetpunten_aantal_overstorten_afstroomgebied.rdata"))# aantal overstorten in afstroomgebied
+load(file = here("data", "verwerkt", "overschrijdingen.rdata")) # data overschrijdingen vervuilende stoffen

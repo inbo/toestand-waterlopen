@@ -1,35 +1,232 @@
 ---
 title: "Macro-invertebraten"
 author: "Emiel De Lombaerde"
-date: "2025-04-18"
+date: "2025-08-18"
 output: html_document
 ---
 
+# Data inlezen + laden packages
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-source(here::here("source", "inladen_packages.R"))
-load(here("data", "verwerkt", "mi_data.rdata"))
 
-# weglaten vijvers, meren, geisoleerd water
+source(here::here("source", "inladen_packages.R"))
+
+load(here("data", "verwerkt", "mi_data.rdata"))
+load(here("data", "verwerkt", "fc_selectie.rdata"))
+load(here("data", "verwerkt", "overschrijdingen.rdata"))
+load(here("data", "verwerkt", "hm_data.rdata"))
+
+load(file = here("data", "verwerkt", "landgebruik", "landgebruik_oever.Rdata"))
+load(file = here("data", "verwerkt", "landgebruik", "landgebruik_buffer.Rdata"))
+load(file = here("data", "verwerkt", "landgebruik", "landgebruik_afstroomgebied_jaren.rdata"))
+load(file = here("data", "verwerkt", "overstorten", "mi_meetpunten_aantal_overstorten_afstroomgebied.rdata"))
+
+# weglaten vijvers, meren, geisoleerd water en punten buiten Vlaanderen
 mi_data_analyse <- mi_data %>%
   filter(categorie != "Vijver") %>%
   filter(waterlooptype != "Geïsoleerd water") %>%
-  filter(waterlichaamcategorie != "meer")
+  filter(waterlichaamcategorie != "meer") %>%
+  filter(!meetplaats %in% c("OW113500", "OW12000", "OW179000", "OW536050", "OW669032", "OW690015", "OW917000", "OW981010", "OW981200"))
 
 ```
 
 ## Verkennen
 
+```{r echo = FALSE}
+# aantal meetplaatsen per jaar
+mi_data_analyse %>%
+  st_drop_geometry() %>%
+  group_by(jaar) %>%
+  summarise(aantal_meetplaatsen = n()) %>%
+  ggplot(aes(jaar, aantal_meetplaatsen)) +
+  geom_col()
+```
+
+```{r echo = FALSE}
+mi_data_analyse %>%
+  # filter(jaar > 2006) %>%
+  st_drop_geometry() %>%
+  group_by(meetplaats) %>%
+  summarise(aantal_herhalingen = n()) %>%
+  group_by(aantal_herhalingen) %>%
+  summarise(aantal_meetplaatsen_met_aantal_herhalingen = n()) %>%
+  ggplot(aes(factor(aantal_herhalingen), aantal_meetplaatsen_met_aantal_herhalingen)) +
+  geom_col()
+```
+
+```{r echo = FALSE}
+mi_data_analyse %>%
+  group_by(meetplaats) %>%
+  filter(jaar == max(jaar)) %>%
+  filter(jaar > 2019) %>%
+  nrow()
+```
+
+```{r echo = FALSE}
+mapviewdata <- mi_data_analyse %>%
+  filter(statuut == "Natuurlijk" | statuut == "Sterk Veranderd") %>%
+  group_by(bekken, meetplaats) %>%
+  summarize(jaren = paste(jaar, collapse = ", "),
+            lengte_reeks = max(jaar) - min(jaar) + 1,
+            aantal_bemonsteringen = n(),
+            recentste_jaar = max(jaar),
+            .groups = "drop")
+
+bekkens_sf <- read_sf(
+  here("data", "ruw", "bekkens", "Wsbekken.shp")
+)
+
+vha_bekkens <- bekkens_sf %>%
+  st_cast("GEOMETRYCOLLECTION") %>%
+  st_collection_extract()
+
+mapviewdata %>%
+  mapview(zcol = "lengte_reeks") +
+  mapview(vha_bekkens, alpha.regions = 0)
+
+mapviewdata %>%
+  mapview(zcol = "aantal_bemonsteringen") +
+  mapview(vha_bekkens, alpha.regions = 0)
+
+mapviewdata %>%
+  mapview(zcol = "recentste_jaar")  +
+  mapview(vha_bekkens, alpha.regions = 0)
+```
+
 ```{r}
-summary(cars)
+mi_full1 <- mi_data_analyse %>%
+  left_join(overschrijdingen %>% 
+              group_by(meetplaats, jaar) %>%
+              summarise(aantal_stoffen_met_overschrijding =
+                          mean(aantal_stoffen_met_overschrijding)),
+            by = c("meetplaats", "jaar")) %>%
+  left_join(landgebruik_afstroomgebied_jaren %>%
+              select(-oppervlakte, landgebruiksjaar),
+            by = c("meetplaats", "monsternamedatum")) %>%
+  left_join(landgebruik_oever,
+            by = "meetplaats") %>%
+  # left_join(landgebruik_buffer,
+  #           by = "meetplaats") %>%
+  left_join(watersheds_aantal_overstorten %>%
+              select(-oppervlakte),
+            by = "meetplaats") %>%
+  filter(jaar > 2009)
+
+# fc meetingen koppeling
+
+fc_mi_koppeling <- mi_data_analyse %>%
+  st_drop_geometry() %>%
+  filter(jaar > 2009) %>%
+  select(meetplaats, monsternamedatum) %>%
+  left_join(.,
+            fc_selectie,
+            by = c("meetplaats"), suffix = c("", "_fc")) %>%
+  filter(
+
+{
+  days_before <- as.numeric(difftime(monsternamedatum, monsternamedatum_fc, units = "days"))
+  days_before < 90 &
+  days_before > -15
+
+}
+) %>%
+  group_by(meetplaats, monsternamedatum) %>% #dubbele samples uitmiddelen
+  summarise(
+    across(
+      where(is.numeric), \(x) mean(x, na.rm = TRUE) # enkel numerische kolommen om de mean te pakken
+    ), # voor niet numerische waarden gewoon de eerste string nemen om te behouden
+    across(
+      where(is.factor) | where(is.character),
+      ~ first(.)
+    ),
+    .groups = "drop" # Drop the grouping at the end
+  )
+
+mi_full <- mi_full1 %>%
+    left_join(.,
+            fc_mi_koppeling,
+            by = c("meetplaats", "monsternamedatum"), suffix = c("", "_fc"))# suffix _fc voor waarden uit fc database
+
+# Transformeer de MMIF-score naar een integer (0-20) voor modellen
+mi_full$mmif_scaled <- mi_full$mmif * 20
+
+mi_natuurlijk_sterk_veranderd <- mi_full %>%
+  filter(statuut %in% c("Natuurlijk", "Sterk veranderd"))
+mi_kunstmatig <- mi_full %>%
+  filter(statuut == "Kunstmatig")
+
 ```
 
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r}
+mi_full <- mi_full[order(mi_full$monsternamedatum),]
+vis_miss(mi_full %>%
+           select(-meetplaats, -jaar, -monsternamedatum, -statuut, -groep, -categorie, -type, -waterlooptype,
+                  -bekken, -deelmonster_id, -landgebruiksjaar, -bbi, -vhag, -waterlichaamcategorie))
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```{r}
+# voorbeeld_data <- mi_natuurlijk_sterk_veranderd %>%
+#   select(c("mmif", "p_h", "t", "o2", "o2_verz", "ec_20", "groep", "bekken", "jaar", "mmif_scaled", "meetplaats"))
+#   filter(!is.na(mmif) &
+#            !is.na(p_h) &
+#            !is.na(t) &
+#            !is.na(o2) &
+#            !is.na(o2_verz) &
+#            !is.na(ec_20) &
+#            !is.na(groep) &
+#            !is.na(bekken) &
+#            !is.na(jaar) &
+#            !is.na(mmif_scaled) &
+#            !is.na(meetplaats))
+#   
+  variabelen <- c("mmif", "p_h", "t", "o2", "o2_verz", "ec_20", "groep", "bekken", "jaar", "mmif_scaled", "meetplaats")
+
+voorbeeld_data <- mi_natuurlijk_sterk_veranderd %>%
+  st_drop_geometry() %>%
+  select(all_of(variabelen)) %>%
+  filter(if_all(everything(), ~ !is.na(.)))
+
+# --- 1. Detectie van Multicollineariteit (VIF) ---
+# Een simpele lineaire model (lm) gebruiken om VIF te berekenen
+# De random effects worden hier weggelaten, omdat VIF voor de vaste effecten is
+vif_model <- glm(cbind(mmif_scaled, 20 - mmif_scaled) ~ p_h + t + o2 + o2_verz + ec_20,
+                 family = binomial(link = "logit"),
+                         na.action = na.omit,
+                 data = voorbeeld_data)
+vif_result <- vif(vif_model)
+print(vif_result)
+
+# B) Binomiaal GLMM
+# De MMIF-score is een proportie van "succesvolle" deelscores.
+# De respons is de telling (`mmif_scaled`), de totale trials zijn 20. Dus modelleren kans op succes per punt op 20?
+
+voorbeeld_model <- glmmTMB(cbind(mmif_scaled, 20 - mmif_scaled) ~
+                           scale(jaar) + scale(o2_verz) + groep +
+                           (1|bekken) + (1 | meetplaats),
+                         data = voorbeeld_data,
+                         family = binomial(link = "logit"))
+
+summary(voorbeeld_model)
+
+simulationOutput <- simulateResiduals(fittedModel = voorbeeld_model, plot = F)
+plot(simulationOutput)
+testDispersion(simulationOutput)
+testZeroInflation(simulationOutput)
+testUniformity(simulationOutput)
+plot(simulationOutput, form = voorbeeld_data$jaar)
+plot(simulationOutput, form = voorbeeld_data$o2_verz)
+
+voorbeeld_model2 <- glmmTMB(cbind(mmif_scaled, 20 - mmif_scaled) ~
+                           I(scale(jaar)^2) + scale(jaar) + scale(o2_verz) + groep +
+                           (1|bekken) + (1 | meetplaats),
+                         data = voorbeeld_data,
+                         family = binomial(link = "logit"),
+                         na.action = na.omit)
+  
+simulationOutput <- simulateResiduals(fittedModel = voorbeeld_model2, plot = F)
+plot(simulationOutput)
+plot(simulationOutput, form = voorbeeld_data$jaar)
+
+
+```

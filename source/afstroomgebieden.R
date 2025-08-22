@@ -8,8 +8,8 @@ source(here::here("source", "inladen_packages.R"))
 
 # Help functies voor qgis process
 
-qgis_algorithms() %>% View # algoritmes bekijken
-qgis_show_help("native:snapgeometries") # argumenten bekijken
+# qgis_algorithms() %>% View # algoritmes bekijken
+# qgis_show_help("native:snapgeometries") # argumenten bekijken
 
 # afstroomgebieden voor alle meetpunten bepalen ----
 dtm_hydro_breached <- rast(here("data", "ruw", "dem", "DHMVIIDTMRAS025mto50m_breachedDTM.tif"))
@@ -50,10 +50,6 @@ streams <- qgis_run_algorithm(
   .quiet = TRUE
 )
 }
-
-raster(here("data", "verwerkt", "hydrologisch",
-            paste0("dhmvii_dtm_50m_streams_t",
-                   threshold,".tif"))) %>% mapview()
 
 # omzetten raster streams tot een streamsvector
 #qgis_arguments("wbt:RasterStreamsToVector")
@@ -99,7 +95,7 @@ if (!file.exists(here("data", "verwerkt", "hydrologisch", "mi_meetpunten_watersh
 )
 }
 # Generate file paths dynamically
-watershed_files <- paste0("mi_meetpunten_watersheds_nested_", 1:60, ".tif")
+watershed_files <- paste0("mi_meetpunten_watersheds_nested_", 1:61, ".tif")
 
 # Convert raster watersheds to polygons in a loop
 watersheds_list <- map(watershed_files, ~ {
@@ -127,12 +123,12 @@ watersheds_nested <- watersheds_nested %>%
   mutate(oppervlakte = st_area(geometry))
 
 if (!file.exists(here("data", "verwerkt", "hydrologisch", "mi_meetpunten_watersheds_nested_all.gpkg"))) {
-st_write(watersheds_nested, here("data", "verwerkt", "hydrologisch", "mi_meetpunten_watersheds_nested_all.gpkg"), delete_dsn = T)
+st_write(watersheds_nested %>% select(-fid), here("data", "verwerkt", "hydrologisch", "mi_meetpunten_watersheds_nested_all.gpkg"), delete_dsn = T)
 }
 
 watersheds_nested <- st_read(here("data", "verwerkt", "hydrologisch", "mi_meetpunten_watersheds_nested_all.gpkg")) #gpkg met alle afstroomgebieden!
 
-# buffered watersheds; sommige afstroomgebieden zijn zo groot al een bekken. Hier overleg ik ze met een cirkelvormige buffer van 5km om dit in te perken.
+# buffered watersheds; sommige afstroomgebieden zijn zo groot als een bekken. Hier overleg ik ze met een cirkelvormige buffer van 5km om dit in te perken.
 
 locations_buffer <- locations %>%
   mutate(buffer = st_buffer(geometry, dist = 5000))
@@ -169,7 +165,8 @@ result <- buffers %>%
 # Optional: drop empty geometries (e.g., no intersection)
 watersheds_buffered <- result %>% filter(!st_is_empty(geometry))
 watersheds_buffered <- watersheds_buffered %>%
-  mutate(oppervlakte = st_area(geometry))
+  mutate(oppervlakte = st_area(geometry)) %>%
+  select(-fid)
 
 if (!file.exists(here("data", "verwerkt", "hydrologisch", "mi_meetpunten_watersheds_buffered_all.gpkg"))) {
 st_write(watersheds_buffered, here("data", "verwerkt", "hydrologisch", "mi_meetpunten_watersheds_buffered_all.gpkg"), delete_dsn = T)

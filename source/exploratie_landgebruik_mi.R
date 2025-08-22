@@ -7,6 +7,7 @@ load(here("data", "verwerkt", "mi_data.rdata"))
 load(file  = here("data", "verwerkt", "landgebruik", "landgebruik_afstroomgebied.Rdata"))
 load(file = here("data", "verwerkt", "landgebruik", "landgebruik_oever.Rdata"))
 load(file = here("data", "verwerkt", "landgebruik", "landgebruik_buffer.Rdata"))
+load(file = here("data", "verwerkt", "landgebruik", "landgebruik_afstroomgebied_jaren.rdata"))
 
 mi_data_analyse <- mi_data %>%
   group_by(meetplaats) %>%
@@ -17,33 +18,21 @@ mi_data_analyse <- mi_data %>%
   filter(waterlichaamcategorie != "meer") %>%
   filter(!meetplaats %in% c("OW113500", "OW12000", "OW179000", "OW536050", "OW669032", "OW690015", "OW917000", "OW981010", "OW981200")) %>% #weglaten punten buiten Vlaanderen
   left_join(watershed_landuse_reclass, by = "meetplaats") %>%
-  # left_join(landgebruik_koppeling, by = c("meetplaats", "monsternamedatum")) %>%
+  left_join(landgebruik_afstroomgebied_jaren %>% select(-oppervlakte), by = c("meetplaats", "monsternamedatum")) %>%
   left_join(oever_landuse_reclass, by = "meetplaats") %>%
   left_join(buffer_landuse_reclass, by = "meetplaats") %>%
   st_drop_geometry() %>%
-  filter(jaar >2006)
+  filter(jaar > 2006)
 mi_data_analyse$mmif_scaled <- mi_data_analyse$mmif * 20
 
 # correlations ----
-library(GGally)
-library(ggplot2)
-
-pairwise_correlation_plot <- function(data, columns) {
-  selected_data <- data[, columns, drop = FALSE]  # Select specified columns
-  selected_data <- na.omit(selected_data)
-  ggpairs(selected_data) + theme_minimal()  # Create pairwise correlation plot
-}
-
-# Example usage:
-pairwise_correlation_plot(mi_data_analyse, c(35:41, 44:57))
-pairwise_correlation_plot(mi_data_analyse, c(41:54))
-
 
 # Load necessary libraries
 library(corrplot)
 
 # Compute the correlation matrix
-cor_data <- mi_data_analyse[, c(35:41, 44:57)] %>%
+cor_data <- mi_data_analyse %>%
+  select() %>%
   na.omit()
 
 cor_matrix <- cor(cor_data)

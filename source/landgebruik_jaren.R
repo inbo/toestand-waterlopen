@@ -1,4 +1,5 @@
 source(here::here("source", "inladen_packages.R"))
+load(here("data", "verwerkt", "mi_data.rdata"))
 
 # landgebruik bepalen (procentueel) binnen elke afstroomgebied
 landuse_raster_2013 <- raster::raster(here("data", "ruw", "landgebruik", "niveau1_vla_2013_v3.tif"))
@@ -116,17 +117,21 @@ landgebruik_koppeling1 <- finale_landgebruik %>%
     values_from = value # Vul de nieuwe kolommen met de waarden uit 'value'
   )
 
-landgebruik_afstroomgebied_jaren <- landgebruik_koppeling0 %>% # me deze df kan je landgebruik op basis van de verschillende jaarlagen koppelen aan mi_data
+landgebruik_afstroomgebied_jaren <- landgebruik_koppeling0 %>% # met deze df kan je landgebruik op basis van de verschillende jaarlagen koppelen aan mi_data
   left_join(., landgebruik_koppeling1, by = c("meetplaats", "landgebruiksjaar"))
 save(landgebruik_afstroomgebied_jaren, file = here("data", "verwerkt", "landgebruik", "landgebruik_afstroomgebied_jaren.rdata"))
 
 # oeverlandgebruik en landgebruik cirkelvormige buffer (door Maarten aangeleverd), omzetten omzetten in percentages en reclassen. Dit zo nog moeten gecorrigeerd worden voor de verschillende jaren van de landgebruikskaart.
 
-landuse_oever <- convert_pixels_to_percentages(data = landuse_oever0)
+landuse_oever0 <- read_excel(here("data", "ruw", "landgebruik", "mi_meetpunten_lu_buffer.xlsx"))
+landuse_buffer0 <- read_excel(here("data", "ruw", "landgebruik", "mi_meetpunten_lu_cirk_min50m.xlsx"))
+
+landuse_oever <- convert_pixels_to_percentages(data = landuse_oever0) %>%
+  mutate(VALUE_13_pct = 0)
 landuse_buffer <- convert_pixels_to_percentages(data = landuse_buffer0)
 save(landuse_oever, file = here("data", "verwerkt", "landgebruik","landgebruik_oever.Rdata"))
 save(landuse_buffer, file = here("data", "verwerkt", "landgebruik","landgebruik_buffer.Rdata"))
-buffer_landuse_reclass <- landuse_reclass(landuse_buffer, "buffer")
-save(buffer_landuse_reclass, file  = here("data", "verwerkt", "landgebruik", "landgebruik_buffer.Rdata"))
-oever_landuse_reclass <- landuse_reclass(landuse_oever, "oever")
-save(oever_landuse_reclass, file  = here("data", "verwerkt", "landgebruik", "landgebruik_oever.Rdata"))
+landgebruik_buffer <- landuse_reclass(landuse_buffer, "buffer")
+save(landgebruik_buffer, file  = here("data", "verwerkt", "landgebruik", "landgebruik_buffer.Rdata"))
+landgebruik_oever <- landuse_reclass(landuse_oever, "oever")
+save(landgebruik_oever, file  = here("data", "verwerkt", "landgebruik", "landgebruik_oever.Rdata"))

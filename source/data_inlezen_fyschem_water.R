@@ -43,7 +43,10 @@ rm(list_of_dataframes)
 
 fc_data <- anaresult %>%
   left_join(., anaresult_locations, by = "sample_point") %>% # toevoegen kolom met aangepast resultaat met detectielimiet /2
-  mutate(resultaat_detectielimiet = ifelse(teken == "<", resultaat/2, resultaat))
+  mutate(resultaat_detectielimiet = ifelse(teken == "<", resultaat/2, resultaat)) %>%
+  rename(meetplaats = sample_point,
+         monsternamedatum = sample_datum_monstername)
+
 save(fc_data, file = here("data", "verwerkt", "fc_data.rdata"))
 }
 
@@ -70,6 +73,14 @@ fc_data %>%
   View()
 
 # selectie van interessante stoffen ----
+
+clean_like_janitor <- function(x) { # soort janitor::clean_names() voor waarden
+  x |>
+    str_to_lower() |>                     # lowercase
+    str_replace_all("[^a-z0-9]+", "_") |> # replace non-alphanumeric with _
+    str_replace_all("^_|_$", "")          # trim leading/trailing underscores
+}
+
 fc_selectie <- fc_data %>%
   filter(parameter_omschrijving %in% c("Chemisch zuurstofverbruik",
                                        "pH",
@@ -90,9 +101,15 @@ fc_selectie <- fc_data %>%
                                        "Sulfaat",
                                        "Orthofosfaat",
                                        "Zwevende stoffen"
-                                       ))
+                                       )) %>%
+  mutate(parameter_symbool = clean_like_janitor(parameter_symbool)) %>%
+  select(meetplaats, monsternamedatum, parameter_symbool, resultaat_detectielimiet) %>% # wide maken
+  pivot_wider(., names_from = parameter_symbool, values_from = resultaat_detectielimiet, values_fn = mean) # gemiddelde nemen van dubbele metingen; hier geen reden voor gevonden want zelfde plaats, dag en uur voor parameter soms dubbele waarde.
+
 
 save(fc_selectie, file = here("data", "verwerkt", "fc_selectie.rdata"))
+
+
 
 # overschrijdingen polluenten ----
 overschrijdingen_aantal <- read_excel(here("data", "ruw", "fys_chem", "250326_Beoordeling GS per SP met norm_2007_2024.xlsx"), sheet = "MPGemMaxLijst") %>%
