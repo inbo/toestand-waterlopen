@@ -202,12 +202,18 @@ print(vif_result)
 # De respons is de telling (`mmif_scaled`), de totale trials zijn 20. Dus modelleren kans op succes per punt op 20?
 
 voorbeeld_model <- glmmTMB(cbind(mmif_scaled, 20 - mmif_scaled) ~
-                           scale(jaar) + scale(o2_verz) + groep +
+                           (scale(jaar) + scale(o2_verz))* groep +
                            (1|bekken) + (1 | meetplaats),
                          data = voorbeeld_data,
                          family = binomial(link = "logit"))
 
 summary(voorbeeld_model)
+r.squaredGLMM(voorbeeld_model)
+AIC(voorbeeld_model)
+
+plot_model(voorbeeld_model, type = "pred")
+plot_model(voorbeeld_model, type = "pred", terms = c("jaar", "groep"))
+plot_model(voorbeeld_model, type = "pred", terms = c("o2_verz", "groep"))
 
 simulationOutput <- simulateResiduals(fittedModel = voorbeeld_model, plot = F)
 plot(simulationOutput)
@@ -224,6 +230,10 @@ voorbeeld_model2 <- glmmTMB(cbind(mmif_scaled, 20 - mmif_scaled) ~
                          family = binomial(link = "logit"),
                          na.action = na.omit)
   
+summary(voorbeeld_model2)
+r.squaredGLMM(voorbeeld_model2)
+AIC(voorbeeld_model2)
+
 simulationOutput <- simulateResiduals(fittedModel = voorbeeld_model2, plot = F)
 plot(simulationOutput)
 plot(simulationOutput, form = voorbeeld_data$jaar)
