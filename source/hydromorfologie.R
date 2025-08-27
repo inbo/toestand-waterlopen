@@ -7,7 +7,7 @@ hydromorf_nieuw <- st_read(here("data", "ruw", "hydromorfologie", "trajectenlaag
 hydromorf3 <- st_read(here("data", "ruw", "hydromorfologie", "trajectenlaag_detail.shp")) # geen idee wat het verschil is met vorige laag.
 hydromorf4 <- st_read(here("data", "ruw", "hydromorfologie", "trajectenlaag_vmm_29jan2025_ruw.shp")) # ruwe data voor nieuwe hydmolaag
 
-hydromorf_velddata <- read_excel(here("data", "ruw", "hydromorfologie", "Opname Resultaten Hydormorfologie v2.0 T11_25_02.xlsx"), sheet = "Opnames Resultaten") # veldmetingen -> hier kan info over bvb oevers uitgehaald worden -> moeilijke structuur (zeer long)
+# hydromorf_velddata <- read_excel(here("data", "ruw", "hydromorfologie", "Opname Resultaten Hydormorfologie v2.0 T11_25_02.xlsx"), sheet = "Opnames Resultaten") # veldmetingen -> hier kan info over bvb oevers uitgehaald worden -> moeilijke structuur (zeer long)
 stroomsnelheid_breedte_diepte <- read_excel(here("data", "ruw",
                                                  "hydromorfologie", "stroomsnelheid_traject.xlsx")) %>%
   select(traj_code, owl, avg_depth, width_used, stroomsnelheid_kmu) # data over stroomsnelheid en breede en diepte op basis van PEGASE model
@@ -38,7 +38,11 @@ nearest_river_index %>% #4095
   length
 
 hydmo_variabelen <- hydromorf_nieuw %>%
-  inner_join(., stroomsnelheid_breedte_diepte, by = "traj_code")
+  full_join(., stroomsnelheid_breedte_diepte, by = "traj_code") %>%
+  full_join(., hydromorf4 %>%
+              select(traj_code, rec_width, bd_depth) %>%
+              st_drop_geometry())
+
 
 test2 <- hydromorf_nieuw %>%
   inner_join(., hydromorf_oud_nieuw, by = c("traj_code" = "corr_traject")) # even geen idee meer wat dit bekijken, dit was om de koppeling van oude en nieuwe trajecten te checken?
@@ -50,8 +54,10 @@ hm_data$EKC2 <- as.numeric(hydmo_variabelen$ekc_r[nearest_river_index]) # 3650 m
 hm_data$sinuositeit <- as.numeric(hydmo_variabelen$sin_s3[nearest_river_index]) #4069
 hm_data$verstuwing <- as.numeric(hydmo_variabelen$opst_sco_t[nearest_river_index]) # 2763 -> veel NA's!
 hm_data$stroomsnelheid <- as.numeric(hydmo_variabelen$stroomsnelheid_kmu[nearest_river_index]) #4070
-hm_data$diepte <- as.numeric(hydmo_variabelen$avg_depth[nearest_river_index]) # 4074
-hm_data$breedte <- as.numeric(hydmo_variabelen$width_used[nearest_river_index])
+hm_data$diepte_peg <- as.numeric(hydmo_variabelen$avg_depth[nearest_river_index]) # 4074
+hm_data$breedte_peg <- as.numeric(hydmo_variabelen$width_used[nearest_river_index])
+hm_data$diepte_ruw <- as.numeric(hydmo_variabelen$bd_depth[nearest_river_index])
+hm_data$breedte_ruw <- as.numeric(hydmo_variabelen$rec_width[nearest_river_index])
 
 hm_data <- hm_data %>%
   st_drop_geometry()
