@@ -44,6 +44,7 @@ mi_deelmaatlatten0 <- vmm_mi$bbi_en_mmif_deelmaatlatten %>%
         bekken,
         vhag,
         waterloop,
+        owl,
         categorie,
         statuut,
         type,
