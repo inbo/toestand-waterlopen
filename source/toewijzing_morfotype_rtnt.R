@@ -1,11 +1,5 @@
 # Installeer en laad benodigde packages als ze nog niet geïnstalleerd zijn
-# install.packages(c("here", "sf", "readr", "dplyr", "purrr", "janitor"))
-library(here)
-library(sf)
-library(readr)
-library(dplyr)
-library(purrr)
-library(tidyverse)
+source(here::here("source", "inladen_packages.R"))
 
 # Laad de benodigde data
 load(here("data", "verwerkt", "mi_data.rdata"))
