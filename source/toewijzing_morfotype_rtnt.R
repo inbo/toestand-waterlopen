@@ -25,6 +25,21 @@ morfotype <- st_read(dsn = here("data", "ruw", "waterlopen", "morfotype", "ecolt
   mutate(vhag = as.character(VHAG)) %>%
   select(-VHAG)
 
+# Overzichtje punten RtNt -> 2012 unieke meetplaatsen met goeie spreiding over Vlaanderen. Voornamelijk Onbevaarbaar categorie 2. Vele punten hebben meerdere opnamemomenten na 2006.
+
+mapview(meetpunten_rtnt, zcol = "categorie")
+tijdsreeks_rtnt <- mi_data_analyse %>%
+  st_drop_geometry() %>%
+  filter(type == "RtNt") %>%
+  select(meetplaats, jaar, type, categorie, waterlooptype, vhag, monsternamedatum) %>%
+  filter(jaar > 2006) %>%
+  group_by(meetplaats) %>%
+  summarise(n = n(),
+            jaren = paste(unique(jaar), collapse = ", ")) %>%
+  filter(n > 1)
+print(tijdsreeks_rtnt)
+hist(tijdsreeks_rtnt$n)
+
 #---------------------------------------------------------------------------------------------------
 # STAP 1: Koppel op basis van VHAG en dichtstbijzijnde geometrie (primaire, robuuste methode)
 #---------------------------------------------------------------------------------------------------

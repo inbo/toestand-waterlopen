@@ -25,6 +25,7 @@ library(performance)
 library(car)
 library(DHARMa)
 library(MuMIn)
+library(knitr)
 
 conflicted::conflict_prefer("select", "dplyr")
 conflicted::conflict_prefer("read_xlsx", "readxl")

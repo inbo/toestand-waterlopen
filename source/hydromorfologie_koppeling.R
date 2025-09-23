@@ -15,7 +15,7 @@ mi_meetpunten <- mi_data_analyse %>%
   select(meetplaats, vhag, owl) %>%
   unique()
 
-# Laad de nieuwe hydromorfologielaag
+# Laad de nieuwe hydromorfologielagen (trajecten + waterloopniveau)
 hydromorf_nieuw_traject <- st_read(here("data", "ruw", "hydromorfologie", "trajectenlaag_detail_afgerond.shp"))
 
 hydromorf_nieuw_waterloop <- st_read(here("data", "ruw", "hydromorfologie", "hymo_wlniveau.shp"))
@@ -26,7 +26,7 @@ stroomsnelheid_breedte_diepte <- read_excel(here("data", "ruw",
   select(traj_code, avg_depth, width_used, stroomsnelheid_kmu)
 
 # Laad de ruwe data voor aanvullende variabelen
-hydromorf4 <- st_read(here("data", "ruw", "hydromorfologie", "trajectenlaag_vmm_29jan2025_ruw.shp")) %>%
+hydromorf_nieuw_ruw <- st_read(here("data", "ruw", "hydromorfologie", "trajectenlaag_vmm_29jan2025_ruw.shp")) %>%
   select(traj_code, rec_width, bd_depth)
 
 #---------------------------------------------------------------------------------------------------
@@ -35,7 +35,7 @@ hydromorf4 <- st_read(here("data", "ruw", "hydromorfologie", "trajectenlaag_vmm_
 
 hydmo_variabelen <- hydromorf_nieuw_traject %>%
   full_join(stroomsnelheid_breedte_diepte, by = "traj_code") %>%
-  full_join(st_drop_geometry(hydromorf4), by = "traj_code") %>%
+  full_join(st_drop_geometry(hydromorf_nieuw_ruw), by = "traj_code") %>%
   mutate(vhag = as.character(vhag))
 
 meetpunten_prep <- mi_meetpunten %>%
@@ -83,13 +83,13 @@ hydromorf_traject_vhag <- meetpunten_prep %>%
   unnest(gekoppeld) %>%
   ungroup() %>%
   # Selecteer de uiteindelijke kolommen
-  select(meetplaats, owl, traj_code, EKC2_traject = ekc_r,
+  select(meetplaats, owl, traj_code, ekc2_traject = ekc_r,
          sinuositeit = sin_s3,
          verstuwing = opst_sco_t, stroomsnelheid = stroomsnelheid_kmu,
          breedte = rec_width, diepte = bd_depth, breedte_diepte_ratio = bd_wd_rat)
 
 #---------------------------------------------------------------------------------------------------
-# Stap 4: Koppelen EKC2 op waterlichaamniveau
+# Stap 4: Koppelen ekc2 op waterlichaamniveau
 #---------------------------------------------------------------------------------------------------
 # deze zou beter beeld kunnen geven dan lokale toestand
 
@@ -97,7 +97,7 @@ hm_data0 <- hydromorf_traject_vhag %>%
   left_join(., hydromorf_nieuw_waterloop %>%
               select(owl_code, ekc_r_owl2),
             by = c("owl" = "owl_code")) %>%
-  rename(EKC2_waterlichaam = ekc_r_owl2)
+  rename(ekc2_waterlichaam = ekc_r_owl2)
 #
 # #---------------------------------------------------------------------------------------------------
 # # Stap 5: Meetplaatsen met NA (traj_code) via vhag koppelen op afstand 20m
@@ -140,3 +140,27 @@ hm_data <- hm_data0 %>%
   st_drop_geometry()
 
 save(hm_data, file = here("data", "verwerkt", "hm_data.rdata"))
+
+# welk type-waterlopen zijn de meetplaatsen NA voor hydmo? Bovenstroomse RtNt
+
+na_data <- mi_data_analyse %>%
+  st_drop_geometry() %>%
+  select(meetplaats, type, categorie) %>%
+  unique() %>%
+  left_join(., hm_data %>%
+              select(-traj_code, -owl)) %>%
+  filter(is.na(ekc2_traject))
+
+na_data %>%
+  group_by(type) %>%
+  summarise(n_type = n())
+
+na_data %>%
+  group_by(categorie) %>%
+  summarise(n_type = n())
+
+na_data %>%
+  filter(type != "RtNt") %>%
+  group_by(categorie) %>%
+  summarise(n_type = n())
+

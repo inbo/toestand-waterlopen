@@ -31,6 +31,28 @@ mi_data_analyse <- mi_data %>%
 
 ```
 
+## Rivier Type Niet Toegekend (RtNt)
+
+```{r}
+# Welke categorieën zijn de RtNt's?
+kable(mi_data_analyse %>% st_drop_geometry() %>% filter(type == "RtNt") %>% group_by(type, categorie) %>% summarise(n()))
+
+# Welke types domineren de verschillende categorieën?
+
+kable(mi_data_analyse %>% st_drop_geometry() %>% group_by(categorie, type) %>% summarise(n()))
+
+#stap 1: splitsen volgens waterlooptype -> kunstmatig vs niet (op het einde)
+#stap 2: splitsen in ecoregio's -> polder, kempen, overig -> polder 1 soort scoring
+#stap 3: splitsen voor kempen en 'overig' 
+# -> categorie Bevaarbaar -> grote beek 
+# -> categorie "Onbevaarbaar cat 1 -> grote beek
+# -> categorie"Onbevaarbaar cat 2 -> kleine beek
+# -> categorie"Onbevaarbaar cat 3 -> kleine beek
+
+
+```
+
+
 ## Verkennen
 
 ```{r echo = FALSE}
@@ -111,6 +133,7 @@ mi_full1 <- mi_data_analyse %>%
   left_join(watersheds_aantal_overstorten %>%
               select(-oppervlakte),
             by = "meetplaats") %>%
+  left_join(hm_data, by = "meetplaats") %>%
   filter(jaar > 2009)
 
 # fc meetingen koppeling
@@ -180,7 +203,7 @@ vis_miss(mi_full %>%
 #            !is.na(mmif_scaled) &
 #            !is.na(meetplaats))
 #   
-  variabelen <- c("mmif", "p_h", "t", "o2", "o2_verz", "ec_20", "groep", "bekken", "jaar", "mmif_scaled", "meetplaats")
+  variabelen <- c("mmif", "ta_xw", "p_h", "t", "o2", "o2_verz", "ec_20", "groep", "bekken", "jaar", "aantal_stoffen_met_overschrijding", "mmif_scaled", "meetplaats", "sinuositeit", "verharding", "n_t", "p_t", "landbouw_intens")
 
 voorbeeld_data <- mi_natuurlijk_sterk_veranderd %>%
   st_drop_geometry() %>%
@@ -190,7 +213,7 @@ voorbeeld_data <- mi_natuurlijk_sterk_veranderd %>%
 # --- 1. Detectie van Multicollineariteit (VIF) ---
 # Een simpele lineaire model (lm) gebruiken om VIF te berekenen
 # De random effects worden hier weggelaten, omdat VIF voor de vaste effecten is
-vif_model <- glm(cbind(mmif_scaled, 20 - mmif_scaled) ~ p_h + t + o2 + o2_verz + ec_20,
+vif_model <- glm(cbind(mmif_scaled, 20 - mmif_scaled) ~ p_h + t + o2 + o2_verz + ec_20 + n_t + p_t + verharding + landbouw_intens,
                  family = binomial(link = "logit"),
                          na.action = na.omit,
                  data = voorbeeld_data)
@@ -224,7 +247,7 @@ plot(simulationOutput, form = voorbeeld_data$jaar)
 plot(simulationOutput, form = voorbeeld_data$o2_verz)
 
 voorbeeld_model2 <- glmmTMB(cbind(mmif_scaled, 20 - mmif_scaled) ~
-                           I(scale(jaar)^2) + scale(jaar) + scale(o2_verz) + groep +
+                           (I(scale(jaar)^2) + scale(jaar) + scale(o2_verz) ) + groep +
                            (1|bekken) + (1 | meetplaats),
                          data = voorbeeld_data,
                          family = binomial(link = "logit"),
@@ -237,6 +260,9 @@ AIC(voorbeeld_model2)
 simulationOutput <- simulateResiduals(fittedModel = voorbeeld_model2, plot = F)
 plot(simulationOutput)
 plot(simulationOutput, form = voorbeeld_data$jaar)
+
+plot_model(voorbeeld_model2, type = "pred", terms = c("o2_verz"))
+
 
 
 ```

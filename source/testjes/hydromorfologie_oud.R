@@ -16,20 +16,20 @@ hydromorf_oud_nieuw <- read_excel(here("data", "ruw", "hydromorfologie", "oude_n
                                   sheet = "Sheet1") %>%
   janitor::clean_names() #file met koppeling tussen nieuwe en oude trajecten?
 
-wider <- hydromorf_velddata %>%
-  janitor::clean_names() %>%
-  pivot_wider(., names_from = profieltype_naam, values_from = `resultaatwaarde_naam`)
+# wider <- hydromorf_velddata %>%
+#   janitor::clean_names() %>%
+#   pivot_wider(., names_from = profieltype_naam, values_from = `resultaatwaarde_naam`)
 
 # oeververdediging <- hydromorf_velddata %>% filter(`Resultaatwaarde Groep Naam` == "Oeververdediging") # oeververdediging uit velddata halen -> met L en R oever
 
 
 # linken meetpunten macroinvertebraten met trajecten hydromorfologie ----
 
-tolerance <- 100 #varieert niet zoveel met afstand
+tolerance <- 15 #varieert niet zoveel met afstand
 
 # Calculate distance to nearest river for each point
 nearest_river_index <- st_nearest_feature(mi_meetpunten, hydromorf_nieuw)
-distances <- st_distance(mi_meetpunten, hydromorf[nearest_river_index, ], by_element = TRUE)
+distances <- st_distance(mi_meetpunten, hydromorf_nieuw[nearest_river_index, ], by_element = TRUE)
 
 # Assign NA for points further than tolerance
 nearest_river_index[as.numeric(distances) > tolerance] <- NA

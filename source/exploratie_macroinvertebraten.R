@@ -75,7 +75,7 @@ mi_data_analyse %>%
   geom_smooth(method = "lm") +
   facet_wrap(~statuut)
 
-mi_data_analyse %>%
+mi_data_analyse2 %>%
   ggplot() +
   geom_line(aes(jaar, mmif, group = meetplaats), alpha = 0.25) +
   geom_smooth(aes(jaar, mmif), method = "gam",
@@ -99,9 +99,9 @@ mi_data_analyse %>%
 
 # plots van de mmif en deelmaatlatten de verschillende types ----
 
-plot_waterlopen_statuut <- function(statuut_input, titel_input) {
+plot_waterlopen_statuut <- function(input_data, statuut_input, titel_input) {
 
-  data_filtered <- mi_data_analyse %>%
+  data_filtered <- input_data %>%
     filter(statuut == statuut_input) %>%
     mutate(across(c("ept", "swd", "nst", "tax", "mts"), ~ .x / 4)) %>%
     pivot_longer(
@@ -149,7 +149,9 @@ plot_waterlopen_statuut <- function(statuut_input, titel_input) {
   return(p)
 }
 
-plot_waterlopen_statuut("Natuurlijk", "Natuurlijke waterlopen")
+plot_waterlopen_statuut(mi_data_analyse, "Natuurlijk", "Natuurlijke waterlopen")
+plot_waterlopen_statuut(mi_data_analyse, "Natuurlijk", "Natuurlijke waterlopen")
+
 
 plot_waterlopen_statuut("Sterk Veranderd", "Sterk veranderde waterlopen")
 
