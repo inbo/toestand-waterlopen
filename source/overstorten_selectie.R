@@ -46,6 +46,9 @@ resultaat_Vlaanderen <- intersectie_totaal %>%
 # Het object 'resultaat_Vlaanderen' bevat nu de afstroomgebieden die
 # voldoen aan het criterium.
 
+###################
+# 2
+# afstroomgebieden weglaten die meer dan 10% in ongemodelleerde zones liggen
 
 # Bereken de oppervlakte van alle polygonen in de 'bedekking'-laag
 bedekking_met_opp <- bedekking %>%
