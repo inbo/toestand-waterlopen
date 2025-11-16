@@ -16,10 +16,12 @@ load(here("data", "verwerkt", "mi_data.rdata"))
 load(here("data", "verwerkt", "fc_selectie.rdata"))
 load(here("data", "verwerkt", "overschrijdingen.rdata"))
 load(here("data", "verwerkt", "hm_data.rdata"))
+load(here("data", "verwerkt", "mi_fd.rdata"))
 
-load(file = here("data", "verwerkt", "landgebruik", "landgebruik_oever.Rdata"))
+load(file = here("data", "verwerkt", "afstroomgebieden_binnen_vlaanderen.rdata"))
 load(file = here("data", "verwerkt", "landgebruik", "landgebruik_buffer.Rdata"))
 load(file = here("data", "verwerkt", "landgebruik", "landgebruik_afstroomgebied_jaren.rdata"))
+load(file = here("data", "verwerkt", "landgebruik", "landgebruik_oever_jaren.rdata"))
 load(file = here("data", "verwerkt", "overstorten", "mi_meetpunten_aantal_overstorten_afstroomgebied.rdata"))
 
 # weglaten vijvers, meren, geisoleerd water en punten buiten Vlaanderen
@@ -35,20 +37,15 @@ mi_data_analyse <- mi_data %>%
 
 ```{r}
 # Welke categorieën zijn de RtNt's?
-kable(mi_data_analyse %>% st_drop_geometry() %>% filter(type == "RtNt") %>% group_by(type, categorie) %>% summarise(n()))
+rtnt <- mi_data_analyse %>% st_drop_geometry() %>% filter(type == "RtNt")
+# kable(rtnt %>% group_by(type, categorie, owl) %>% summarise(n()))
+# kable(rtnt %>%  filter(jaar > 2009) %>% group_by(meetplaats) %>% summarise(n(), jaren = paste(unique(jaar), collapse = ", ")))
 
 # Welke types domineren de verschillende categorieën?
+# rtnt %>% group_by(meetplaats) %>% summarise(n(),jaren = paste(unique(jaar), collapse = ", "))
+# kable(mi_data_analyse %>% st_drop_geometry() %>% group_by(categorie, type) %>% summarise(n()))
 
-kable(mi_data_analyse %>% st_drop_geometry() %>% group_by(categorie, type) %>% summarise(n()))
-
-#stap 1: splitsen volgens waterlooptype -> kunstmatig vs niet (op het einde)
-#stap 2: splitsen in ecoregio's -> polder, kempen, overig -> polder 1 soort scoring
-#stap 3: splitsen voor kempen en 'overig' 
-# -> categorie Bevaarbaar -> grote beek 
-# -> categorie "Onbevaarbaar cat 1 -> grote beek
-# -> categorie"Onbevaarbaar cat 2 -> kleine beek
-# -> categorie"Onbevaarbaar cat 3 -> kleine beek
-
+load(file = here("data", "verwerkt", "mi_data_analyse_rtnt_update.rdata"))
 
 ```
 
@@ -85,6 +82,24 @@ mi_data_analyse %>%
   nrow()
 ```
 
+```{r}
+mi_data_analyse %>%
+  ggplot() +
+  # geom_line(aes(jaar, mmif, group = meetplaats), alpha = 0.25) +
+  geom_smooth(aes(jaar, mmif), method = "gam",
+              formula = y ~ s(x)) +
+  facet_grid(statuut ~ groep)
+
+mi_data_analyse %>%
+  ggplot() +
+  geom_line(aes(jaar, mmif, group = meetplaats), alpha = 0.25) +
+  geom_smooth(aes(jaar, mmif), method = "gam",
+              formula = y ~ s(x)) +
+  facet_grid(groep ~ statuut)
+
+```
+
+
 ```{r echo = FALSE}
 mapviewdata <- mi_data_analyse %>%
   filter(statuut == "Natuurlijk" | statuut == "Sterk Veranderd") %>%
@@ -117,23 +132,36 @@ mapviewdata %>%
 ```
 
 ```{r}
+fdisp_mi_filtered <- fdisp_mi %>%
+  filter(trait_coverage_percentage >= 80) %>%
+  select(meetplaats, monsternamedatum, fdisp)
+
+landgebruik_data <- landgebruik_afstroomgebied_jaren %>%
+              select(-oppervlakte, -landgebruiksjaar) %>%
+              filter(meetplaats %in% afstroomgebieden_binnen_vlaanderen$meetplaats) %>%
+  full_join(.,
+            landgebruik_oever_jaren %>%
+              select(-landgebruiksjaar),
+            by = c("meetplaats", "monsternamedatum"), suffix = c("_afstr", "_oever"))
+
 mi_full1 <- mi_data_analyse %>%
   left_join(overschrijdingen %>% 
               group_by(meetplaats, jaar) %>%
               summarise(aantal_stoffen_met_overschrijding =
-                          mean(aantal_stoffen_met_overschrijding)),
+                          mean(aantal_stoffen_met_overschrijding),
+                        aantal_pesticiden_met_overschrijding =
+                          mean(aantal_pesticiden_met_overschrijding)),
             by = c("meetplaats", "jaar")) %>%
-  left_join(landgebruik_afstroomgebied_jaren %>%
-              select(-oppervlakte, landgebruiksjaar),
+  left_join(landgebruik_data,
             by = c("meetplaats", "monsternamedatum")) %>%
-  left_join(landgebruik_oever,
-            by = "meetplaats") %>%
   # left_join(landgebruik_buffer,
   #           by = "meetplaats") %>%
   left_join(watersheds_aantal_overstorten %>%
               select(-oppervlakte),
             by = "meetplaats") %>%
   left_join(hm_data, by = "meetplaats") %>%
+  left_join(., fdisp_mi_filtered,
+            by = c("meetplaats", "monsternamedatum")) %>%
   filter(jaar > 2009)
 
 # fc meetingen koppeling
@@ -150,7 +178,7 @@ fc_mi_koppeling <- mi_data_analyse %>%
 {
   days_before <- as.numeric(difftime(monsternamedatum, monsternamedatum_fc, units = "days"))
   days_before < 90 &
-  days_before > -15
+  days_before > -14
 
 }
 ) %>%
@@ -172,38 +200,345 @@ mi_full <- mi_full1 %>%
             by = c("meetplaats", "monsternamedatum"), suffix = c("", "_fc"))# suffix _fc voor waarden uit fc database
 
 # Transformeer de MMIF-score naar een integer (0-20) voor modellen
-mi_full$mmif_scaled <- mi_full$mmif * 20
+mi_full$mmif_20 <- mi_full$mmif * 20
+mi_full <- mi_full[order(mi_full$monsternamedatum),]
 
-mi_natuurlijk_sterk_veranderd <- mi_full %>%
-  filter(statuut %in% c("Natuurlijk", "Sterk veranderd"))
+mi_nat_sv <- mi_full %>%
+  filter(statuut %in% c("Natuurlijk", "Sterk Veranderd")) %>%
+  st_drop_geometry() %>%
+  mutate(mmif_20 = as.integer(mmif_20))
 mi_kunstmatig <- mi_full %>%
   filter(statuut == "Kunstmatig")
+save(mi_nat_sv, file = here("data", "verwerkt", "mi_nat_sv.rdata"))
+
 
 ```
 
 ```{r}
-mi_full <- mi_full[order(mi_full$monsternamedatum),]
+
 vis_miss(mi_full %>%
            select(-meetplaats, -jaar, -monsternamedatum, -statuut, -groep, -categorie, -type, -waterlooptype,
-                  -bekken, -deelmonster_id, -landgebruiksjaar, -bbi, -vhag, -waterlichaamcategorie))
+                  -bekken, -deelmonster_id, -bbi, -vhag, -waterlichaamcategorie))
+```
+
+# omgevingsvariabelen
+
+## basisset
+
+```{r}
+variabelen_basis <- c("mmif", "mmif_20", "ta_xw", "ep_tw", "mt_sw", "sw_dw", "ns_tw", "fdisp",
+                "p_h", "t", "o2", "o2_verz", "ec_20", "ec_25",
+                "statuut", "groep", "bekken", "jaar", "meetplaats", "monsternamedatum")
+
+vis_miss(mi_nat_sv %>%
+           select(mmif, p_h, t, o2, o2_verz, ec_20, ec_25))
+
+basis_data <- mi_nat_sv %>%
+  select(all_of(variabelen_basis)) %>%
+  filter(if_all(everything(), ~ !is.na(.)))
+
+# Correlatieplot
+numerieke_var <- basis_data %>%
+  select(p_h, t, o2, o2_verz, ec_20, ec_25) # perfecte correlatie ec20 en ec25 -> weglaten ec25
+cor_matrix <- cor(numerieke_var)
+corrplot(cor_matrix, method = "circle", type = "upper", diag = FALSE, addCoef.col = "black")
+
+numerieke_var <- basis_data %>%
+  select(mmif, ta_xw, ns_tw, ep_tw, mt_sw, sw_dw, fdisp) # perfecte correlatie ec20 en ec25 -> weglaten ec25
+cor_matrix <- cor(numerieke_var)
+corrplot(cor_matrix, method = "circle", type = "upper", diag = FALSE, addCoef.col = "black")
+
+# VIF
+vif_model <- glm(cbind(mmif_20, 20 - mmif_20) ~ p_h + t + o2 + o2_verz + ec_20, # weglaten o2_verz
+                 family = binomial(link = "logit"),
+                         na.action = na.omit,
+                 data = basis_data)
+vif_result <- vif(vif_model)
+print(vif_result)
+
+# Basismodel
+
+# Binomiaal GLMM
+# De MMIF-score is een proportie van "succesvolle" deelscores.
+# De respons is de telling (`mmif_scaled`), de totale trials zijn 20. Dus modelleren kans op succes per punt op 20?
+# Testen op overdispersie of zero-inflation
+
+data <- basis_data %>%
+  mutate(groep = factor(groep),
+         bekken = factor(bekken),
+         meetplaats = factor(meetplaats)) %>%
+  filter(groep != "zeer_grote_rivier")
+
+
+dredge_model <- glmmTMB(cbind(mmif_20, 20 - mmif_20) ~
+                                               (p_h + t + poly(o2, 2) + ec_20 +
+                                                  poly(jaar, 2)) * groep + statuut +
+                                               (1 | bekken) + (1 | meetplaats),
+                                             data = data,
+                                             family = binomial(link = "logit"),
+                                             na.action = "na.fail")
+# dd <- dredge(dredge_model, trace = 2)
+# summary(get.models(dd, 1)[[1]])
+# model <- get.models(dd, 1)[[1]]
+# plot_model(model, type = "pred", terms = c("o2 [all]", "groep"))
+best_model <- glmmTMB(cbind(mmif_20, 20 - mmif_20) ~
+                                        (p_h + t + ec_20 + poly(jaar, 2)) * groep + poly(o2, 2) +
+                                        (1 | bekken / meetplaats),
+                                      data = data,
+                                      family = binomial(link = "logit"))
+
+plot_model(best_model, type = "pred", terms = c("jaar [all]", "groep"))
+plot_model(best_model, type = "pred", terms = c("ec_20 [all]", "groep"))
+plot_model(best_model, type = "pred", terms = c("t [all]", "groep"))
+plot_model(best_model, type = "pred", terms = c("p_h [all]", "groep"))
+plot_model(best_model, type = "pred", terms = c("o2 [all]"))
+
+
+simulationOutput <- simulateResiduals(fittedModel = best_model, plot = F)
+plot(simulationOutput)
+testDispersion(simulationOutput) # geen overdispersie
+testZeroInflation(simulationOutput) # geen zero_inflation
+testUniformity(simulationOutput)
+
+```
+
+## basisset + andere FC
+
+```{r}
+variabelen_fc <- c("bzv5", "czv", "cl", "kjn", "n_t", "p_t", "no2", "no3", "opo4", "so4", "zs")
+
+vis_miss(mi_nat_sv %>%
+           select(all_of(variabelen_fc))) # bzv5, opo4 en so4 laten vallen
+variabelen_fc_update <- c("czv", "cl", "kjn", "n_t", "p_t", "no2", "no3", "zs")
+vis_miss(mi_nat_sv %>%
+           select(all_of(variabelen_fc_update))) # allemaal ongeveer 20% missing
+variabelen_basis_fc <- c(variabelen_basis, variabelen_fc_update)
+vis_miss(mi_nat_sv %>%
+           select(all_of(variabelen_basis_fc))) # allemaal ongeveer 20% missing
+
+basis_fc_data <- mi_nat_sv %>%
+  select(all_of(variabelen_basis_fc)) %>%
+  filter(if_all(everything(), ~ !is.na(.)))
+
+# Correlatieplot
+numerieke_var <- basis_fc_data %>%
+  select(p_h, t, o2, o2_verz, ec_20, ec_25, czv, cl, kjn, n_t, p_t, no2, no3, zs) # 
+cor_matrix <- cor(numerieke_var)
+corrplot(cor_matrix, method = "circle", type = "upper", diag = FALSE, addCoef.col = "black")
+
+# VIF
+vif_model <- glm(cbind(mmif_20, 20 - mmif_20) ~ p_h + t + o2 + ec_20 + o2_verz + czv + cl + n_t + kjn + p_t + no2 + no3 + zs, # weglaten o2_verz + 
+                 family = binomial(link = "logit"),
+                         na.action = na.omit,
+                 data = basis_fc_data)
+vif(vif_model)
+vif(update(vif_model, . ~ . - n_t - o2_verz - cl))
+
+data <- basis_fc_data %>%
+  mutate(groep = factor(groep),
+         bekken = factor(bekken),
+         meetplaats = factor(meetplaats)) %>%
+  filter(groep != "zeer_grote_rivier")
+
+
+model_basis_fc <- glmmTMB(cbind(mmif_20, 20 - mmif_20) ~
+                                (jaar + ec_20 + o2 + ec_20 + czv + kjn + p_t) * groep 
+                                (1 | bekken) + (1 | meetplaats),
+                              data = data,
+                              family = binomial(link = "logit"),
+                           control = glmmTMBControl(optCtrl = list(iter.max = 5000, eval.max = 5000)))
+
+model_basis_fc <- glmmTMB(cbind(mmif_20, 20 - mmif_20) ~
+                                (jaar + o2 + kjn + p_t) * groep +
+                                (1 | bekken) + (1 | meetplaats),
+                              data = data %>% filter(jaar < 2015),
+                              family = binomial(link = "logit"),
+                           control = glmmTMBControl(optCtrl = list(iter.max = 5000, eval.max = 5000)))
+summary(model_basis_fc)
+
+plot_model(model_basis_fc, type = "pred")
+plot_model(model_basis_fc, type = "pred", terms = c("kjn [all]", "groep"))
+plot_model(model_basis_fc, type = "pred", terms = c("o2 [all]", "groep"))
+plot_model(model_basis_fc, type = "pred", terms = c("p_t [all]", "groep"))
+
+
 ```
 
 ```{r}
-# voorbeeld_data <- mi_natuurlijk_sterk_veranderd %>%
-#   select(c("mmif", "p_h", "t", "o2", "o2_verz", "ec_20", "groep", "bekken", "jaar", "mmif_scaled", "meetplaats"))
-#   filter(!is.na(mmif) &
-#            !is.na(p_h) &
-#            !is.na(t) &
-#            !is.na(o2) &
-#            !is.na(o2_verz) &
-#            !is.na(ec_20) &
-#            !is.na(groep) &
-#            !is.na(bekken) &
-#            !is.na(jaar) &
-#            !is.na(mmif_scaled) &
-#            !is.na(meetplaats))
-#   
-  variabelen <- c("mmif", "ta_xw", "p_h", "t", "o2", "o2_verz", "ec_20", "groep", "bekken", "jaar", "aantal_stoffen_met_overschrijding", "mmif_scaled", "meetplaats", "sinuositeit", "verharding", "n_t", "p_t", "landbouw_intens")
+variabelen_lu <- names(landgebruik_data %>% select(-meetplaats, -monsternamedatum))
+vis_miss(mi_nat_sv %>%
+           select(all_of(variabelen_lu)))
+
+variabelen_basis_lu <- c(variabelen_basis, variabelen_lu)
+vis_miss(mi_nat_sv %>%
+           select(all_of(variabelen_basis_lu))) #
+
+basis_lu_data <- mi_nat_sv %>%
+  select(all_of(variabelen_basis_lu)) %>%
+  filter(if_all(everything(), ~ !is.na(.)))
+
+variabelen_basis_fc_lu <- c(variabelen_basis_fc, variabelen_lu)
+vis_miss(mi_nat_sv %>%
+           select(all_of(variabelen_basis_fc_lu)))
+
+fc_lu_data <- mi_nat_sv %>%
+  select(all_of(variabelen_basis_fc_lu)) %>%
+  filter(if_all(everything(), ~ !is.na(.)))
+
+
+# Correlatieplot
+numerieke_var <- fc_lu_data %>%
+  select(p_h, t, o2, o2_verz, ec_20, ec_25, czv, cl, kjn, n_t, p_t, no2, no3, zs, landbouw_intens_afstr, landbouw_intens_oever, hooggroen_afstr, verharding_afstr, landbouw_extensief_afstr) # 
+cor_matrix <- cor(numerieke_var)
+corrplot(cor_matrix, method = "circle", type = "upper", diag = FALSE, addCoef.col = "black")
+
+# VIF
+vif_model <- glm(cbind(mmif_20, 20 - mmif_20) ~ p_h + t + o2 + ec_20 + o2_verz + czv + cl + n_t + kjn + p_t + no2 + no3 + zs + landbouw_intens_afstr + hooggroen_afstr + verharding_afstr, # weglaten o2_verz + 
+                 family = binomial(link = "logit"),
+                         na.action = na.omit,
+                 data = fc_lu_data)
+vif(vif_model)
+vif(update(vif_model, . ~ . - n_t - o2_verz - cl))
+
+data <- fc_lu_data %>%
+  mutate(groep = factor(groep),
+         bekken = factor(bekken),
+         meetplaats = factor(meetplaats)) %>%
+  filter(groep != "zeer_grote_rivier")
+
+m1 <- glmmTMB(data = fc_lu_data, n_t ~ landbouw_intens_afstr + jaar + (1 | meetplaats))
+
+m2 <- glmmTMB(data = fc_lu_data, cbind(mmif_20, 20 - mmif_20) ~ n_t + jaar + (1 | meetplaats),
+              family = binomial(link = "logit"))
+
+model_fc_lu <- glmmTMB(cbind(mmif_20, 20 - mmif_20) ~
+                                (jaar + hooggroen_afstr + landbouw_intens_afstr) * groep +
+                                (1 | bekken) + (1 | meetplaats),
+                              data = data,
+                              family = binomial(link = "logit"),
+                           control = glmmTMBControl(optCtrl = list(iter.max = 5000, eval.max = 5000)))
+summary(model_fc_lu)
+plot_model(model_fc_lu, type = "pred", terms = c("landbouw_intens_afstr [all]", "groep"))
+plot_model(model_fc_lu, type = "pred", terms = c("verharding_afstr [all]", "groep"))
+plot_model(model_fc_lu, type = "pred", terms = c("hooggroen_afstr [all]", "groep"))
+
+
+```
+
+```{r}
+variabelen_hm <- names(hm_data %>%
+                         select(-meetplaats,
+                                          -owl, -traj_code, -geometry))
+vis_miss(mi_nat_sv %>%
+           select(all_of(variabelen_hm)))
+
+variabelen_fc_hm <- c(variabelen_basis, variabelen_fc, variabelen_lu, variabelen_hm, "aantal_stoffen_met_overschrijding", "aantal_pesticiden_met_overschrijding")
+vis_miss(mi_nat_sv %>%
+           select(all_of(variabelen_fc_hm))) #
+
+
+fc_hm_data <- mi_nat_sv %>%
+  select(all_of(variabelen_fc_hm)) %>%
+    # select(-fdisp, -aantal_stoffen_met_overschrijding) %>%
+  filter(if_all(everything(), ~ !is.na(.)))
+
+
+# Correlatieplot
+numerieke_var <- fc_hm_data %>%
+  select(o2, kjn, p_t, ekc2_traject, ekc2_waterlichaam, p_h, landbouw_intens_afstr, verharding_afstr, hooggroen_afstr) # 
+cor_matrix <- cor(numerieke_var)
+corrplot(cor_matrix, method = "circle", type = "upper", diag = FALSE, addCoef.col = "black")
+
+# VIF
+vif_model <- glm(cbind(mmif_20, 20 - mmif_20) ~ p_h + t + o2 + ec_20 + o2_verz + czv + cl + n_t + kjn + p_t + no2 + no3 + zs, # weglaten o2_verz + 
+                 family = binomial(link = "logit"),
+                         na.action = na.omit,
+                 data = basis_fc_data)
+vif(vif_model)
+vif(update(vif_model, . ~ . - n_t - o2_verz - cl))
+
+data <- fc_hm_data %>%
+  mutate(groep = factor(groep),
+         bekken = factor(bekken),
+         meetplaats = factor(meetplaats)) %>%
+  filter(groep != "zeer_grote_rivier")
+
+model_fc_hm <- glmmTMB(cbind(mmif_20, 20 - mmif_20) ~
+                                jaar * groep + kjn + ekc2_waterlichaam + aantal_stoffen_met_overschrijding +
+                                (1 | bekken) + (1 | meetplaats),
+                              data = data,
+                              family = binomial(link = "logit"),
+                           control = glmmTMBControl(optCtrl = list(iter.max = 5000, eval.max = 5000)))
+
+summary(model_fc_hm)
+
+model_fc_hm <- glmmTMB(ns_tw ~
+                                scale(jaar) * groep + o2 + kjn + ekc2_waterlichaam + landbouw_intens_afstr + aantal_stoffen_met_overschrijding +
+                                (1 | bekken) + (1 | meetplaats),
+                              data = data %>% mutate(ns_tw = as.integer(ns_tw)),
+                              family = poisson(link = "log"),
+                           control = glmmTMBControl(optCtrl = list(iter.max = 5000, eval.max = 5000)))
+
+model_fc_hm <- glmmTMB(ep_tw ~
+                                scale(jaar) * groep + o2 + kjn + ekc2_waterlichaam + landbouw_intens_afstr + aantal_stoffen_met_overschrijding +
+                                (1 | bekken) + (1 | meetplaats),
+                              data = data %>% mutate(ep_tw = as.integer(ep_tw)),
+                              family = poisson(link = "log"),
+                           control = glmmTMBControl(optCtrl = list(iter.max = 5000, eval.max = 5000)))
+
+model_fc_hm <- glmmTMB(ta_xw ~
+                                scale(jaar) * groep + kjn + ekc2_waterlichaam + hooggroen_afstr * groep +
+                                (1 | bekken) + (1 | meetplaats),
+                              data = data %>% mutate(ta_xw = as.integer(ta_xw)),
+                              family = poisson(link = "log"),
+                           control = glmmTMBControl(optCtrl = list(iter.max = 5000, eval.max = 5000)))
+
+model_fc_hm <- glmmTMB(fdisp_mi ~
+                                scale(jaar) * groep + kjn + ekc2_waterlichaam + hooggroen_afstr * groep +
+                                (1 | bekken) + (1 | meetplaats),
+                              data = data %>% mutate(ta_xw = as.integer(ta_xw)),
+                              family = poisson(link = "log"),
+                           control = glmmTMBControl(optCtrl = list(iter.max = 5000, eval.max = 5000)))
+
+summary(model_fc_hm)
+plot_model(model_fc_hm, type = "pred", terms = c("kjn [all]", "groep"))
+plot_model(model_fc_hm, type = "pred", terms = c("ekc2_waterlichaam [all]"))
+plot_model(model_fc_hm, type = "pred", terms = c("hooggroen_afstr [all]"))
+plot_model(model_fc_hm, type = "pred", terms = c("hooggroen_afstr [all]", "groep"))
+
+
+cor.test(data$ns_tw, data$ep_tw)
+
+
+
+test_data <- mi_nat_sv %>%
+  select(fdisp, mmif, jaar, bekken, meetplaats, kjn, ekc2_waterlichaam, o2, hooggroen_afstr, landbouw_intens_afstr, groep, p_t, aantal_stoffen_met_overschrijding, aantal_overstorten) %>%
+  filter(if_all(everything(), ~ !is.na(.))) %>%
+    mutate(groep = factor(groep),
+         bekken = factor(bekken),
+         meetplaats = factor(meetplaats)) %>%
+  filter(groep != "zeer_grote_rivier")
+test_data$meetplaats %>% unique %>% length
+
+test_fdisp <- glmmTMB(fdisp ~
+                                scale(jaar) * groep + o2 + kjn + ekc2_waterlichaam + hooggroen_afstr * groep + aantal_stoffen_met_overschrijding +
+                                (1 | bekken) + (1 | meetplaats),
+                              data = test_data,
+                           control = glmmTMBControl(optCtrl = list(iter.max = 5000, eval.max = 5000)))
+
+summary(test_fdisp)
+
+```
+
+
+## exploratiecode
+
+```{r eval = FALSE}
+
+variabelen <- c("mmif", "ta_xw", "p_h", "t", "o2", "o2_verz", "ec_20", "groep", "bekken", "jaar", "aantal_stoffen_met_overschrijding", "mmif_scaled", "meetplaats", "sinuositeit", "verharding", "n_t", "p_t", "landbouw_intens")
+
+variabelen <- c("meetplaats", "mmif", "mmif_scaled",  "o2_verz", "groep", "bekken", "jaar")
+("t", "o2", "p_h",  "ec_20")
 
 voorbeeld_data <- mi_natuurlijk_sterk_veranderd %>%
   st_drop_geometry() %>%
@@ -225,7 +560,7 @@ print(vif_result)
 # De respons is de telling (`mmif_scaled`), de totale trials zijn 20. Dus modelleren kans op succes per punt op 20?
 
 voorbeeld_model <- glmmTMB(cbind(mmif_scaled, 20 - mmif_scaled) ~
-                           (scale(jaar) + scale(o2_verz))* groep +
+                           (scale(jaar) + scale(o2_verz)) * groep +
                            (1|bekken) + (1 | meetplaats),
                          data = voorbeeld_data,
                          family = binomial(link = "logit"))
@@ -261,8 +596,38 @@ simulationOutput <- simulateResiduals(fittedModel = voorbeeld_model2, plot = F)
 plot(simulationOutput)
 plot(simulationOutput, form = voorbeeld_data$jaar)
 
-plot_model(voorbeeld_model2, type = "pred", terms = c("o2_verz"))
+plot_model(voorbeeld_model2, type = "pred", terms = c("o2_verz[all]"))
+plot_model(model, type = "pred", terms = c("x[all]"))
+
+voorbeeld_kunstmatig <- mi_kunstmatig %>%
+  st_drop_geometry() %>%
+  select(all_of(variabelen)) %>%
+  filter(if_all(everything(), ~ !is.na(.)))
+
+vif_model <- glm(cbind(mmif_scaled, 20 - mmif_scaled) ~ p_h + t + o2_verz + ec_20,
+                 family = binomial(link = "logit"),
+                         na.action = na.omit,
+                 data = voorbeeld_data)
+vif_result <- vif(vif_model)
+print(vif_result)
 
 
+voorbeeld_model_kunstmatig <- glmmTMB(cbind(mmif_scaled, 20 - mmif_scaled) ~
+                           ( scale(jaar) +  scale(o2_verz) + scale(p_h) + scale(t) +  s(scale(ec_20), k = 5)) + groep +
+                           (1|bekken) + (1 | meetplaats),
+                         data = voorbeeld_kunstmatig,
+                         family = binomial(link = "logit"),
+                         na.action = na.omit)
+  
+summary(voorbeeld_model_kunstmatig)
+r.squaredGLMM(voorbeeld_model_kunstmatig)
+AIC(voorbeeld_model2)
+
+plot_model(voorbeeld_model_kunstmatig, type = "pred", terms = "ec_20")
+
+simulationOutput <- simulateResiduals(fittedModel = voorbeeld_model_kunstmatig, plot = F)
+plot(simulationOutput)
+plot(simulationOutput, form = voorbeeld_kunstmatig$jaar)
+plot(simulationOutput, form = voorbeeld_kunstmatig$ec_20)
 
 ```
