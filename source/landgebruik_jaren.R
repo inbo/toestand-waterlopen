@@ -121,7 +121,9 @@ landgebruik_afstroomgebied_jaren <- landgebruik_koppeling0 %>% # met deze df kan
   left_join(., landgebruik_koppeling1, by = c("meetplaats", "landgebruiksjaar"))
 save(landgebruik_afstroomgebied_jaren, file = here("data", "verwerkt", "landgebruik", "landgebruik_afstroomgebied_jaren.rdata"))
 
-# oeverlandgebruik en landgebruik cirkelvormige buffer (door Maarten aangeleverd), omzetten omzetten in percentages en reclassen. Dit zo nog moeten gecorrigeerd worden voor de verschillende jaren van de landgebruikskaart.
+
+###### zie ander script jaren
+# oeverlandgebruik en landgebruik cirkelvormige buffer (door Maarten aangeleverd), omzetten in percentages en reclassen. Dit zo nog moeten gecorrigeerd worden voor de verschillende jaren van de landgebruikskaart.
 
 landuse_oever0 <- read_excel(here("data", "ruw", "landgebruik", "mi_meetpunten_lu_buffer.xlsx"))
 landuse_buffer0 <- read_excel(here("data", "ruw", "landgebruik", "mi_meetpunten_lu_cirk_min50m.xlsx"))
@@ -135,3 +137,16 @@ landgebruik_buffer <- landuse_reclass(landuse_buffer, "buffer")
 save(landgebruik_buffer, file  = here("data", "verwerkt", "landgebruik", "landgebruik_buffer.Rdata"))
 landgebruik_oever <- landuse_reclass(landuse_oever, "oever")
 save(landgebruik_oever, file  = here("data", "verwerkt", "landgebruik", "landgebruik_oever.Rdata"))
+
+### Landgebruik van oever voor de 4 jaren
+
+# inlezen txt files
+
+landuse_oever_2013 <- read.table(here("data", "ruw", "landgebruik", "rebufferslandgebruik", "mi_meetpunten_lu_2013.txt"), sep = ";", header = T)
+landuse_oever_2016 <- read.table(here("data", "ruw", "landgebruik", "rebufferslandgebruik", "mi_meetpunten_lu_2016.txt"), sep = ";", header = T)
+landuse_oever_2019 <- read.table(here("data", "ruw", "landgebruik", "rebufferslandgebruik", "mi_meetpunten_lu_2019.txt"), sep = ";", header = T)
+landuse_oever_2022 <- read.table(here("data", "ruw", "landgebruik", "rebufferslandgebruik", "mi_meetpunten_lu_2022.txt"), sep = ";", header = T)
+
+# koppeling van hierboven
+
+landgebruik_koppeling0

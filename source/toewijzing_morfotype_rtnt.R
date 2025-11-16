@@ -40,6 +40,11 @@ tijdsreeks_rtnt <- mi_data_analyse %>%
 print(tijdsreeks_rtnt)
 hist(tijdsreeks_rtnt$n)
 
+#NVT
+NVT <- mi_data_analyse %>% filter(type == "NVT")
+NVT %>% group_by(meetplaats) %>% summarise(n(),jaren = paste(unique(jaar), collapse = ", ")) %>% View()
+mapview(NVT) + mapview(wlas)
+
 #---------------------------------------------------------------------------------------------------
 # STAP 1: Koppel op basis van VHAG en dichtstbijzijnde geometrie (primaire, robuuste methode)
 #---------------------------------------------------------------------------------------------------
@@ -274,7 +279,7 @@ mi_data_rtnt <- meetpunten_morfotype_mmif_herberekend %>%
     waterlooptype == "Kunstmatige waterloop" ~ "Kunstmatig",
     waterlooptype == "Natuurlijke waterloop" ~ "Natuurlijk",
     vhag %in% kunstmatige_vhag$vhag ~ "Kunstmatig",
-    TRUE ~ "Natuurlijk"
+    TRUE ~ "Default"
   )) %>%
   select(-statuut) %>%
   rename(statuut = statuut_nieuw)

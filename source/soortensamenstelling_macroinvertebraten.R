@@ -7,13 +7,15 @@ load(here("data", "verwerkt", "mi_soorten.rdata"))
 data_wide <- mi_soorten %>%
   filter(categorie != "Vijver") %>%
   filter(waterlooptype != "Geïsoleerd water") %>%
+  filter(groep != "overgangswater") %>%
   filter(waterlichaamcategorie != "meer") %>%
+  filter(statuut != "Default") %>% #Voorlopig RtNt enzo weglaten
   select(macroinvertebraat, ind, aantal, deelmonster_id, monsternamedatum, meetplaats, statuut, groep) %>%
   drop_na(ind) %>%
   filter(!macroinvertebraat %in% c("Vis", "Salamander", "Lege schelpen", "Lege kokers")) %>%
   group_by(meetplaats) %>%
   filter(monsternamedatum == max(monsternamedatum)) %>%
-  filter(monsternamedatum > as.POSIXct("2010-12-31")) %>%
+  filter(monsternamedatum > as.POSIXct("2006-12-31")) %>%
   ungroup() %>%
   select(-ind) %>%
   pivot_wider(names_from = macroinvertebraat, values_from = aantal, values_fill = 0) %>%
@@ -25,7 +27,8 @@ species_matrix <- data_wide %>%
 nmds0 <- metaMDS(species_matrix, distance = "bray", k = 2, trymax = 10)
 plot(nmds0, type = "t")  # Basic NMDS plot
 
-data_wide <- data_wide[-541, ] # outliers uithalen voor visualisatie
+data_wide <- data_wide %>%
+  filter(deelmonster_id != "22033877") # heel sterke outlier kunstmatige rivier uithalen voor visualisatie
 species_matrix <- data_wide %>%
   select(-deelmonster_id, -monsternamedatum, -meetplaats, -statuut, -groep)
 # %>%
@@ -61,6 +64,7 @@ anova(dispersion_test)  # p < 0.05 means dispersion varies between groups
 nmds_scores <- as.data.frame(scores(nmds, display = "sites"))  # Extract NMDS coordinates
 nmds_scores$statuut <- data_wide$statuut  # Add statuut column
 
+
 # Compute convex hulls for each group
 hull_data <- nmds_scores %>%
   group_by(statuut) %>%
@@ -94,6 +98,7 @@ ggplot(nmds_scores, aes(x = NMDS1, y = NMDS2, color = groep)) +
   labs(title = "NMDS Ordination with Convex Hulls",
        x = "NMDS1", y = "NMDS2") +
   theme(legend.position = "right")
+
 
 # met soorten bij
 

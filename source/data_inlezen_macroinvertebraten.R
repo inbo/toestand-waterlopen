@@ -85,7 +85,7 @@ mi_data <- janitor::clean_names(mi_data0) %>%
   group_by(meetplaats, monsternamedatum) %>% #dubbele samples uitmiddelen
   summarise(
     across(
-      where(is.numeric), \(x) if(all(is.na(x))) NA else max(x, na.rm = TRUE) # enkel numerische kolommen om de max te pakken
+      where(is.numeric), \(x) if(all(is.na(x))) NA else mean(x, na.rm = TRUE) # enkel numerische kolommen om de max te pakken
     ), # voor niet numerische waarden gewoon de eerste string nemen om te behouden
     across(
       where(is.factor) | where(is.character),
@@ -133,7 +133,7 @@ mi_soorten0 <- vmm_mi$bemonsteringen %>%
 mi_soorten <- mi_soorten0 %>%
     # filter(waterlooptype != "Geïsoleerd water" &
     #          !(waterlichaamcategorie %in% c("meer", "overgangswater"))) %>%
-  mutate(meetplaats = paste0("OW", deelmonster_id)) %>%
+  mutate(meetplaats = paste0("OW", meetplaats)) %>%
     left_join(waterlopen_groep, by = "type") %>%
   mutate(datum_monstername = as.Date(datum_monstername, "%Y-%m-%d")) %>%
   rename(monsternamedatum = datum_monstername)

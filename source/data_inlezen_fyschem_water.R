@@ -117,11 +117,32 @@ overschrijdingen_aantal <- read_excel(here("data", "ruw", "fys_chem", "250326_Be
   rename(meetplaats = sample_point_naam) %>%
   select(-x, -y)
 
+overschrijdingen_soorten_stoffen <- read_excel(here("data", "ruw", "fys_chem", "tabel_overschrijdingen.xlsx"))
+
 overschrijdingen_parameters <- read_excel(here("data", "ruw", "fys_chem", "250326_Beoordeling GS per SP met norm_2007_2024.xlsx"), sheet = "OverschrijdingMPPar") %>%
   janitor::clean_names() %>%
   rename(meetplaats = sample_point_naam) %>%
-  select(-x, -y)
+  select(-x, -y) %>%
+  left_join(overschrijdingen_soorten_stoffen,
+            by = c("parameter_omschrijving" = "stofnaam"))
 
-overschrijdingen <- overschrijdingen_aantal %>%
+overschrijdingen0 <- overschrijdingen_aantal %>%
   left_join(., overschrijdingen_parameters, by = c("jaar", "meetplaats"))
+
+aantal_pesticiden_met_overschrijding <- overschrijdingen0 %>%
+  filter(categorie == "Pesticiden (Bestrijdingsmiddelen)") %>%
+  group_by(jaar, meetplaats) %>%
+  summarise(aantal_pesticiden_met_overschrijding = n(), .groups = "drop")
+
+aantal_zware_metalen_met_overschrijding <- overschrijdingen0 %>%
+  filter(categorie == "Zware Metalen / Sporenelementen") %>%
+  group_by(jaar, meetplaats) %>%
+  summarise(aantal_zware_metalen_met_overschrijding = n(), .groups = "drop")
+
+overschrijdingen <- overschrijdingen0 %>%
+  left_join(aantal_pesticiden_met_overschrijding, by = c("jaar", "meetplaats")) %>%
+  mutate(aantal_pesticiden_met_overschrijding = replace_na(aantal_pesticiden_met_overschrijding, 0)) %>%
+  left_join(aantal_zware_metalen_met_overschrijding, by = c("jaar", "meetplaats")) %>%
+  mutate(aantal_zware_metalen_met_overschrijding = replace_na(aantal_zware_metalen_met_overschrijding, 0))
+
 save(overschrijdingen, file = here("data", "verwerkt", "overschrijdingen.rdata"))

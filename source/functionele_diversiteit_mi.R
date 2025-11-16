@@ -1,11 +1,14 @@
 source(here::here("source", "inladen_packages.R"))
 
+#---------------------------------------------------------------------------------------------------
 # --- 1. Gegevens inlezen ---
+#---------------------------------------------------------------------------------------------------
+
 load(file = here("data", "verwerkt", "mi_soorten.rdata"))
 
 comm_data_raw <- mi_soorten %>%
-  select(meetplaats, monsternamedatum, macroinvertebraat, aantal) %>%
-  pivot_wider(., names_from = macroinvertebraat, values_from = aantal, values_fill = 0)
+  select(meetplaats, monsternamedatum, deelmonster_id, macroinvertebraat, aantal) %>%
+  pivot_wider(., names_from = macroinvertebraat, values_from = aantal, values_fill = list(aantal = 0))
 # write.csv(comm_data, file = here("data", "ruw", "macroinvertebraten", "traits", "comm_data.csv"))
 
 trait_data_raw <- read_excel(here("data", "ruw", "macroinvertebraten", "traits", "tachet_traits_mi.xlsx")) %>%
@@ -13,10 +16,12 @@ trait_data_raw <- read_excel(here("data", "ruw", "macroinvertebraten", "traits",
 # write.csv(trait_data_raw, file = here("data", "ruw", "macroinvertebraten", "traits", "trait_data.csv"))
 
 
-# Lees de eerder gegenereerde taxonlijst met taxonomisch niveau in
+# Lees de eerder gegenereerde taxonlijst met taxonomisch niveau in (komt uit excel VMM)
 taxon_levels_df <- read_csv(here("data", "ruw", "macroinvertebraten", "traits", "taxonlist_with_taxonomic_level.csv"))
 
+#---------------------------------------------------------------------------------------------------
 # --- 2. Trait Data voorbereiden en consolideren voor koppeling ---
+#---------------------------------------------------------------------------------------------------
 
 trait_data0 <- trait_data_raw
 
@@ -57,8 +62,8 @@ consolidated_trait_data <- trait_data %>%
     .groups = 'drop' # Verwijder de groepering na summarize
   )
 
-# Komt niet voor met tachet. telkens alle traits voor alle taxa
 # Vervang eventuele NaN waarden die kunnen ontstaan zijn door mean(NA) met NA
+# Komt niet voor met tachet. telkens alle traits voor alle taxa
 consolidated_trait_data[is.nan(as.matrix(consolidated_trait_data))] <- NA
 
 # Maak de geconsolideerde trait data frame klaar voor matching door Taxon_Consolidated_Key
@@ -67,7 +72,9 @@ matched_traits_df_for_fd <- consolidated_trait_data %>%
   column_to_rownames(var = "Taxon_Consolidated_Key") %>%
   select(all_of(trait_cols)) # Selecteer alleen de trait kolommen
 
+#---------------------------------------------------------------------------------------------------
 # --- 3. Taxa uit Community Data extraheren en filteren ---
+#---------------------------------------------------------------------------------------------------
 
 # De taxa namen zijn de kolomnamen van de community data, exclusief de eerste drie (index, meetplaats, monsternamedatum)
 comm_taxa_list_raw <- names(comm_data_raw)[4:ncol(comm_data_raw)]
@@ -79,7 +86,9 @@ comm_taxa_list_filtered <- taxon_levels_df %>%
   pull(macroinvertebraat) %>%
   base::intersect(comm_taxa_list_raw) # Zorg ervoor dat ze ook daadwerkelijk in de community data voorkomen
 
+#---------------------------------------------------------------------------------------------------
 # --- 4. Trait Matching (Hiërarchisch en Specifieke Regels) ---
+#---------------------------------------------------------------------------------------------------
 
 # Maak een leeg dataframe om de gematchte traits op te slaan
 matched_traits_output_df <- as.data.frame(matrix(NA,
@@ -146,7 +155,9 @@ for (comm_taxon in comm_taxa_list_filtered) {
   unmatched_taxa <- c(unmatched_taxa, comm_taxon)
 }
 
+#---------------------------------------------------------------------------------------------------
 # --- 5. Data voorbereiden voor functionele diversiteitsberekening (vervolg) ---
+#---------------------------------------------------------------------------------------------------
 
 # Filter de gematchte_traits_output_df om rijen met alleen NA's te verwijderen
 # Dit zijn taxa waarvoor geen enkele trait is gevonden na de matching, zelfs na de specifieke regels
@@ -155,7 +166,7 @@ matched_traits_df_final <- matched_traits_output_df[rowSums(is.na(matched_traits
 # Identificeer de taxa die we daadwerkelijk gaan gebruiken (die met complete, gematchte trait data)
 taxa_for_fd <- rownames(matched_traits_df_final)
 
-# --- NIEUWE STAP: Normaliseer de fuzzy scores per traitcategorie ---
+# --- Normaliseer de fuzzy scores per traitcategorie ---
 
 # Definieer de trait categorieën (prefixes van de kolommen)
 
@@ -199,12 +210,10 @@ for (category in trait_categories) {
 normalized_traits_df[is.nan(as.matrix(normalized_traits_df))] <- NA
 
 
-# Bereid de community matrix voor per meetplaats en monsternamedatum
+# Bereid de community matrix voor per meetplaats en monsternamedatum -> niet uniek! soms meerdere staalnames -> uniek is deelmonster_id!
 comm_matrix <- comm_data_raw %>%
   mutate(
-    monsternamedatum_str = format(as.Date(monsternamedatum), "%Y-%m-%d"),
-    unique_id = paste(meetplaats, monsternamedatum_str, sep = "_")
-  ) %>%
+    unique_id = as.character(deelmonster_id)) %>%
   select(unique_id, all_of(taxa_for_fd)) %>% # Selecteer alleen taxa die uiteindelijk gematcht zijn
   column_to_rownames(var = "unique_id") %>%
   as.matrix()
@@ -212,12 +221,12 @@ comm_matrix <- comm_data_raw %>%
 # Vervang eventuele NA's in de community matrix door 0 (als NA's afwezigheid betekenen)
 comm_matrix[is.na(comm_matrix)] <- 0
 
-# --- NIEUWE STAP: Verwijder communities (rijen) met nul-som abundanties ---
+# --- Verwijder communities (rijen) met nul-som abundanties ---
 # Bereken de som van abundanties voor elke rij
 row_sums_comm_matrix <- rowSums(comm_matrix, na.rm = TRUE)
 
 # Identificeer rijen waar de som nul is
-empty_communities <- names(row_sums_comm_matrix[row_sums_comm_matrix == 0])
+empty_communities <- names(row_sums_comm_matrix[row_sums_comm_matrix == 0]) #deze werden weggelaten uit de data
 
 if (length(empty_communities) > 0) {
   message(paste("Waarschuwing: De volgende meetplaatsen/data combinaties hebben nul-som abundanties en worden verwijderd (aantal tussen haakjes):",
@@ -235,7 +244,9 @@ if (!all(colnames(comm_matrix) == rownames(normalized_traits_df))) {
   stop("Taxa in community matrix en genormaliseerde trait matrix komen niet overeen of staan niet in dezelfde volgorde voor FD berekening!")
 }
 
+#---------------------------------------------------------------------------------------------------
 # --- 6. Functionele Diversiteit berekenen ---
+#---------------------------------------------------------------------------------------------------
 
 fd_results <- dbFD(
   x = normalized_traits_df, # Gebruik de genormaliseerde traits matrix
@@ -248,19 +259,24 @@ fd_results <- dbFD(
   m = "min"                 # Minimale aantal PCoA dimensies
 )
 
-# Bereken de Trait Coverage per sampling event ---
+#---------------------------------------------------------------------------------------------------
+# --- 7. Bereken de Trait Coverage per sampling event ---
+#---------------------------------------------------------------------------------------------------
 
 # Bereid een dataframe voor met de totale abundanties van de oorspronkelijke data
 total_raw_abundances_df <- comm_data_raw %>%
-  mutate(
-    monsternamedatum_str = format(as.Date(monsternamedatum), "%Y-%m-%d"),
-    unique_id = paste(meetplaats, monsternamedatum_str, sep = "_")
-  ) %>%
+     mutate(
+    unique_id = as.character(deelmonster_id)) %>%
   # Selecteer alle taxa-kolommen en de unieke ID
-  select(-meetplaats, -monsternamedatum, -monsternamedatum_str) %>%
+  select(-meetplaats, -monsternamedatum, -deelmonster_id) %>%
   # Bereken de rij-som voor elke unieke ID
   mutate(total_raw_abundance = rowSums(select(., c(-unique_id)))) %>%
   select(unique_id, total_raw_abundance)
+
+# hier komen unique_id's uit met NA als total raw abundance. Deze checken in comm_data_raw. en aanpassen.
+na_total_raw_abundance <- total_raw_abundances_df %>% filter(is.na(total_raw_abundance)) %>% pull(unique_id)
+# hier ontbreken abundances -> weglaten van die deelmonsters door trait_coverage -> 0 te geven
+
 
 # Haal de unieke sampling IDs uit de comm_matrix
 sampling_ids <- rownames(comm_matrix)
@@ -297,10 +313,12 @@ fdisp_mi <- fd_results$FDis %>%
   left_join(.,
             comm_data_raw %>%
               mutate(
-                monsternamedatum_str = format(as.Date(monsternamedatum), "%Y-%m-%d"),
-                unique_id = paste(meetplaats, monsternamedatum_str, sep = "_")) %>%
+                unique_id = as.character(deelmonster_id)) %>%
               select(monsternamedatum, meetplaats, unique_id),
-            by = "unique_id")
+            by = "unique_id") %>%
+  select(-unique_id) %>%
+  group_by(meetplaats, monsternamedatum) %>%
+  summarise_all(.funs = mean)
 save(fdisp_mi, file = here("data", "verwerkt", "mi_fd.rdata"))
 
 ggplot(fdisp_mi
