@@ -1,39 +1,19 @@
 ###EC20 aanpassen in het model
-load("data/temp/fc_lu_data.rdata")
-load("data/verwerkt/neerslag_beide_periodes.rdata")
-load(here("data", "verwerkt", "overschrijdingen.rdata"))
-load(here("data", "verwerkt", "hm_data.rdata"))
-load(file = here("data", "verwerkt", "overstorten", "overstort_tellingen_df.rdata"))
+load("data/verwerkt/mi_nat_sv.rdata")
 
 source("source/inladen_packages.R")
 # Selecteer alleen de noodzakelijke variabelen en verwijder NA's
-fc_lu_data_clean <- fc_lu_data %>%
-  left_join(overschrijdingen %>%
-              group_by(meetplaats, jaar) %>%
-              summarise(aantal_stoffen_met_overschrijding =
-                          mean(aantal_stoffen_met_overschrijding),
-                        aantal_pesticiden_met_overschrijding =
-                          mean(aantal_pesticiden_met_overschrijding),
-                        aantal_zware_metalen_met_overschrijding =
-                          mean(aantal_zware_metalen_met_overschrijding)),
-            by = c("meetplaats", "jaar")) %>%
-  left_join(hm_data, by = "meetplaats") %>%
-  left_join(finale_resultaten_sequentieel,
-            by = c("meetplaats", "monsternamedatum")) %>%
-  dplyr::select(groep, bekken, statuut, meetplaats, owl, ep_tw, ta_xw, ns_tw, sw_dw, mt_sw, mmif, mmif_20, n_t, p_h, t, ec_20, o2, p_t, landbouw_intens_afstr, hooggroen_afstr, hooggroen_oever, jaar, kjn, aantal_pesticiden_met_overschrijding, aantal_zware_metalen_met_overschrijding, Neerslag_som_10dagen, Neerslag_som_1jaar,
-                ekc2_waterlichaam) %>%
-  left_join(overstort_tellingen_df %>%
-              select(meetplaats, aantal_overstorten_500m),
-            by = "meetplaats") %>%
+data_sem_clean0 <- mi_nat_sv %>%
+  dplyr::select(groep, bekken, statuut, meetplaats, owl.x, ep_tw, ta_xw, ns_tw, sw_dw, mt_sw, mmif, mmif_20, n_t, ph, t_fc, ec_20_fc, o2_verz_fc, o2_fc, p_t, landbouw_intens_afstr, akker, hooggroen_afstr, hooggroen_oever, jaar, kjn, aantal_pesticiden_met_overschrijding, aantal_zware_metalen_met_overschrijding, Neerslag_som_10dagen, Neerslag_som_1jaar, ekc2_waterlichaam, aantal_overstorten_500m) %>%
+  tidyr::drop_na() %>%
+  filter(groep %in% c("beek")) %>%
   mutate(across(.cols = n_t:aantal_overstorten_500m, # Selects n_t and all columns to the end
                 .fns = ~as.numeric(scale(.x)),
-                .names = "{.col}_s")) %>%
-  tidyr::drop_na() %>%
-  filter(groep %in% c("beek"))
+                .names = "{.col}_s"))
 
 # # Correlatie en VIF
 #
-# numerieke_var <- fc_lu_data_clean %>%
+# numerieke_var <- data_sem_clean %>%
 #   dplyr::select(ep_tw, ta_xw, sw_dw, mt_sw, mmif, n_t, p_h, ec_20, o2, p_t, landbouw_intens_afstr, hooggroen_afstr, hooggroen_oever, jaar_scaled, kjn,
 #                 # aantal_pesticiden_met_overschrijding,
 #                 aantal_overstorten_500m,
@@ -43,95 +23,100 @@ fc_lu_data_clean <- fc_lu_data %>%
 # corrplot(cor_matrix, method = "circle", type = "upper", diag = FALSE, addCoef.col = "black")
 
 # Zorg ervoor dat de respons term (20 - mmif_20) ook correct is
-fc_lu_data_clean <- fc_lu_data_clean %>%
+data_sem_clean <- data_sem_clean0 %>%
   dplyr::mutate(ep_tw = as.integer(ep_tw),
                 ta_xw = as.integer(ta_xw),
                 ns_tw = as.integer(ns_tw),
                 mt_sw_prop = mt_sw / 10,
-                owl = as.factor(owl),
+                owl = as.factor(owl.x),
                 bekken = as.factor(bekken),
                 nst_prop = ns_tw / ta_xw,
                 stress_prop = (ep_tw + ns_tw)/ta_xw,
-                ept_prop = ep_tw / ta_xw)
+                ept_prop = ep_tw / ta_xw,
+                kjn_log = log(kjn),
+                p_t_log = log(p_t),
+                o2 = o2_fc,
+                groep_dummy = ifelse(groep == "beek", 0, 1)
+                )
 
 # # VIF
 # vif_model <- glm(ep_tw ~ n_t + p_h + ec_20 + o2 + p_t + landbouw_intens_afstr + hooggroen_afstr + hooggroen_oever + jaar_scaled + kjn + aantal_overstorten_500m + aantal_pesticiden_met_overschrijding + Neerslag_som_10dagen + Neerslag_som_1jaar + ekc2_waterlichaam,
 #                  family = poisson(link = "log"),
 #                  na.action = na.omit,
-#                  data = fc_lu_data_clean)
+#                  data = data_sem_clean)
 # vif(vif_model)
 # vif(update(vif_model, . ~ . - hooggroen_afstr - kjn))
 
 
 
 # M1: N_T (Gaussian)
-m1 <- glmmTMB(data = fc_lu_data_clean,
-              kjn_s ~ landbouw_intens_afstr_s + ekc2_waterlichaam_s + jaar_s + Neerslag_som_1jaar_s + Neerslag_som_10dagen_s + aantal_overstorten_500m_s + hooggroen_oever_s + (1 | meetplaats),
+m1 <- glmmTMB(data = data_sem_clean,
+              kjn_log ~ landbouw_intens_afstr_s + ekc2_waterlichaam_s + t_fc_s + jaar_s + Neerslag_som_1jaar_s + Neerslag_som_10dagen_s + aantal_overstorten_500m_s + hooggroen_oever_s + (1 | meetplaats),
               family = gaussian)
 
 
-m3 <- glmmTMB(data = fc_lu_data_clean,
-              p_t_s ~ landbouw_intens_afstr_s + ekc2_waterlichaam_s  + kjn_s + jaar_s + aantal_overstorten_500m_s +
-               Neerslag_som_1jaar_s + Neerslag_som_10dagen_s + hooggroen_oever_s + (1 | meetplaats),
+m3 <- glmmTMB(data = data_sem_clean,
+              p_t_log ~ landbouw_intens_afstr_s + ekc2_waterlichaam_s  + kjn_log + jaar_s + aantal_overstorten_500m_s +
+               Neerslag_som_1jaar_s + Neerslag_som_10dagen_s + hooggroen_oever_s + t_fc_s  + (1 | meetplaats),
               family = gaussian)
 
-m4 <- glmmTMB(data = fc_lu_data_clean,
-              o2_s ~  landbouw_intens_afstr_s + p_t_s + kjn_s + aantal_pesticiden_met_overschrijding + aantal_overstorten_500m_s +  Neerslag_som_1jaar_s + Neerslag_som_10dagen_s + hooggroen_oever_s + t_s +
+m4 <- glmmTMB(data = data_sem_clean,
+              o2_fc_s ~  landbouw_intens_afstr_s + p_t_log + kjn_log + aantal_pesticiden_met_overschrijding + aantal_overstorten_500m_s +  Neerslag_som_1jaar_s + Neerslag_som_10dagen_s + hooggroen_oever_s + t_fc_s +
                 ekc2_waterlichaam_s + jaar_s + (1 | meetplaats),
               family = gaussian)
 
-m5 <- glmmTMB(data = fc_lu_data_clean,
-             aantal_pesticiden_met_overschrijding ~ landbouw_intens_afstr_s + hooggroen_oever_s + Neerslag_som_1jaar_s + Neerslag_som_10dagen_s +  ekc2_waterlichaam_s + jaar_s + (1 | meetplaats),
+m5 <- glmmTMB(data = data_sem_clean,
+             aantal_pesticiden_met_overschrijding ~ landbouw_intens_afstr_s + t_fc_s + hooggroen_oever_s + Neerslag_som_1jaar_s  + Neerslag_som_10dagen_s +  ekc2_waterlichaam_s + jaar_s + aantal_overstorten_500m_s +  (1 | meetplaats),
               family = nbinom1)
-MuMIn::r.squaredGLMM(m5)
 
-m2 <- glmmTMB(
-  mmif ~ kjn_s + landbouw_intens_afstr_s + Neerslag_som_1jaar_s + Neerslag_som_10dagen_s + hooggroen_oever_s + aantal_pesticiden_met_overschrijding + ekc2_waterlichaam_s + o2_s + jaar_s + p_t_s + aantal_overstorten_500m_s + t_s + (1 | meetplaats),
+
+m2x <- glmmTMB(
+  mmif ~ kjn_log + landbouw_intens_afstr_s + Neerslag_som_1jaar_s + Neerslag_som_10dagen_s + hooggroen_oever_s + aantal_pesticiden_met_overschrijding + ekc2_waterlichaam_s + o2_fc_s + jaar_s + p_t_log + aantal_overstorten_500m_s + t_fc_s + (1 | meetplaats),
   family = ordbeta,
-  data = fc_lu_data_clean)
+  data = data_sem_clean)
 
-m2 <- glmmTMB(
-  ept_prop ~ kjn_s + landbouw_intens_afstr_s + Neerslag_som_1jaar_s + Neerslag_som_10dagen_s + hooggroen_oever_s + aantal_pesticiden_met_overschrijding + ekc2_waterlichaam_s + o2_s + jaar_s + p_t_s + aantal_overstorten_500m_s + t_s + (1 | meetplaats),
-  weights = fc_lu_data_clean$ta_xw,
-  data = fc_lu_data_clean,
-  family =  binomial)
+# m2 <- glmmTMB(
+#   ept_prop ~ kjn_log + landbouw_intens_afstr_s + Neerslag_som_1jaar_s + Neerslag_som_10dagen_s + hooggroen_oever_s + aantal_pesticiden_met_overschrijding + ekc2_waterlichaam_s + o2_fc_s + jaar_s + p_t_log + aantal_overstorten_500m_s + t_fc_s + (1 | meetplaats),
+#   weights = data_sem_clean$ta_xw,
+#   data = data_sem_clean,
+#   family =  binomial)
 
-m2 <- glmmTMB(
-  ta_xw ~ kjn + landbouw_intens_afstr + Neerslag_som_1jaar_s + Neerslag_som_10dagen_s + hooggroen_oever_s + aantal_pesticiden_met_overschrijding_s + ekc2_waterlichaam_s + o2_s + jaar_s + p_t_s + aantal_overstorten_500m_s + (1 | bekken/meetplaats),
-  data = fc_lu_data_clean,
-  family =  poisson)
-
-m2 <- glmmTMB(
-  mt_sw_prop ~ kjn_s + landbouw_intens_afstr_s + Neerslag_som_1jaar_s + Neerslag_som_10dagen_s + hooggroen_oever_s + aantal_pesticiden_met_overschrijding + ekc2_waterlichaam_s + o2_s + jaar_s + p_t_s + aantal_overstorten_500m_s + (1 | meetplaats),
-  family = ordbeta,
-  data = fc_lu_data_clean)
-
-m2 <- glmmTMB(
-  mt_sw ~ kjn + landbouw_intens_afstr + scaled_neerslag_jaar + scaled_neerslag_piek + aantal_pesticiden_met_overschrijding + ekc2_waterlichaam + o2 + jaar_scaled + p_t  + aantal_overstorten_500m  + (1 | bekken/meetplaats),
-  data = fc_lu_data_clean)
-
-m2 <- glmmTMB(
-  nst_prop ~ kjn_s + landbouw_intens_afstr_s + Neerslag_som_1jaar_s + Neerslag_som_10dagen_s + hooggroen_oever_s + aantal_pesticiden_met_overschrijding + ekc2_waterlichaam_s + o2_s + jaar_s + p_t_s + aantal_overstorten_500m_s + (1 | meetplaats),
-  weights = fc_lu_data_clean$ta_xw,
-  data = fc_lu_data_clean,
-  family =  binomial(link = "logit"))
-
-m2 <- glmmTMB(
-  stress_prop ~ kjn + landbouw_intens_afstr + scaled_neerslag_jaar + aantal_pesticiden_met_overschrijding + ekc2_waterlichaam + o2 + jaar_scaled + p_t + aantal_overstorten_500m + (1 | meetplaats),
-  weights = fc_lu_data_clean$ta_xw,
-  data = fc_lu_data_clean,
-  family =  binomial(link = "logit"))
-
-simulationOutput <- simulateResiduals(m5, plot = TRUE)
-testDispersion(simulationOutput) # geen overdispersie
-testZeroInflation(simulationOutput) # geen zero_inflation
-testUniformity(simulationOutput)
+# m2 <- glmmTMB(
+#   ta_xw ~ kjn + landbouw_intens_afstr + Neerslag_som_1jaar_s + Neerslag_som_10dagen_s + hooggroen_oever_s + aantal_pesticiden_met_overschrijding_s + ekc2_waterlichaam_s + o2_s + jaar_s + p_t_s + aantal_overstorten_500m_s + (1 | bekken/meetplaats),
+#   data = data_sem_clean,
+#   family =  poisson)
+#
+# m2 <- glmmTMB(
+#   mt_sw_prop ~ kjn_s + landbouw_intens_afstr_s + Neerslag_som_1jaar_s + Neerslag_som_10dagen_s + hooggroen_oever_s + aantal_pesticiden_met_overschrijding + ekc2_waterlichaam_s + o2_s + jaar_s + p_t_s + aantal_overstorten_500m_s + (1 | meetplaats),
+#   family = ordbeta,
+#   data = data_sem_clean)
+#
+# m2 <- glmmTMB(
+#   mt_sw ~ kjn + landbouw_intens_afstr + scaled_neerslag_jaar + scaled_neerslag_piek + aantal_pesticiden_met_overschrijding + ekc2_waterlichaam + o2 + jaar_scaled + p_t  + aantal_overstorten_500m  + (1 | bekken/meetplaats),
+#   data = data_sem_clean)
+#
+# m2 <- glmmTMB(
+#   nst_prop ~ kjn_s + landbouw_intens_afstr_s + Neerslag_som_1jaar_s + Neerslag_som_10dagen_s + hooggroen_oever_s + aantal_pesticiden_met_overschrijding + ekc2_waterlichaam_s + o2_s + jaar_s + p_t_s + aantal_overstorten_500m_s + (1 | meetplaats),
+#   weights = data_sem_clean$ta_xw,
+#   data = data_sem_clean,
+#   family =  binomial(link = "logit"))
+#
+# m2 <- glmmTMB(
+#   stress_prop ~ kjn + landbouw_intens_afstr + scaled_neerslag_jaar + aantal_pesticiden_met_overschrijding + ekc2_waterlichaam + o2 + jaar_scaled + p_t + aantal_overstorten_500m + (1 | meetplaats),
+#   weights = data_sem_clean$ta_xw,
+#   data = data_sem_clean,
+#   family =  binomial(link = "logit"))
+#
+# simulationOutput <- simulateResiduals(m1, plot = TRUE)
+# testDispersion(simulationOutput) # geen overdispersie
+# testZeroInflation(simulationOutput) # geen zero_inflation
+# testUniformity(simulationOutput)
 
 sem_resultaat <- psem(m1, m2, m3, m4, m5)
-
+# multigroup(sem_resultaat, group = data_sem_clean$groep_dummy)
 summary(sem_resultaat)
-coefs(sem_resultaat)
-plot(sem_resultaat)
+# coefs(sem_resultaat)
+# plot(sem_resultaat)
 
 
 library(piecewiseSEM)
@@ -140,6 +125,8 @@ library(igraph)
 
 # 1️⃣ Extract coëfficiënten uit je SEM
 coefs_df <- coefs(sem_resultaat)[,-9]
+
+source("source/Overige scripts/sem_standardised_coef_manually.R")
 
 coef_df <- coefs_df
 # 2️⃣ Filter enkel significante paden (p < 0.05)

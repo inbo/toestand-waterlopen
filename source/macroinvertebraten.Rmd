@@ -23,6 +23,8 @@ load(file = here("data", "verwerkt", "landgebruik", "landgebruik_buffer.Rdata"))
 load(file = here("data", "verwerkt", "landgebruik", "landgebruik_afstroomgebied_jaren.rdata"))
 load(file = here("data", "verwerkt", "landgebruik", "landgebruik_oever_jaren.rdata"))
 load(file = here("data", "verwerkt", "overstorten", "mi_meetpunten_aantal_overstorten_afstroomgebied.rdata"))
+load(file = here("data", "verwerkt", "overstorten", "overstort_tellingen_df.rdata"))
+load(file = here("data", "verwerkt", "neerslag_beide_periodes.rdata"))
 
 # weglaten vijvers, meren, geisoleerd water en punten buiten Vlaanderen
 mi_data_analyse <- mi_data %>%
@@ -150,7 +152,9 @@ mi_full1 <- mi_data_analyse %>%
               summarise(aantal_stoffen_met_overschrijding =
                           mean(aantal_stoffen_met_overschrijding),
                         aantal_pesticiden_met_overschrijding =
-                          mean(aantal_pesticiden_met_overschrijding)),
+                          mean(aantal_pesticiden_met_overschrijding),
+                        aantal_zware_metalen_met_overschrijding=
+                          mean(aantal_zware_metalen_met_overschrijding)),
             by = c("meetplaats", "jaar")) %>%
   left_join(landgebruik_data,
             by = c("meetplaats", "monsternamedatum")) %>%
@@ -162,6 +166,11 @@ mi_full1 <- mi_data_analyse %>%
   left_join(hm_data, by = "meetplaats") %>%
   left_join(., fdisp_mi_filtered,
             by = c("meetplaats", "monsternamedatum")) %>%
+  left_join(finale_resultaten_sequentieel,
+            by = c("meetplaats", "monsternamedatum")) %>%
+  left_join(overstort_tellingen_df %>%
+              select(meetplaats, aantal_overstorten_500m),
+            by = "meetplaats") %>%
   filter(jaar > 2009)
 
 # fc meetingen koppeling

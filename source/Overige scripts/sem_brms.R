@@ -9,30 +9,30 @@ library(brms)
 # (1 | bekken/meetplaats)  ==> (1 | bekken) + (1 | bekken:meetplaats)
 
 # M1: kjn (Gaussian)
-brm_m1 <- bf(kjn ~ landbouw_intens_afstr + ekc2_waterlichaam + jaar_scaled +
+brm_m1 <- bf(kjn ~ landbouw_intens_afstr + ekc2_waterlichaam + jaar_s +
                (1 | bekken) + (1 | bekken:meetplaats),
              family = gaussian())
 
 # M3: p_t (Gaussian) - Afhankelijk van kjn
-brm_m3 <- bf(p_t ~ landbouw_intens_afstr + ekc2_waterlichaam + kjn + jaar_scaled +
+brm_m3 <- bf(p_t ~ landbouw_intens_afstr + ekc2_waterlichaam + kjn + jaar_s +
                (1 | bekken) + (1 | bekken:meetplaats),
              family = gaussian())
 
 # M5: aantal_pesticiden_met_overschrijding (Gaussian)
-brm_m5 <- bf(aantal_pesticiden_met_overschrijding ~ landbouw_intens_afstr + ekc2_waterlichaam + jaar_scaled +
+brm_m5 <- bf(aantal_pesticiden_met_overschrijding ~ landbouw_intens_afstr + ekc2_waterlichaam + jaar_s +
                (1 | bekken) + (1 | bekken:meetplaats),
              family = gaussian())
 
 # M4: o2 (Gaussian) - Afhankelijk van p_t, kjn, aantal_pesticiden_met_overschrijding
 brm_m4 <- bf(o2 ~ landbouw_intens_afstr + p_t + kjn + aantal_pesticiden_met_overschrijding +
-               ekc2_waterlichaam + jaar_scaled + aantal_overstorten +
+               ekc2_waterlichaam + jaar_s + aantal_overstorten_500m +
                (1 | bekken) + (1 | bekken:meetplaats),
              family = gaussian())
 
 # M2: ep_tw (Poisson) - Afhankelijk van alle tussenliggende variabelen (kjn, aantal_pesticiden_met_overschrijding, o2, p_t)
 # Gebruik het offset argument als term in de vaste effecten formule
-brm_m2 <- bf(ep_tw ~ offset(log(ta_xw)) + kjn + landbouw_intens_afstr + aantal_pesticiden_met_overschrijding +
-               ekc2_waterlichaam + o2 + jaar_scaled + p_t +
+brm_m2 <- bf(ep_tw ~ kjn + landbouw_intens_afstr + aantal_pesticiden_met_overschrijding +
+               ekc2_waterlichaam + o2 + jaar_s + p_t +
                (1 | bekken) + (1 | bekken:meetplaats),
              family = poisson(link = "log"))
 

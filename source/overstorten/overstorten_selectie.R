@@ -24,7 +24,7 @@ buffer_ring_sf <- st_sf(
 bedekking_met_buffer <- bind_rows(bedekking, buffer_ring_sf)
 
 ################
-# 1. eerst de afstroomgebieden die voor meer dan 20% buiten de bedekkinglaag Vlaanderen vallen wegdoen
+# 1. eerst de afstroomgebieden (buffer 5000m) die voor meer dan 20% buiten de bedekkinglaag Vlaanderen vallen wegdoen
 #################
 
 # Bepaal de totale extent van de bedekkingslaag

@@ -2,7 +2,7 @@
 coefs_df <- coefs(sem_resultaat)[,-9]
 
 
-# Aanname: de objecten fc_lu_data_clean, m5 en coefs_df zijn geladen in uw R-sessie.
+# Aanname: de objecten data_sem_clean, m5 en coefs_df zijn geladen in uw R-sessie.
 
 library(dplyr)
 library(tibble)
@@ -17,20 +17,20 @@ library(glmmTMB)
 
 # Bereken de lineaire predictor (eta) op de log-link schaal
 # Gebruik type = "link" om de schattingen op de link-schaal te krijgen
-fc_lu_data_clean$eta_pesticiden <- predict(m5, type = "link", se.fit = FALSE)
+data_sem_clean$eta_pesticiden <- predict(m5, type = "link", se.fit = FALSE)
 
 # SD van de Latente Respons (SD(Y_latent))
-SD_Latente_Y_Pest <- sd(fc_lu_data_clean$eta_pesticiden)
+SD_Latente_Y_Pest <- sd(data_sem_clean$eta_pesticiden)
 
 
 # --- 2. BEREKEN DE 6 GESTANDARDISEERDE ESTIMATES ---
 
 # De lijst van predictoren in m5
-predictoren_m5 <- c("landbouw_intens_afstr_s", "hooggroen_oever_s", "Neerslag_som_1jaar_s",
-                    "Neerslag_som_10dagen_s", "ekc2_waterlichaam_s", "jaar_s")
+rijen_m5 <- 41:48
+predictoren_m5 <- coefs_df$Predictor[rijen_m5]
 
 # DataFrame om de SD(X) waarden te extraheren
-data_voor_sd_x <- fc_lu_data_clean %>%
+data_voor_sd_x <- data_sem_clean %>%
   select(all_of(predictoren_m5))
 
 # Maak een vector om de 6 handmatige estimates op te slaan
@@ -60,7 +60,7 @@ for (i in 1:length(predictoren_m5)) {
 
 # De rijen voor model m5 beginnen bij rij 37 en eindigen bij rij 42 in de output.
 # We vullen de berekende vector in de kolom 'Std.Estimate' van de rijen 37 t/m 42
-coefs_df[37:42, "Std.Estimate"] <- manual_std_estimates
+coefs_df[41:48, "Std.Estimate"] <- manual_std_estimates
 coefs_df$Std.Estimate <- as.numeric(coefs_df$Std.Estimate)
 
 # --- 4. CONTROLE OUTPUT ---
@@ -69,7 +69,7 @@ cat("\n✅ Succes! De 6 missende Std.Estimates zijn ingevuld.\n\n")
 cat("--- Resultaten voor Model M5 (Pesticiden) ---\n")
 
 # Toon de gevulde rijen 37 t/m 42 ter controle
-print(coef_df[37:42, ])
+# print(coef_df[37:42, ])
 
 cat("\nDe kolom 'Std.Estimate' bevat nu de handmatig berekende waarden.\n")
 
@@ -104,11 +104,11 @@ SD_Latente_Y_m2 <- sqrt(Var_latent_m2)
 # B) Bepaal de predictoren en hun SD's
 
 # Selecteer de rijnummers voor M2 in coef_df (Rijen 8 t/m 18)
-rijen_m2 <- 8:18
-predictoren_m2 <- coef_df$Predictor[rijen_m2]
+rijen_m2 <- 9:21
+predictoren_m2 <- coefs_df$Predictor[rijen_m2]
 
 # DataFrame voor de SD(X) extractie
-data_voor_sd_x_m2 <- fc_lu_data_clean %>%
+data_voor_sd_x_m2 <- data_sem_clean %>%
   select(all_of(predictoren_m2))
 
 # Vector om de 11 handmatige estimates op te slaan
@@ -121,7 +121,7 @@ for (i in 1:length(rijen_m2)) {
   predictor_name <- predictoren_m2[i]
 
   # 1. Haal de ongestandaardiseerde estimate op
-  beta_fixed <- coef_df$Estimate[rijen_m2[i]]
+  beta_fixed <- coefs_df$Estimate[rijen_m2[i]]
 
   # 2. Haal de SD(X) op (moet werken omdat alle predictoren geschaald zijn)
   SD_predictor_X <- sd(data_voor_sd_x_m2[[predictor_name]])
@@ -149,5 +149,5 @@ coefs_df[rijen_m2, "Std.Estimate"] <- unlist(manual_std_estimates_m2)
 cat("\n✅ Standardisatie voor Ordbeta (M2) en Nbinom1 (M5) voltooid.\n")
 cat("----------------------------------------------------------------------\n")
 cat("--- Controle van de ingevulde Std.Estimate waarden (Rijen 8-18) ---\n")
-print(coefs_df[c(8:18, 37:42), c("Response", "Predictor", "Estimate", "Std.Estimate")])
+print(coefs_df[c(8:19, 39:44), c("Response", "Predictor", "Estimate", "Std.Estimate")])
 cat("----------------------------------------------------------------------\n")
