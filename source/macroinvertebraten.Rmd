@@ -25,6 +25,10 @@ load(file = here("data", "verwerkt", "landgebruik", "landgebruik_oever_jaren.rda
 load(file = here("data", "verwerkt", "overstorten", "mi_meetpunten_aantal_overstorten_afstroomgebied.rdata"))
 load(file = here("data", "verwerkt", "overstorten", "overstort_tellingen_df.rdata"))
 load(file = here("data", "verwerkt", "neerslag_beide_periodes.rdata"))
+load(here("data", "verwerkt", "landgebruik", "intensiteit_landbouw_scores.rdata"))
+load(file = here("data", "verwerkt", "tu_resultaten.rdata"))
+
+
 
 # weglaten vijvers, meren, geisoleerd water en punten buiten Vlaanderen
 mi_data_analyse <- mi_data %>%
@@ -144,7 +148,10 @@ landgebruik_data <- landgebruik_afstroomgebied_jaren %>%
   full_join(.,
             landgebruik_oever_jaren %>%
               select(-landgebruiksjaar),
-            by = c("meetplaats", "monsternamedatum"), suffix = c("_afstr", "_oever"))
+            by = c("meetplaats", "monsternamedatum"), suffix = c("_afstr", "_oever")) %>%
+  left_join(.,
+            intensiteit_landbouw_scores,
+            by = c("meetplaats", "monsternamedatum"))
 
 mi_full1 <- mi_data_analyse %>%
   left_join(overschrijdingen %>% 

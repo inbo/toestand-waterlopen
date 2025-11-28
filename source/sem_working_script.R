@@ -4,10 +4,10 @@ load("data/verwerkt/mi_nat_sv.rdata")
 source("source/inladen_packages.R")
 # Selecteer alleen de noodzakelijke variabelen en verwijder NA's
 data_sem_clean0 <- mi_nat_sv %>%
-  dplyr::select(groep, bekken, statuut, meetplaats, owl.x, ep_tw, ta_xw, ns_tw, sw_dw, mt_sw, mmif, mmif_20, n_t, ph, t_fc, ec_20_fc, o2_verz_fc, o2_fc, p_t, landbouw_intens_afstr, akker, hooggroen_afstr, hooggroen_oever, jaar, kjn, aantal_pesticiden_met_overschrijding, aantal_zware_metalen_met_overschrijding, Neerslag_som_10dagen, Neerslag_som_1jaar, ekc2_waterlichaam, aantal_overstorten_500m) %>%
+  dplyr::select(groep, monsternamedatum, bekken, statuut, meetplaats, owl.x, ep_tw, ta_xw, ns_tw, sw_dw, mt_sw, mmif, mmif_20, n_t, ph, t_fc, ec_20_fc, o2_verz_fc, o2_fc, p_t, landbouw_intens_afstr, akker, hooggroen_afstr, hooggroen_oever, jaar, kjn, aantal_pesticiden_met_overschrijding, aantal_zware_metalen_met_overschrijding, Neerslag_som_10dagen, Neerslag_som_1jaar, ekc2_waterlichaam, aantal_overstorten_500m, intensiteit_combo) %>%
   tidyr::drop_na() %>%
   filter(groep %in% c("beek")) %>%
-  mutate(across(.cols = n_t:aantal_overstorten_500m, # Selects n_t and all columns to the end
+  mutate(across(.cols = n_t:intensiteit_combo, # Selects n_t and all columns to the end
                 .fns = ~as.numeric(scale(.x)),
                 .names = "{.col}_s"))
 
@@ -34,6 +34,7 @@ data_sem_clean <- data_sem_clean0 %>%
                 stress_prop = (ep_tw + ns_tw)/ta_xw,
                 ept_prop = ep_tw / ta_xw,
                 kjn_log = log(kjn),
+                n_t_log = log(n_t),
                 p_t_log = log(p_t),
                 o2 = o2_fc,
                 groep_dummy = ifelse(groep == "beek", 0, 1)
@@ -70,7 +71,7 @@ m5 <- glmmTMB(data = data_sem_clean,
               family = nbinom1)
 
 
-m2x <- glmmTMB(
+m2 <- glmmTMB(
   mmif ~ kjn_log + landbouw_intens_afstr_s + Neerslag_som_1jaar_s + Neerslag_som_10dagen_s + hooggroen_oever_s + aantal_pesticiden_met_overschrijding + ekc2_waterlichaam_s + o2_fc_s + jaar_s + p_t_log + aantal_overstorten_500m_s + t_fc_s + (1 | meetplaats),
   family = ordbeta,
   data = data_sem_clean)

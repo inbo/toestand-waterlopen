@@ -1,11 +1,12 @@
 load(file = here("data", "verwerkt", "spear_data.rdata"))
 load(file = "data/temp/fc_lu_data.rdata")
 load(file = "data/verwerkt/mi_nat_sv.rdata")
+load(file = "data/verwerkt/fc_data.rdata")
 
 data0 <- mi_nat_sv %>%
   left_join(spear_data,
             by = c("meetplaats", "monsternamedatum")) %>%
-  select(mmif, ep_tw, ns_tw, mt_sw, sw_dw, ta_xw, aantal_pesticiden_met_overschrijding, meetplaats, bekken, groep, jaar, landbouw_intens_afstr, akker, hooggroen_afstr, spear_pesticides, tu_estimated, ekc2_waterlichaam, kjn, p_t, monsternamedatum) %>%
+  select(mmif, ep_tw, ns_tw, mt_sw, sw_dw, ta_xw, aantal_pesticiden_met_overschrijding, meetplaats, bekken, groep, jaar, landbouw_intens_afstr, akker, intensiteit_combo, hooggroen_afstr, spear_pesticides, tu_estimated, ekc2_waterlichaam, kjn, p_t, monsternamedatum) %>%
   tidyr::drop_na() %>%
   filter(groep == "beek")
 
@@ -55,7 +56,7 @@ data <- data0 %>%
             suffix = c("", "_pest")) %>%
   drop_na()
 
-model_mmif <- glmmTMB(data = data,
+model_mmif <- glmmTMB(data = data0,
                       mmif ~ scale(spear_pesticides) + scale(akker) + scale(jaar) + (1 | bekken/meetplaats),
                       family = ordbeta)
 summary(model_mmif)
@@ -71,7 +72,7 @@ sjPlot::plot_model(model_mmif, "pred")
 simulationOutput <- simulateResiduals(model_mmif, plot = TRUE)
 
 model_spear <- glmmTMB(data = data,
-                      spear_pesticides ~ scale(pesticiden_totaal) + scale(akker) + scale(aantal_pesticiden_met_overschrijding) + scale(hooggroen_afstr) + scale(jaar) + (1 | bekken/meetplaats),
+                      spear_pesticides ~ scale(intensiteit_combo) + scale(aantal_pesticiden_met_overschrijding)  + scale(jaar) + (1 | meetplaats),
                       family = ordbeta)
 summary(model_spear)
 

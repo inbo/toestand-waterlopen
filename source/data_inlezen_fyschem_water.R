@@ -47,6 +47,58 @@ fc_data <- anaresult %>%
   rename(meetplaats = sample_point,
          monsternamedatum = sample_datum_monstername)
 
+# -------------------------------------------------------------------------
+# STANDAARDISATIE EENHEDEN NAAR µg/L
+# -------------------------------------------------------------------------
+
+fc_data <- fc_data %>%
+  mutate(
+    # 1. Bepaal de conversiefactor op basis van de huidige eenheid
+    factor_naar_ug = case_when(
+      # A. Milligram familie (mg/L, mgN/L, mgP/L, etc.) -> x 1000
+      grepl("^mg.*/L$", eenheid) ~ 1000,
+
+      # B. Nanogram familie (ng/L, ngSn/L) -> x 0.001
+      grepl("^ng.*/L$", eenheid) ~ 0.001,
+
+      # C. Franse Hardheidsgraden (°F)
+      # Relevant voor metaal-toxiciteit correcties (BLM modellen)
+      # 1 °F = 10 mg CaCO3/L = 10.000 µg CaCO3/L
+      eenheid == "°F" ~ 10000,
+
+      # D. Reeds in µg of niet converteerbaar (bijv. bacteriën, pH, %) -> x 1
+      TRUE ~ 1
+    ),
+
+    # 2. Bereken de gestandaardiseerde waarde
+    resultaat_ug_L = resultaat_detectielimiet * factor_naar_ug,
+
+    # 3. Update de eenheid label (alleen als er geconverteerd is)
+    eenheid_std = case_when(
+      # Als de factor 1 is, behoud de originele eenheid
+      factor_naar_ug == 1 ~ eenheid,
+
+      # Specifieke conversie voor hardheid
+      eenheid == "°F" ~ "µg CaCO3/L",
+
+      # Alle andere massa-conversies worden µg/L
+      # Let op: mgN/L wordt hiermee µg/L (waarbij 'N' impliciet blijft via de parameter naam)
+      TRUE ~ "µg/L"
+    )
+  )
+
+# -------------------------------------------------------------------------
+# CONTROLE & OPSLAAN
+# -------------------------------------------------------------------------
+
+# Check even wat er is veranderd
+check_conversie <- fc_data %>%
+  select(parameter_symbool, resultaat, eenheid, resultaat_ug_L, eenheid_std) %>%
+  filter(eenheid != eenheid_std) %>%
+  distinct(eenheid, eenheid_std)
+
+print(check_conversie)
+
 save(fc_data, file = here("data", "verwerkt", "fc_data.rdata"))
 }
 
@@ -103,7 +155,7 @@ fc_selectie <- fc_data %>%
                                        "Zwevende stoffen"
                                        )) %>%
   mutate(parameter_symbool = clean_like_janitor(parameter_symbool)) %>%
-  select(meetplaats, monsternamedatum, parameter_symbool, resultaat_detectielimiet) %>% # wide maken
+  select(meetplaats, monsternamedatum, parameter_symbool, resultaat_detectielimiet, resultaat_ug_L) %>% # wide maken
   pivot_wider(., names_from = parameter_symbool, values_from = resultaat_detectielimiet, values_fn = mean) # gemiddelde nemen van dubbele metingen; hier geen reden voor gevonden want zelfde plaats, dag en uur voor parameter soms dubbele waarde.
 
 
