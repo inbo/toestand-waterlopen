@@ -7,6 +7,49 @@ source(here::here("source", "inladen_packages.R"))
 # - Whitebox tools moet geïnstalleerd zijn (zie instructies in commentaar)
 # - QGIS-plugins moeten correct gelinkt zijn
 
+# --- Stap 1: Data inlezen en standaardiseren ---
+
+# Lees MI meetpunten en behoud alleen de naam en de geometrie
+mi_meetpunten <- st_read(here("data", "ruw", "macroinvertebraten", "mi_meetpunten.gpkg"), quiet = TRUE) %>%
+  select(meetplaats)
+
+# Lees FC meetpunten en behoud alleen de naam en de geometrie
+# (We halen de 'unique()' hier nog even weg, dat doen we pas na het samenvoegen)
+fc_meetpunten <- st_read(here("data", "ruw", "fys_chem", "fc_meetpunten.gpkg"), quiet = TRUE) %>%
+  select(meetplaats)
+
+# --- Stap 2: Zorg voor gelijke CRS (Coördinatensysteem) ---
+
+# Het is cruciaal dat beide dezelfde CRS hebben voor bind_rows.
+# We controleren het en transformeren indien nodig naar de CRS van de eerste set.
+if (st_crs(mi_meetpunten_std) != st_crs(fc_meetpunten_std)) {
+  message("Coördinatensystemen verschillen. FC wordt getransformeerd naar MI CRS.")
+  target_crs <- st_crs(mi_meetpunten_std)
+  fc_meetpunten_std <- st_transform(fc_meetpunten_std, target_crs)
+}
+
+# --- Stap 3, 4 & 5: Samenvoegen, uniek maken en filteren op lege geometrie ---
+
+unieke_meetpunten_met_coords <- bind_rows(mi_meetpunten_std, fc_meetpunten_std) %>%
+  # Zorg dat we alleen unieke meetplaatsnamen overhouden.
+  # .keep_all = TRUE zorgt dat de geometrie van de eerste 'hit' bewaard blijft.
+  distinct(meetplaats, .keep_all = TRUE) %>%
+  # Filter punten eruit die geen geometrie hebben (lege punten)
+  # st_is_empty geeft TRUE als er geen coördinaten zijn, dus we willen de '!' (niet) empty
+  filter(!st_is_empty(st_geometry(.)))
+
+
+# --- Controle ---
+
+# Bekijk het resultaat
+print(unieke_meetpunten_met_coords)
+
+# Controleer hoeveel punten je overhoudt
+nrow(unieke_meetpunten_met_coords)
+
+# Optioneel: plot om te checken
+plot(st_geometry(unieke_meetpunten_met_coords), pch = 20, col = 'blue')
+
 # =====================================================================
 # 2. DEM inladen en voorbereiden
 # =====================================================================
@@ -83,6 +126,7 @@ st_crs(streams_sf) <- "EPSG:31370"
 # =====================================================================
 if (!file.exists(here("data", "verwerkt", "hydrologisch",
                       "mi_meetpunten_snapped_to_streams.shp"))) {
+
   snapped <- qgis_run_algorithm(
     "wbt:JensonSnapPourPoints",
     pour_pts = here("data", "ruw", "macroinvertebraten",
