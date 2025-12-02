@@ -1,9 +1,10 @@
 source(here::here("source", "inladen_packages.R"))
 
 #inlezen data
+load(file = here("data", "verwerkt", "tu_resultaten.rdata"))
 tu_meetpunten <- tu_per_sample  %>%
   filter(monsternamedatum > "2009-12-31")
-afstroomgebieden <- st_read(here("data", "verwerkt", "hydrologisch", "mi_meetpunten_watersheds_buffered_5000m.gpkg"))
+afstroomgebieden <- st_read(here("data", "verwerkt", "hydrologisch", "ow_meetpunten_watersheds_buffered_5000m.gpkg"))
 crs_referentie <- st_crs(afstroomgebieden)
 lbg_intensiteit_scores <- read_xlsx(here("data", "ruw", "landgebruik", "landbouwgebruikspercelen", "landbouwgebruikspercelen_intensiteitsscores.xlsx")) %>%
   mutate(combo = (gewasbescherming + nitraatresidues)/2)
@@ -61,13 +62,13 @@ print(alle_unieke_gewasgroepen)
 
 # Koppel de afstroomgebieden aan de meetpunten
 # Dit dataframe zal de basis vormen voor de lus
-data_basis <- mi_meetpunten %>%
+data_basis <- tu_meetpunten %>%
   # Selecteer de benodigde kolommen om te koppelen
   st_drop_geometry() %>%
   select(meetplaats, monsternamedatum) %>%
 
   # Voeg het jaar toe voor latere matching met de perceelkaarten
-  mutate(jaar = year(monsternamedatum)) %>%
+  mutate(jaar = lubridate::year(monsternamedatum)) %>%
 
   # Koppel de geometrie van het afstroomgebied toe (Meetplaats is de sleutel)
   left_join(afstroomgebieden %>% select(meetplaats, oppervlakte), by = "meetplaats") %>%
@@ -147,11 +148,11 @@ for (j in jaren) {
 # --- 3. Combineer de Resultaten ---
 
 # Combineer alle jaarlijkse dataframes tot één definitief dataframe
-intensiteit_landbouw_scores <- bind_rows(resultaten_lijst)
+intensiteit_landbouw_scores_tu <- bind_rows(resultaten_lijst)
 
 cat("\n✅ Scores Landbouwintensiteit succesvol berekend en gecombineerd.\n")
 cat("Structuur van de definitieve dataset (data_compleet_scores):\n")
-print(head(data_compleet_scores))
+print(head(intensiteit_landbouw_scores_tu))
 
-save(intensiteit_landbouw_scores, file = here("data", "verwerkt", "landgebruik", "intensiteit_landbouw_scores.rdata"))
+save(intensiteit_landbouw_scores_tu, file = here("data", "verwerkt", "landgebruik", "intensiteit_landbouw_scores_tu.rdata"))
 

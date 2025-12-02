@@ -35,7 +35,7 @@ m4 <- glmmTMB(data = fc_lu_data_clean,
 check_residuals(m4x)
 summary(m4)
 summary(m4x)
-simulationOutput <- simulateResiduals(m1, plot = TRUE)
+simulationOutput <- simulateResiduals(m, plot = TRUE)
 AIC(m1)
 r2(m1)
 
@@ -107,7 +107,7 @@ r.squaredGLMM(model)
 ###toxicolo
 
 data_EC50_master %>%
-  filter(!class %in% niet_relevante_soortgroepen) %>%
+  filter(!ecotox_group %in% niet_relevante_soortgroepen) %>%
   select(cas) %>%
   unique() %>%
   filter(

@@ -106,14 +106,11 @@ load(file = here("data", "verwerkt", "fc_data.rdata"))
 
 if (!file.exists(here("data", "ruw", "fys_chem", "fc_meetpunten.gpkg"))) {
 fc_meetpunten <- fc_data %>%
-  select(sample_point, sample_datum_monstername, lambert_x, lambert_y) %>%
+  select(meetplaats, monsternamedatum, lambert_x, lambert_y) %>%
   drop_na(lambert_x) %>%
-  rename(meetplaats = sample_point,
-         monsternamedatum = sample_datum_monstername) %>%
   unique() %>%
   st_as_sf(coords = c("lambert_x", "lambert_y"),
            crs = 31370)
-rm(anaresult)
 st_write(fc_meetpunten, dsn = here("data", "ruw", "fys_chem", "fc_meetpunten.gpkg"), delete_dsn = T)
 }
 
@@ -155,8 +152,8 @@ fc_selectie <- fc_data %>%
                                        "Zwevende stoffen"
                                        )) %>%
   mutate(parameter_symbool = clean_like_janitor(parameter_symbool)) %>%
-  select(meetplaats, monsternamedatum, parameter_symbool, resultaat_detectielimiet, resultaat_ug_L) %>% # wide maken
-  pivot_wider(., names_from = parameter_symbool, values_from = resultaat_detectielimiet, values_fn = mean) # gemiddelde nemen van dubbele metingen; hier geen reden voor gevonden want zelfde plaats, dag en uur voor parameter soms dubbele waarde.
+  select(meetplaats, monsternamedatum, parameter_symbool, resultaat_ug_L) %>% # wide maken
+  pivot_wider(., names_from = parameter_symbool, values_from = resultaat_ug_L, values_fn = mean) # gemiddelde nemen van dubbele metingen; hier geen reden voor gevonden want zelfde plaats, dag en uur voor parameter soms dubbele waarde.
 
 
 save(fc_selectie, file = here("data", "verwerkt", "fc_selectie.rdata"))

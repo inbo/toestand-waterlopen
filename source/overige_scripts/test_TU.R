@@ -1,5 +1,8 @@
-tu_data <- tu_per_sample %>%
-  select(meetplaats, monsternamedatum, TU_sum)
+load(here("data", "verwerkt", "mi_nat_sv.rdata"))
+load(file = here("data", "verwerkt", "tu_resultaten.rdata"))
+
+tu_data <- tu_specific_groups %>%
+  select(meetplaats, monsternamedatum, TU_sum, TU_insecticide)
 koppeling_mi_tu <- mi_nat_sv %>%
   st_drop_geometry() %>%
   filter(jaar > 2009) %>%
@@ -45,13 +48,13 @@ mi_data_met_tu <- mi_nat_sv %>%
 mi_data_met_tu %>% filter(!is.na(TU_sum))
 
 
-m <- glmmTMB(data = mi_data_met_tu,
-             nst_prop ~ log(TU_sum) + scale(jaar) + (1 | meetplaats),
-             weights = ta_xw,
-             family = binomial)
+m <- glmmTMB(data = mi_data_met_tu %>% filter(TU_sum < 5),
+             mmif ~ poly(TU_sum, 2) * scale(jaar) + (1 | meetplaats),
+             # weights = ta_xw,
+             family = gaussian)
 summary(m)
-plot_model(m, "pred")
-ggplot(mi_data_met_tu, aes(TU_sum, ep_tw)) + geom_point() + geom_smooth()
+plot_model(m, "pred", terms = c("TU_sum", "jaar"))
+ggplot(mi_data_met_tu %>% filter(TU_insecticide < 5), aes(TU_insecticide, ep_tw)) + geom_point() + geom_smooth()
 locations <- read_sf(here("data", "verwerkt", "hydrologisch",
                           "mi_meetpunten_snapped_to_streams.shp"))
 spatial <-
@@ -63,4 +66,25 @@ spatial_plot <- spatial %>% select(meetplaats, geometry) %>%
   st_as_sf()
 mapview(spatial_plot)
 
+#####landuse
 
+
+source(here::here("source", "inladen_packages.R"))
+load(file = here("data", "verwerkt", "landgebruik", "intensiteit_landbouw_scores_tu.rdata"))
+
+tu_lu <- tu_per_sample %>%
+  left_join(intensiteit_landbouw_scores_tu,
+            by = c("meetplaats", "monsternamedatum")) %>%
+  filter(TU_sum < 10) %>%
+  mutate(jaar = year(monsternamedatum)) %>%
+  na.omit()
+
+ggplot(data = tu_lu %>% filter(TU_sum < 10), aes(intensiteit_gewasbescherming, TU_sum)) +
+  geom_point() +
+  geom_smooth()
+
+model <- glmmTMB(data = tu_lu %>% filter(TU_sum < 10),
+                 TU_sum ~ poly(intensiteit_gewasbescherming, 2) * scale(jaar) + (1 | meetplaats))
+
+summary(model)
+plot_model(model, "pred", terms = c("intensiteit_gewasbescherming", "jaar"))
