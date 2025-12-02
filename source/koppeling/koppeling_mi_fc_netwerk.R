@@ -108,9 +108,16 @@ mi_snapped$node <- segment_to_node_from[mi_snapped$segment_id]
 fc_snapped$node <- segment_to_node_from[fc_snapped$segment_id]
 
 # Build river network graph using from_node and to_node directly
+
+# 1. Bereken lengte van elk segment in het netwerk
+# 'fd' is je flow direction shapefile (de lijnen)
+fd$length_m <- st_length(fd)
+
+# 2. Bouw de graaf OPNIEUW, maar nu met 'weight' (lengte)
 edges <- data.frame(
   from = as.character(fd$from_node),
   to = as.character(fd$to_node),
+  weight = as.numeric(fd$length_m), # Dit is cruciaal!
   segment_id = seq_len(nrow(fd))
 )
 
@@ -147,19 +154,41 @@ for (i in seq_len(nrow(mi_snapped))) {
   #   )
 
   if (nrow(candidates) > 0) {
-    # Compute distances
-    dists <- st_distance(mpt, candidates)
 
-    # Set distance threshold (x meters)
-    within_threshold <- which(as.numeric(dists) <= 5000)
+    # We hebben kandidaten die stroomopwaarts liggen en binnen de tijd vallen.
+    # Nu willen we de 'rivier-afstand' weten.
 
-    if (length(within_threshold) > 0) {
-      # Find the closest candidate within x meters
-      closest_idx <- within_threshold[which.min(dists[within_threshold])]
-      match <- candidates[closest_idx, ]
+    river_distances <- c()
+
+    for(j in seq_len(nrow(candidates))) {
+      cand <- candidates[j, ]
+
+      # Bereken de afstand via de graaf
+      # Van candidate (upstream) NAAR mafy punt (downstream)
+      # distances() berekent het kortste pad op basis van 'weight'
+      d <- distances(
+        g,
+        v = as.character(cand$node),
+        to = as.character(mnode),
+        mode = "out" # Volg de stroomrichting naar beneden
+      )
+
+      river_distances[j] <- as.numeric(d)
+    }
+
+    # Voeg afstand toe aan kandidaten tabel
+    candidates$river_dist_m <- river_distances
+
+    # Filter: bvb maximaal 5000m STROOMAFSTAND (veel nauwkeuriger dan vogelvlucht)
+    candidates_within <- candidates %>% filter(river_dist_m <= 5000)
+
+    if (nrow(candidates_within) > 0) {
+      # Kies de dichtstbijzijnde via de rivier
+      match <- candidates_within[which.min(candidates_within$river_dist_m), ]
     } else {
       match <- NA
     }
+
   } else {
     match <- NA
   }
