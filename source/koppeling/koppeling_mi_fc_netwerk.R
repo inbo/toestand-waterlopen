@@ -37,8 +37,10 @@ fd$flow_dir <- "start_to_end"  # All flows are from Start -> End as defined in c
 # find nearest fc point for mi point in space upstream and in time ----
 
 # Load your data (adjust paths)
-mi_meetpunten_datum <- st_read(here("data", "ruw", "macroinvertebraten", "mi_meetpunten_datum.gpkg"))
-fc_meetpunten_datum <- st_read(here("data", "ruw", "fys_chem", "fc_meetpunten.gpkg"))
+mi_meetpunten_datum <- st_read(here("data", "ruw", "macroinvertebraten", "mi_meetpunten_datum.gpkg")) %>%
+  filter(monsternamedatum > '31-12-2009')
+fc_meetpunten_datum <- st_read(here("data", "ruw", "fys_chem", "fc_meetpunten.gpkg")) %>%
+  filter(monsternamedatum > '31-12-2007')
 
 mi_meetpunten_meetplaats <- mi_meetpunten_datum %>% #enkel de meetplaatsen, geen data
   select(meetplaats, geom) %>%
