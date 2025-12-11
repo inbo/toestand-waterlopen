@@ -226,7 +226,7 @@ time <- system.time({
   save(matched_df, file = "data/verwerkt/koppeling/matched_df_mi_fc.rdata")
 })
 
-matched_df %>% drop_
+matched_df %>% drop_na(meetplaats...5) %>% nrow
 load(file = file = "data/verwerkt/koppeling/matched_df_mi_fc.rdata")
 # Verificatie en duplicates check
 duplicates_check <- matched_df %>%

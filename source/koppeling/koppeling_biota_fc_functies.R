@@ -2,6 +2,7 @@ library(sf)
 library(igraph)
 library(tidyverse)
 library(progress)
+library(here)
 
 # ==============================================================================
 # FUNCTIE 1: Bouw het netwerk (Doe dit 1 keer aan het begin)
@@ -52,27 +53,27 @@ build_river_network <- function(lines_sf, nodes_sf) {
 match_upstream <- function(biota_sf,
                            quality_sf,
                            network_list,
+                           discharge_sf = NULL, # NIEUW: Optionele laag met lozingspunten
                            max_dist_m = 5000,
                            days_before = 14,
                            days_after = 30,
                            col_date_biota = "monsternamedatum",
                            col_date_quality = "monsternamedatum",
-                           selection_mode = "closest_distance") { # NIEUW: Keuze optie
+                           selection_mode = "closest_distance") {
 
-  # Validatie van de modus
+  # 1. Validatie
   valid_modes <- c("closest_distance", "closest_time", "all")
   if (!selection_mode %in% valid_modes) stop("selection_mode moet zijn: 'closest_distance', 'closest_time' of 'all'")
 
   g <- network_list$graph
   net_sf <- network_list$network_sf
 
+  # Datum conversies
   biota_sf[[col_date_biota]] <- as.Date(biota_sf[[col_date_biota]])
   quality_sf[[col_date_quality]] <- as.Date(quality_sf[[col_date_quality]])
-
-  # Voeg een uniek ID toe aan biota om later correct te kunnen joinen (nodig voor 'all' optie)
   biota_sf$tmp_join_id <- seq_len(nrow(biota_sf))
 
-  message("1/3 Snapping points to river network...")
+  message("1/4 Snapping points to river network...")
 
   snap_to_node <- function(points, network) {
     nearest_segment_idx <- st_nearest_feature(points, network)
@@ -81,10 +82,18 @@ match_upstream <- function(biota_sf,
 
   biota_sf$node_id <- snap_to_node(biota_sf, net_sf)
   quality_sf$node_id <- snap_to_node(quality_sf, net_sf)
-
   quality_df <- st_drop_geometry(quality_sf)
 
-  message("2/3 Matching upstream points...")
+  # --- NIEUW: Verwerk lozingspunten indien aanwezig ---
+  discharge_nodes <- character(0)
+  if (!is.null(discharge_sf)) {
+    message("    -> Snapping discharge points...")
+    discharge_sf$node_id <- snap_to_node(discharge_sf, net_sf)
+    discharge_nodes <- unique(as.character(discharge_sf$node_id))
+  }
+  # ----------------------------------------------------
+
+  message("2/4 Matching upstream points...")
 
   results <- list()
 
@@ -99,83 +108,97 @@ match_upstream <- function(biota_sf,
     b_pt <- biota_sf[i, ]
     b_date <- b_pt[[col_date_biota]]
     b_node <- b_pt$node_id
-    b_id   <- b_pt$tmp_join_id # We houden het ID bij
+    b_id   <- b_pt$tmp_join_id
 
+    # Vind upstream kandidaten
     upstream_nodes <- names(subcomponent(g, v = b_node, mode = "in"))
 
-    # We berekenen hier alvast het tijdsverschil en slaan het op als kolom
-    # zodat we er later op kunnen sorteren voor 'closest_time'
+    # Filter kandidaten (upstream + tijd)
     candidates <- quality_df %>%
       filter(node_id %in% upstream_nodes) %>%
       mutate(
         temp_diff_days = as.numeric(difftime(b_date, .[[col_date_quality]], units = "days")),
-        abs_time_diff  = abs(temp_diff_days) # Absolute verschil voor sortering
+        abs_time_diff  = abs(temp_diff_days)
       ) %>%
       filter(temp_diff_days >= -days_after & temp_diff_days <= days_before)
 
     match <- NA
 
     if (nrow(candidates) > 0) {
-      d_matrix <- distances(
-        g,
-        v = candidates$node_id,
-        to = b_node,
-        mode = "out"
-      )
-
+      # Afstand berekenen
+      d_matrix <- distances(g, v = candidates$node_id, to = b_node, mode = "out")
       candidates$river_dist_m <- as.numeric(d_matrix)
+
+      # Filter op max afstand
       candidates_within <- candidates %>% filter(river_dist_m <= max_dist_m)
 
+      # --- NIEUW: Filter op lozingspunten (Topology Check) ---
+      if (nrow(candidates_within) > 0 && length(discharge_nodes) > 0) {
+
+        # We maken een vector van TRUE/FALSE om kandidaten te behouden
+        keep_candidate <- sapply(candidates_within$node_id, function(cand_node) {
+
+          # Als kandidaat of biota zelf een lozingspunt is, is dat meestal OK (grensgeval).
+          # We checken of er een lozingspunt TUSSENIN ligt.
+          if (cand_node == b_node) return(TRUE)
+
+          # Bereken het pad van kandidaat (stroomopwaarts) naar biota (stroomafwaarts)
+          # mode="out" volgt de stroomrichting
+          path_res <- shortest_paths(g, from = cand_node, to = b_node, mode = "out")
+          path_nodes <- names(path_res$vpath[[1]])
+
+          # Haal start (kwaliteit) en eind (biota) van het pad af
+          # We kijken puur naar wat er 'tussen' ligt
+          intermediate_nodes <- setdiff(path_nodes, c(cand_node, b_node))
+
+          # Als een van de tussenliggende nodes een lozingspunt is -> FALSE (verwerp match)
+          if (any(intermediate_nodes %in% discharge_nodes)) {
+            return(FALSE)
+          } else {
+            return(TRUE)
+          }
+        })
+
+        # Filter de kandidatenlijst
+        candidates_within <- candidates_within[keep_candidate, ]
+      }
+      # -------------------------------------------------------
+
+      # Selecteer de beste match op basis van de modus
       if (nrow(candidates_within) > 0) {
-
-        # --- HIER ZIT DE NIEUWE LOGICA ---
         if (selection_mode == "closest_distance") {
-          # Oude gedrag: pak de kleinste afstand
           match <- candidates_within[which.min(candidates_within$river_dist_m), ]
-
         } else if (selection_mode == "closest_time") {
-          # Nieuw: pak het kleinste tijdsverschil
           match <- candidates_within[which.min(candidates_within$abs_time_diff), ]
-
         } else if (selection_mode == "all") {
-          # Nieuw: behoud alles
           match <- candidates_within
         }
       }
     }
 
-    # Afhandeling als er geen match is (lege rij maken)
+    # Lege rij opvulling indien geen match
     if (!is.data.frame(match)) {
       match <- quality_df[1, ]
       match[] <- NA
       match$river_dist_m <- NA
     }
 
-    # Belangrijk: Voeg het biota ID toe aan de match(es) zodat we weten bij wie ze horen
     match$biota_match_id <- b_id
 
-    # Verwijder tijdelijke hulpkolommen (optioneel, houdt het schoon)
     if("temp_diff_days" %in% names(match)) match$temp_diff_days <- NULL
     if("abs_time_diff" %in% names(match)) match$abs_time_diff <- NULL
 
     results[[i]] <- match
   }
 
-  message("3/3 Merging results...")
-
-  # Bind alle gevonden matches onder elkaar
+  message("3/4 Merging results...")
   matched_quality_df <- do.call(rbind, results)
 
-  # Hernoem kolommen (behalve het ID waarop we joinen)
   cols_to_rename <- setdiff(names(matched_quality_df), "biota_match_id")
   names(matched_quality_df)[names(matched_quality_df) %in% cols_to_rename] <-
     paste0("qual_", cols_to_rename)
 
-  # Joinen: Nu gebruiken we left_join i.p.v. bind_cols
-  # Dit is robuuster en werkt ook voor "all" (waarbij biota rijen gedupliceerd worden)
   final_sf <- left_join(biota_sf, matched_quality_df, by = c("tmp_join_id" = "biota_match_id"))
-
-  # Ruim de tijdelijke ID op
   final_sf$tmp_join_id <- NULL
 
   return(final_sf)
@@ -183,13 +206,13 @@ match_upstream <- function(biota_sf,
 
 # --- STAP 0: Data Inladen ---
 # (Laad hier je shapefiles in zoals je gewend bent)
-fd <- st_read(here("data", "ruw", "netwerk", "Flow_direction_coordinates.shp"), quiet=T)
-nodes <- st_read(here("data", "ruw", "waterlopen", "vha_network_junctions.shp"), quiet=T)
+fd <- st_read(here("data", "ruw", "netwerk", "Flow_direction_coordinates.shp"), quiet = T)
+nodes <- st_read(here("data", "ruw", "waterlopen", "vha_network_junctions.shp"), quiet = T)
 
-mi_data <- st_read(here("data", "ruw", "macroinvertebraten", "mi_meetpunten_datum.gpkg"), quiet=T) %>%
+mi_data <- st_read(here("data", "ruw", "macroinvertebraten", "mi_meetpunten_datum.gpkg"), quiet = T) %>%
   filter(monsternamedatum > '2009-12-31')
 
-fc_data <- st_read(here("data", "ruw", "fys_chem", "fc_meetpunten.gpkg"), quiet=T) %>%
+fc_data <- st_read(here("data", "ruw", "fys_chem", "fc_meetpunten.gpkg"), quiet = T) %>%
   filter(monsternamedatum > '2007-12-31')
 
 
@@ -207,16 +230,63 @@ mi_met_fc <- match_upstream(
   days_before = 180,       # Kwaliteit mag tot 180 dagen VOOR de biota meting zijn
   days_after = 14,         # Kwaliteit mag tot 14 dagen NA de biota meting zijn
   col_date_biota = "monsternamedatum",
-  col_date_quality = "monsternamedatum"
+  col_date_quality = "monsternamedatum",
+  selection_mode = "closest_distance"
 )
 
-# --- STAP 3: Voer de matching uit (Nutriënten - voorbeeld) ---
-# Stel dat je een aparte nutriënten laag hebt:
-# nutrient_data <- ...
-# mi_met_nutrienten <- match_upstream(mi_data, nutrient_data, river_network, max_dist_m = 3000, ...)
-
 # Opslaan
-save(mi_met_fc, file = "data/verwerkt/mi_met_fc_matched.rdata")
+save(mi_met_fc, file = "data/verwerkt/koppeling/mi_met_fc_matched.rdata")
 
 # Check resultaat
 print(paste("Aantal matches:", sum(!is.na(mi_met_fc$qual_meetplaats))))
+
+
+# --- STAP 3: Voer de matching uit (Nutriënten - voorbeeld) ---
+# Stel dat je een aparte nutriënten laag hebt:
+
+
+if (!file.exists(here("data", "verwerkt", "koppeling", "nutrient_meetpunten_datum.gpkg"))) {
+    load(here("data", "verwerkt", "fc_selectie.rdata"))
+    fc_meetpunten_datum <- st_read(here("data", "ruw", "fys_chem", "fc_meetpunten.gpkg"), quiet = T) %>%
+      filter(monsternamedatum > '2007-12-31')
+    nutrient_meetpunten_datum <- fc_selectie %>%
+      filter(!is.na(n_t)) %>%
+      select(meetplaats, monsternamedatum) %>%
+      left_join(fc_meetpunten_datum,
+                by = c("meetplaats", "monsternamedatum"))
+    st_write(nutrient_meetpunten_datum, dsn = here("data", "verwerkt", "koppeling", "nutrient_meetpunten_datum.gpkg"))
+  }
+nutrient_data <- st_read(dsn = here("data", "verwerkt", "koppeling", "nutrient_meetpunten_datum.gpkg"), quiet = T)
+
+mi_met_nutrient <- match_upstream(
+  biota_sf = mi_data,
+  quality_sf = nutrient_data,
+  network_list = river_network,
+  max_dist_m = 5000,       # Max 5km stroomopwaarts
+  days_before = 180,       # Kwaliteit mag tot 180 dagen VOOR de biota meting zijn
+  days_after = 14,         # Kwaliteit mag tot 14 dagen NA de biota meting zijn
+  col_date_biota = "monsternamedatum",
+  col_date_quality = "monsternamedatum",
+  selection_mode = "closest_distance"
+)
+
+save(mi_met_nutrient, file = "data/verwerkt/koppeling/mi_met_nutrient_matched.rdata")
+mi_met_nutrient %>% drop_na(qual_meetplaats) %>% nrow
+
+# --- STAP 4: Voer de matching uit (Nutriënten - maar met overstortenlaag bij) ---
+overstorten_uitlaat_vha <- st_read(here("data", "ruw", "overstorten", "P_OS_uitlaat_VHA.shp"))
+
+mi_met_fc_overstorten <- match_upstream(
+  biota_sf = mi_data,
+  quality_sf = nutrient_data,
+  network_list = river_network,
+  discharge_sf = overstorten_uitlaat_vha,
+  max_dist_m = 5000,       # Max 5km stroomopwaarts
+  days_before = 180,       # Kwaliteit mag tot 180 dagen VOOR de biota meting zijn
+  days_after = 14,         # Kwaliteit mag tot 14 dagen NA de biota meting zijn
+  col_date_biota = "monsternamedatum",
+  col_date_quality = "monsternamedatum",
+  selection_mode = "closest_distance"
+)
+
+# --- STAP 4: Voer de matching uit (pesticiden TU) ---
