@@ -4,6 +4,9 @@ library(tidyverse)
 library(purrr)
 library(glue)
 library(here)
+library(glmmTMB)
+library(sjPlot)
+library(DHARMa)
 
 load(here("data", "verwerkt", "mi_data.rdata"))
 
@@ -266,7 +269,7 @@ plot_model(model_kjn, "pred", terms = c("pa_overstort_250m", "groep"))
 
 
 data_model <- overstort_tellingen_df %>%
-  select(meetplaats, aantal_overstorten_250m, aantal_overstorten_1000m, aantal_overstorten_500m) %>%
+  select(meetplaats, aantal_overstorten_250m, aantal_overstorten_1000m) %>%
   mutate(pa_overstort_250m = as.factor(if_else(aantal_overstorten_250m > 0, 1, 0))) %>%
          # mutate(aantal_overstorten_250m = as.factor(aantal_overstorten_250m)) %>%
   right_join(mi_nat_sv, by = "meetplaats") %>%
@@ -297,7 +300,6 @@ model_mts_beek_kempen <- glmmTMB(mt_sw ~
                                     filter(!groep %in% c("rivier", "polder")) %>%
                                              mutate(mt_sw = mt_sw/10))
 summary(model_mts_beek_kempen)
-plot_model(model_mts_beek_kempen_250, "pred", terms = c("aantal_overstorten_250m"))
 plot_model(model_mts_beek_kempen, "pred", terms = c("aantal_overstorten_500m"))
 
 model_swd_beek_kempen <- glmmTMB(sw_dw ~
@@ -390,7 +392,7 @@ plot(simulationOutput)
 model_stress_beek_kempen_positief <- glmmTMB(n_stress ~
                                       scale(aantal_overstorten_500m) + scale(jaar) + scale(hooggroen_afstr) + scale(kjn) + scale(o2) + scale(ec_20) +
                                       (1 | bekken/meetplaats),
-                                    family = binomial,
+                                    family = betabinomial,
                                     weights = ta_xw,
                                     data = data_model %>%
                                       filter(!groep %in% c("rivier", "polder")) %>%

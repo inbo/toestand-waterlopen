@@ -10,262 +10,225 @@ library(nngeo)
 library(igraph)
 library(lubridate)
 library(mapview)
+library(progress) # Nodig voor de voortgangsbalk
+
 time <- system.time({
-fd <- st_read(here("data", "ruw", "netwerk", "Flow_direction_coordinates.shp"))
-nodes <- st_read(here("data", "ruw", "waterlopen", "vha_network_junctions.shp"))
+  fd <- st_read(here("data", "ruw", "netwerk", "Flow_direction_coordinates.shp"))
+  nodes <- st_read(here("data", "ruw", "waterlopen", "vha_network_junctions.shp"))
 
-# Calculate from_node and to_node based on Start and End coordinates
-# Convert the Start and End coordinates into POINT geometries
-start_points <- st_as_sf(data.frame(
-  x = fd$StartX,
-  y = fd$StartY
-), coords = c("x", "y"), crs = st_crs(fd))
+  # Calculate from_node and to_node based on Start and End coordinates
+  # Convert the Start and End coordinates into POINT geometries
+  start_points <- st_as_sf(data.frame(
+    x = fd$StartX,
+    y = fd$StartY
+  ), coords = c("x", "y"), crs = st_crs(fd))
 
-end_points <- st_as_sf(data.frame(
-  x = fd$EndX,
-  y = fd$EndY
-), coords = c("x", "y"), crs = st_crs(fd))
+  end_points <- st_as_sf(data.frame(
+    x = fd$EndX,
+    y = fd$EndY
+  ), coords = c("x", "y"), crs = st_crs(fd))
 
-# Find the nearest network node for start and end points
-fd$from_node <- st_nearest_feature(start_points, nodes)
-fd$to_node <- st_nearest_feature(end_points, nodes)
+  # Find the nearest network node for start and end points
+  fd$from_node <- st_nearest_feature(start_points, nodes)
+  fd$to_node <- st_nearest_feature(end_points, nodes)
 
-# Assign flow direction based on these nodes (optional: store as string)
-fd$flow_dir <- "start_to_end"  # All flows are from Start -> End as defined in coords
-
-
-# find nearest fc point for mi point in space upstream and in time ----
-
-# Load your data (adjust paths)
-mi_meetpunten_datum <- st_read(here("data", "ruw", "macroinvertebraten", "mi_meetpunten_datum.gpkg"), quiet = T) %>%
-  mutate(monsternamedatum = as.Date(monsternamedatum, "%Y-%m-%d")) %>%
-  filter(monsternamedatum > '2009-12-31')
-fc_meetpunten_datum <- st_read(here("data", "ruw", "fys_chem", "fc_meetpunten.gpkg"), quiet = T) %>%
-  filter(monsternamedatum > '2007-12-31')
-
-mi_meetpunten_meetplaats <- mi_meetpunten_datum %>% #enkel de meetplaatsen, geen data
-  select(meetplaats, geom) %>%
-  unique()
-
-fc_meetpunten_meetplaats <- fc_meetpunten_datum %>% #enkel de meetplaatsen, geen data
-  select(meetplaats, geom) %>%
-  unique()
-
-# Convert dates if necessary
-mi_meetpunten_datum$monsternamedatum <- as.Date(mi_meetpunten_datum$monsternamedatum)
-fc_meetpunten_datum$monsternamedatum <- as.Date(fc_meetpunten_datum$monsternamedatum)
-
-# Snap mi points to river lines
-
-qgis_run_algorithm(
-  "native:snapgeometries",
-  INPUT = mi_meetpunten_datum,
-  TOLERANCE = 100,
-  REFERENCE_LAYER = fd,
-  OUTPUT = here("data", "verwerkt", "hydrologisch", "mi_snapped.gpkg"),
-  .quiet = TRUE
-)
-
-mi_snapped <- st_read(here("data", "verwerkt", "hydrologisch", "mi_snapped.gpkg"))
-# %>%
-#   st_join(., mi_meetpunten %>%
-#             select(meetplaats, monsternamedatum),
-#           by = "meetplaats")
+  # Assign flow direction based on these nodes (optional: store as string)
+  fd$flow_dir <- "start_to_end"  # All flows are from Start -> End as defined in coords
 
 
+  # find nearest fc point for mi point in space upstream and in time ----
 
-# Snap quality points to river lines
+  # Load your data (adjust paths)
+  mi_meetpunten_datum <- st_read(here("data", "ruw", "macroinvertebraten", "mi_meetpunten_datum.gpkg"), quiet = T) %>%
+    mutate(monsternamedatum = as.Date(monsternamedatum, "%Y-%m-%d")) %>%
+    filter(monsternamedatum > '2009-12-31')
 
-qgis_run_algorithm(
-  "native:snapgeometries",
-  INPUT = fc_meetpunten_meetplaats,
-  TOLERANCE = 100,
-  REFERENCE_LAYER = fd,
-  OUTPUT = here("data", "verwerkt", "hydrologisch", "fc_snapped.gpkg"),
-  .quiet = TRUE
-)
-fc_snapped_meetplaats <- st_read(here("data", "verwerkt", "hydrologisch", "fc_snapped.gpkg"))
+  fc_meetpunten_datum <- st_read(here("data", "ruw", "fys_chem", "fc_meetpunten.gpkg"), quiet = T) %>%
+    filter(monsternamedatum > '2007-12-31')
 
-fc_no_geom <- fc_meetpunten_datum %>%
-  st_drop_geometry()
+  mi_meetpunten_meetplaats <- mi_meetpunten_datum %>% #enkel de meetplaatsen, geen data
+    select(meetplaats, geom) %>%
+    unique()
 
-fc_snapped <- fc_snapped_meetplaats %>% #enkel meetplaatsen snappen om dan terug datums toe te voegen om tijd te besparen
-  left_join(., fc_no_geom, by = "meetplaats")
+  fc_meetpunten_meetplaats <- fc_meetpunten_datum %>% #enkel de meetplaatsen, geen data
+    select(meetplaats, geom) %>%
+    unique()
 
-#plotten
-mapview(mi_snapped, color = "red", legend = FALSE) +
-  # mapview(mi_meetpunten_meetplaats, color = "green", legend = F) +
-  mapview(fc_snapped_meetplaats, color = "yellow", legend = F) +
-  mapview(nodes, color = "blue", legend = F) +
-  mapview(st_simplify(fd))
+  # Convert dates if necessary
+  mi_meetpunten_datum$monsternamedatum <- as.Date(mi_meetpunten_datum$monsternamedatum)
+  fc_meetpunten_datum$monsternamedatum <- as.Date(fc_meetpunten_datum$monsternamedatum)
 
-# Assign each snapped point to nearest river segment
-mi_snapped$segment_id <- st_nearest_feature(mi_snapped, fd)
-fc_snapped$segment_id <- st_nearest_feature(fc_snapped, fd)
+  # Snap mi points to river lines
 
-# Map river segments to from_node (start) and assign to snapped points
-segment_to_node_from <- setNames(fd$from_node, seq_len(nrow(fd)))
-mi_snapped$node <- segment_to_node_from[mi_snapped$segment_id]
-fc_snapped$node <- segment_to_node_from[fc_snapped$segment_id]
+  qgis_run_algorithm(
+    "native:snapgeometries",
+    INPUT = mi_meetpunten_datum,
+    TOLERANCE = 100,
+    REFERENCE_LAYER = fd,
+    OUTPUT = here("data", "verwerkt", "hydrologisch", "mi_snapped.gpkg"),
+    .quiet = TRUE
+  )
 
-# Build river network graph using from_node and to_node directly
+  mi_snapped <- st_read(here("data", "verwerkt", "hydrologisch", "mi_snapped.gpkg"))
 
-# 1. Bereken lengte van elk segment in het netwerk
-# 'fd' is je flow direction shapefile (de lijnen)
-fd$length_m <- st_length(fd)
+  # Snap quality points to river lines
 
-# 2. Bouw de graaf OPNIEUW, maar nu met 'weight' (lengte)
-edges <- data.frame(
-  from = as.character(fd$from_node),
-  to = as.character(fd$to_node),
-  weight = as.numeric(fd$length_m), # Dit is cruciaal!
-  segment_id = seq_len(nrow(fd))
-)
+  qgis_run_algorithm(
+    "native:snapgeometries",
+    INPUT = fc_meetpunten_meetplaats,
+    TOLERANCE = 100,
+    REFERENCE_LAYER = fd,
+    OUTPUT = here("data", "verwerkt", "hydrologisch", "fc_snapped.gpkg"),
+    .quiet = TRUE
+  )
+  fc_snapped_meetplaats <- st_read(here("data", "verwerkt", "hydrologisch", "fc_snapped.gpkg"))
 
-g <- graph_from_data_frame(edges, directed = TRUE)
+  fc_no_geom <- fc_meetpunten_datum %>%
+    st_drop_geometry()
+
+  fc_snapped <- fc_snapped_meetplaats %>% #enkel meetplaatsen snappen om dan terug datums toe te voegen om tijd te besparen
+    left_join(., fc_no_geom, by = "meetplaats")
+
+  # Assign each snapped point to nearest river segment
+  mi_snapped$segment_id <- st_nearest_feature(mi_snapped, fd)
+  fc_snapped$segment_id <- st_nearest_feature(fc_snapped, fd)
+
+  # Map river segments to from_node (start) and assign to snapped points
+  segment_to_node_from <- setNames(fd$from_node, seq_len(nrow(fd)))
+  mi_snapped$node <- segment_to_node_from[mi_snapped$segment_id]
+  fc_snapped$node <- segment_to_node_from[fc_snapped$segment_id]
+
+  # Build river network graph using from_node and to_node directly
+
+  # 1. Bereken lengte van elk segment in het netwerk
+  # 'fd' is je flow direction shapefile (de lijnen)
+  fd$length_m <- st_length(fd)
+
+  # 2. Bouw de graaf OPNIEUW, maar nu met 'weight' (lengte)
+  edges <- data.frame(
+    from = as.character(fd$from_node),
+    to = as.character(fd$to_node),
+    weight = as.numeric(fd$length_m), # Dit is cruciaal!
+    segment_id = seq_len(nrow(fd))
+  )
+
+  g <- graph_from_data_frame(edges, directed = TRUE)
 
 
-# Initialize results
-results <- list()
+  # Initialize results
+  results <- list()
 
-# For each mi point, find closest upstream quality point within 3 months
-for (i in seq_len(nrow(mi_snapped))) {
-  mpt <- mi_snapped[i, ]
-  mdate <- mpt$monsternamedatum
-  mnode <- as.character(mpt$node)
+  # >>> NIEUWE PROGRESS BAR (met ETA) <<<
+  pb <- progress_bar$new(
+    format = "  matching MI-FC [:bar] :percent eta: :eta",
+    total = nrow(mi_snapped),
+    clear = FALSE,
+    width = 60
+  )
 
-  upstream_nodes <- subcomponent(g, v = mnode, mode = "in") %>% names()
+  # For each mi point, find closest upstream quality point within 3 months
+  for (i in seq_len(nrow(mi_snapped))) {
 
-  #geen within segment filtering -> maar is niet erg dat er een downstream fc punt wordt genomen, gezien het op hetzelfde segment ligt en dus waarschijnlijk dichtbij
+    # Tick de progress bar
+    pb$tick()
 
-  candidates <- fc_snapped %>%
-    filter(
-      as.character(node) %in% upstream_nodes,
-      {
-        days_before <- as.numeric(difftime(mdate, monsternamedatum, units = "days"))
-        days_before >= -14 &
-          days_before <= 180
-      }
-    )
+    mpt <- mi_snapped[i, ]
+    mdate <- mpt$monsternamedatum
+    mnode <- as.character(mpt$node)
 
-  # candidates <- fc_snapped %>% #code voor 30 dagen voor en na mi meting
-  #   filter(
-  #     as.character(node) %in% upstream_nodes,
-  #     abs(difftime(monsternamedatum, mdate, units = "days")) <= 30
-  #   )
+    upstream_nodes <- subcomponent(g, v = mnode, mode = "in") %>% names()
 
-  if (nrow(candidates) > 0) {
+    #geen within segment filtering -> maar is niet erg dat er een downstream fc punt wordt genomen, gezien het op hetzelfde segment ligt en dus waarschijnlijk dichtbij
 
-    # We hebben kandidaten die stroomopwaarts liggen en binnen de tijd vallen.
-    # Nu willen we de 'rivier-afstand' weten.
-
-    river_distances <- c()
-
-    for(j in seq_len(nrow(candidates))) {
-      cand <- candidates[j, ]
-
-      # Bereken de afstand via de graaf
-      # Van candidate (upstream) NAAR mafy punt (downstream)
-      # distances() berekent het kortste pad op basis van 'weight'
-      d <- distances(
-        g,
-        v = as.character(cand$node),
-        to = as.character(mnode),
-        mode = "out" # Volg de stroomrichting naar beneden
+    candidates <- fc_snapped %>%
+      filter(
+        as.character(node) %in% upstream_nodes,
+        {
+          days_before <- as.numeric(difftime(mdate, monsternamedatum, units = "days"))
+          days_before >= -14 &
+            days_before <= 180
+        }
       )
 
-      river_distances[j] <- as.numeric(d)
-    }
+    if (nrow(candidates) > 0) {
 
-    # Voeg afstand toe aan kandidaten tabel
-    candidates$river_dist_m <- river_distances
+      # >>> OPTIMALISATIE: Vectorized distance calculation <<<
+      # Bereken afstand van ALLE kandidaten tegelijk naar het meetpunt
 
-    # Filter: bvb maximaal 5000m STROOMAFSTAND (veel nauwkeuriger dan vogelvlucht)
-    candidates_within <- candidates %>% filter(river_dist_m <= 5000)
+      d_matrix <- distances(
+        g,
+        v = as.character(candidates$node), # Van (upstream candidates)
+        to = as.character(mnode),          # Naar (downstream meetpunt)
+        mode = "out"                       # Volg de stroomrichting
+      )
 
-    if (nrow(candidates_within) > 0) {
-      # Kies de dichtstbijzijnde via de rivier
-      match <- candidates_within[which.min(candidates_within$river_dist_m), ]
+      # Zet matrix om naar vector
+      candidates$river_dist_m <- as.numeric(d_matrix)
+
+      # Filter: bvb maximaal 5000m STROOMAFSTAND
+      candidates_within <- candidates %>% filter(river_dist_m <= 5000)
+
+      if (nrow(candidates_within) > 0) {
+        # Kies de dichtstbijzijnde via de rivier
+        match <- candidates_within[which.min(candidates_within$river_dist_m), ]
+      } else {
+        match <- NA
+      }
+
     } else {
       match <- NA
     }
 
-  } else {
-    match <- NA
+    results[[i]] <- list(mi = mpt, quality = match)
   }
 
-  results[[i]] <- list(mi = mpt, quality = match)
-}
+  # Convert results into a data frame
+  matched_mi <- do.call(rbind, lapply(results, function(x) x$mi))
 
-# Convert results into a data frame
-matched_mi <- do.call(rbind, lapply(results, function(x) x$mi))
-# matched_quality <- do.call(rbind, lapply(results, function(x) x$quality))
-#
-# # Only keep results that have a valid 'quality' entry
-# valid_quality <- lapply(results, function(x) {
-#   if (!is.null(x$quality) && inherits(x$quality, "sf")) {
-#     return(x$quality)
-#   } else {
-#     return(NULL)
-#   }
-# })
-#
-# # Remove NULLs
-# valid_quality <- Filter(Negate(is.null), valid_quality)
-#
-# # Bind all valid quality points into one sf object
-# matched_quality <- do.call(rbind, valid_quality)
-
-#lijkt te werken
-# Step 1: Get template from first valid entry
-first_valid <- NULL
-for (x in results) {
-  if (!is.null(x$quality) && inherits(x$quality, "sf")) {
-    first_valid <- x$quality[0, ]  # zero-row sf with correct structure
-    break
-  }
-}
-if (is.null(first_valid)) stop("No valid quality matches found.")
-
-# Step 2: Create empty row constructor
-make_empty_row <- function(template) {
-  empty <- template[1, ]
-  for (col in names(template)) {
-    if (col != attr(template, "sf_column")) {
-      empty[[col]] <- NA
+  # Step 1: Get template from first valid entry
+  first_valid <- NULL
+  for (x in results) {
+    if (!is.null(x$quality) && inherits(x$quality, "sf")) {
+      first_valid <- x$quality[0, ]  # zero-row sf with correct structure
+      break
     }
   }
-  # Assign empty point geometry
-  st_geometry(empty) <- st_sfc(st_point(), crs = st_crs(template))
-  return(empty)
-}
+  if (is.null(first_valid)) stop("No valid quality matches found.")
 
-# Step 3: Apply logic
-matched_quality <- do.call(rbind, lapply(results, function(x) {
-  if (!is.null(x$quality) && inherits(x$quality, "sf")) {
-    return(x$quality)
-  } else {
-    return(make_empty_row(first_valid))
+  # Step 2: Create empty row constructor
+  make_empty_row <- function(template) {
+    empty <- template[1, ]
+    for (col in names(template)) {
+      if (col != attr(template, "sf_column")) {
+        empty[[col]] <- NA
+      }
+    }
+    # Assign empty point geometry
+    st_geometry(empty) <- st_sfc(st_point(), crs = st_crs(template))
+    return(empty)
   }
-}))
+
+  # Step 3: Apply logic
+  matched_quality <- do.call(rbind, lapply(results, function(x) {
+    if (!is.null(x$quality) && inherits(x$quality, "sf")) {
+      return(x$quality)
+    } else {
+      return(make_empty_row(first_valid))
+    }
+  }))
 
 
-# Optionally combine into one data frame
-matched_df <- bind_cols(st_drop_geometry(matched_mi), st_drop_geometry(matched_quality)) %>%
-  mutate(monsternamedatum...6 = as.Date(monsternamedatum...6))
-matched_sf_fd <- st_sf(matched_df, geometry = st_geometry(matched_mi))
+  # Optionally combine into one data frame
+  matched_df <- bind_cols(st_drop_geometry(matched_mi), st_drop_geometry(matched_quality)) %>%
+    mutate(monsternamedatum...6 = as.Date(monsternamedatum...6))
+  matched_sf_fd <- st_sf(matched_df, geometry = st_geometry(matched_mi))
 
-matched_sf_fd %>%
-  drop_na(meetplaats...5) %>% nrow()
-save(matched_df, file = "data/verwerkt/matched_df.rdata")
+  save(matched_df, file = "data/verwerkt/koppeling/matched_df_mi_fc.rdata")
 })
 
-load(file = "data/verwerkt/matched_df.rdata")
-
-filtered_matches <- matched_df %>%
-  filter(!is.na(meetplaats...5)) %>%
-
-# Count how many measurements matched per location
+matched_df %>% drop_
+load(file = file = "data/verwerkt/koppeling/matched_df_mi_fc.rdata")
+# Verificatie en duplicates check
 duplicates_check <- matched_df %>%
   filter(!is.na(meetplaats...5)) %>% # Filter only successful matches
   group_by(meetplaats...1) %>%       # Group by the MI location ID
