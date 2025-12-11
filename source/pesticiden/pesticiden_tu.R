@@ -103,14 +103,6 @@ print(tu_per_sample %>% arrange(desc(TU_sum)) %>% head(10))
 # Opslaan
 save(tu_per_sample, tu_dataset, file = here("data", "verwerkt", "tu_resultaten.rdata"))
 
-
-# Check de EC50 waarden van de boosdoeners
-check_drivers <- pesticiden_ec50 %>%
-  filter(stof_naam %in% c("Malathion", "Diuron", "Imidacloprid")) %>%
-  select(stof_naam, cas, final_ec50_ug_L, sensitive_group, sensitive_species)
-
-print(check_drivers)
-
 #### Aggregatie TU pesticiden per jaar ####
 # -------------------------------------------------------------------------
 # STAP 1: CHEMIE AGGREGEREN NAAR JAAR-NIVEAU

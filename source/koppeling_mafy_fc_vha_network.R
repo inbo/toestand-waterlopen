@@ -69,8 +69,6 @@ mafy_snapped <- st_read(here("data", "verwerkt", "hydrologisch", "mafy_snapped.g
 #             select(meetplaats, monsternamedatum),
 #           by = "meetplaats")
 
-
-
 # Snap quality points to river lines
 
 qgis_run_algorithm(

@@ -10,7 +10,7 @@ library(nngeo)
 library(igraph)
 library(lubridate)
 library(mapview)
-
+time <- system.time({
 fd <- st_read(here("data", "ruw", "netwerk", "Flow_direction_coordinates.shp"))
 nodes <- st_read(here("data", "ruw", "waterlopen", "vha_network_junctions.shp"))
 
@@ -37,10 +37,11 @@ fd$flow_dir <- "start_to_end"  # All flows are from Start -> End as defined in c
 # find nearest fc point for mi point in space upstream and in time ----
 
 # Load your data (adjust paths)
-mi_meetpunten_datum <- st_read(here("data", "ruw", "macroinvertebraten", "mi_meetpunten_datum.gpkg")) %>%
-  filter(monsternamedatum > '31-12-2009')
-fc_meetpunten_datum <- st_read(here("data", "ruw", "fys_chem", "fc_meetpunten.gpkg")) %>%
-  filter(monsternamedatum > '31-12-2007')
+mi_meetpunten_datum <- st_read(here("data", "ruw", "macroinvertebraten", "mi_meetpunten_datum.gpkg"), quiet = T) %>%
+  mutate(monsternamedatum = as.Date(monsternamedatum, "%Y-%m-%d")) %>%
+  filter(monsternamedatum > '2009-12-31')
+fc_meetpunten_datum <- st_read(here("data", "ruw", "fys_chem", "fc_meetpunten.gpkg"), quiet = T) %>%
+  filter(monsternamedatum > '2007-12-31')
 
 mi_meetpunten_meetplaats <- mi_meetpunten_datum %>% #enkel de meetplaatsen, geen data
   select(meetplaats, geom) %>%
@@ -253,6 +254,23 @@ matched_quality <- do.call(rbind, lapply(results, function(x) {
 matched_df <- bind_cols(st_drop_geometry(matched_mi), st_drop_geometry(matched_quality)) %>%
   mutate(monsternamedatum...6 = as.Date(monsternamedatum...6))
 matched_sf_fd <- st_sf(matched_df, geometry = st_geometry(matched_mi))
+
 matched_sf_fd %>%
   drop_na(meetplaats...5) %>% nrow()
+save(matched_df, file = "data/verwerkt/matched_df.rdata")
+})
 
+load(file = "data/verwerkt/matched_df.rdata")
+
+filtered_matches <- matched_df %>%
+  filter(!is.na(meetplaats...5)) %>%
+
+# Count how many measurements matched per location
+duplicates_check <- matched_df %>%
+  filter(!is.na(meetplaats...5)) %>% # Filter only successful matches
+  group_by(meetplaats...1) %>%       # Group by the MI location ID
+  summarise(n = n()) %>%
+  arrange(desc(n))
+
+# Show locations with more than 1 match
+head(duplicates_check)
