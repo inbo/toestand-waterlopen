@@ -52,42 +52,42 @@ build_river_network <- function(lines_sf, nodes_sf) {
 match_upstream <- function(biota_sf,
                            quality_sf,
                            network_list,
-                           max_dist_m = 5000, # zelf in te vullen
+                           max_dist_m = 5000,
                            days_before = 14,
                            days_after = 30,
                            col_date_biota = "monsternamedatum",
-                           col_date_quality = "monsternamedatum") {
+                           col_date_quality = "monsternamedatum",
+                           selection_mode = "closest_distance") { # NIEUW: Keuze optie
 
-  # Haal graaf en lijnen uit de input lijst
+  # Validatie van de modus
+  valid_modes <- c("closest_distance", "closest_time", "all")
+  if (!selection_mode %in% valid_modes) stop("selection_mode moet zijn: 'closest_distance', 'closest_time' of 'all'")
+
   g <- network_list$graph
   net_sf <- network_list$network_sf
 
-  # Zorg dat datums correct zijn
   biota_sf[[col_date_biota]] <- as.Date(biota_sf[[col_date_biota]])
   quality_sf[[col_date_quality]] <- as.Date(quality_sf[[col_date_quality]])
 
+  # Voeg een uniek ID toe aan biota om later correct te kunnen joinen (nodig voor 'all' optie)
+  biota_sf$tmp_join_id <- seq_len(nrow(biota_sf))
+
   message("1/3 Snapping points to river network...")
 
-  # Helper functie voor snapping (zonder QGIS dependency)
   snap_to_node <- function(points, network) {
-    # Vind dichtstbijzijnde lijnsegment
     nearest_segment_idx <- st_nearest_feature(points, network)
-    # Wijs de 'from_node' van dat segment toe aan het punt
-    # (We nemen from_node omdat we stroomopwaarts kijken vanaf het begin van het segment)
     return(as.character(network$from_node[nearest_segment_idx]))
   }
 
   biota_sf$node_id <- snap_to_node(biota_sf, net_sf)
   quality_sf$node_id <- snap_to_node(quality_sf, net_sf)
 
-  # Drop geometry van quality voor snellere filtering (we gebruiken de node ID)
   quality_df <- st_drop_geometry(quality_sf)
 
   message("2/3 Matching upstream points...")
 
   results <- list()
 
-  # Progress bar
   pb <- progress_bar$new(
     format = "  [:bar] :percent eta: :eta",
     total = nrow(biota_sf), clear = FALSE, width = 60
@@ -99,63 +99,84 @@ match_upstream <- function(biota_sf,
     b_pt <- biota_sf[i, ]
     b_date <- b_pt[[col_date_biota]]
     b_node <- b_pt$node_id
+    b_id   <- b_pt$tmp_join_id # We houden het ID bij
 
-    # 1. Vind alle stroomopwaartse knopen
     upstream_nodes <- names(subcomponent(g, v = b_node, mode = "in"))
 
-    # 2. Filter kandidaten (Ruimtelijk & Temporeel)
+    # We berekenen hier alvast het tijdsverschil en slaan het op als kolom
+    # zodat we er later op kunnen sorteren voor 'closest_time'
     candidates <- quality_df %>%
-      filter(
-        node_id %in% upstream_nodes,
-        {
-          d_diff <- as.numeric(difftime(b_date, .[[col_date_quality]], units = "days"))
-          d_diff >= -days_after & d_diff <= days_before
-        }
-      )
+      filter(node_id %in% upstream_nodes) %>%
+      mutate(
+        temp_diff_days = as.numeric(difftime(b_date, .[[col_date_quality]], units = "days")),
+        abs_time_diff  = abs(temp_diff_days) # Absolute verschil voor sortering
+      ) %>%
+      filter(temp_diff_days >= -days_after & temp_diff_days <= days_before)
 
     match <- NA
 
     if (nrow(candidates) > 0) {
-      # 3. Bereken afstanden (Gevectoriseerd)
       d_matrix <- distances(
         g,
         v = candidates$node_id,
         to = b_node,
-        mode = "out" # Met de stroom mee van kandidaat naar biota
+        mode = "out"
       )
 
       candidates$river_dist_m <- as.numeric(d_matrix)
-
-      # 4. Filter op afstand en kies dichtstbijzijnde
       candidates_within <- candidates %>% filter(river_dist_m <= max_dist_m)
 
       if (nrow(candidates_within) > 0) {
-        match <- candidates_within[which.min(candidates_within$river_dist_m), ]
+
+        # --- HIER ZIT DE NIEUWE LOGICA ---
+        if (selection_mode == "closest_distance") {
+          # Oude gedrag: pak de kleinste afstand
+          match <- candidates_within[which.min(candidates_within$river_dist_m), ]
+
+        } else if (selection_mode == "closest_time") {
+          # Nieuw: pak het kleinste tijdsverschil
+          match <- candidates_within[which.min(candidates_within$abs_time_diff), ]
+
+        } else if (selection_mode == "all") {
+          # Nieuw: behoud alles
+          match <- candidates_within
+        }
       }
     }
 
-    # Als match NA is, maak een lege rij op basis van quality structuur
+    # Afhandeling als er geen match is (lege rij maken)
     if (!is.data.frame(match)) {
       match <- quality_df[1, ]
       match[] <- NA
+      match$river_dist_m <- NA
     }
 
-    # Voeg afstand toe aan match als die er nog niet is (bij NA)
-    if (!"river_dist_m" %in% names(match)) match$river_dist_m <- NA
+    # Belangrijk: Voeg het biota ID toe aan de match(es) zodat we weten bij wie ze horen
+    match$biota_match_id <- b_id
+
+    # Verwijder tijdelijke hulpkolommen (optioneel, houdt het schoon)
+    if("temp_diff_days" %in% names(match)) match$temp_diff_days <- NULL
+    if("abs_time_diff" %in% names(match)) match$abs_time_diff <- NULL
 
     results[[i]] <- match
   }
 
   message("3/3 Merging results...")
 
-  # Bind alles samen
+  # Bind alle gevonden matches onder elkaar
   matched_quality_df <- do.call(rbind, results)
 
-  # Hernoem kolommen van kwaliteit om botsingen te voorkomen
-  names(matched_quality_df) <- paste0("qual_", names(matched_quality_df))
+  # Hernoem kolommen (behalve het ID waarop we joinen)
+  cols_to_rename <- setdiff(names(matched_quality_df), "biota_match_id")
+  names(matched_quality_df)[names(matched_quality_df) %in% cols_to_rename] <-
+    paste0("qual_", cols_to_rename)
 
-  # Voeg samen met originele biota
-  final_sf <- bind_cols(biota_sf, matched_quality_df)
+  # Joinen: Nu gebruiken we left_join i.p.v. bind_cols
+  # Dit is robuuster en werkt ook voor "all" (waarbij biota rijen gedupliceerd worden)
+  final_sf <- left_join(biota_sf, matched_quality_df, by = c("tmp_join_id" = "biota_match_id"))
+
+  # Ruim de tijdelijke ID op
+  final_sf$tmp_join_id <- NULL
 
   return(final_sf)
 }
