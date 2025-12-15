@@ -269,6 +269,7 @@ mi_met_nutrient <- match_upstream(
   col_date_quality = "monsternamedatum",
   selection_mode = "closest_distance"
 )
+print(paste("Aantal matches:", sum(!is.na(mi_met_nutrient$qual_meetplaats))))
 
 save(mi_met_nutrient, file = "data/verwerkt/koppeling/mi_met_nutrient_matched.rdata")
 mi_met_nutrient %>% drop_na(qual_meetplaats) %>% nrow
@@ -278,7 +279,7 @@ overstorten_uitlaat_vha <- st_read(here("data", "ruw", "overstorten", "P_OS_uitl
 
 mi_met_fc_overstorten <- match_upstream(
   biota_sf = mi_data,
-  quality_sf = nutrient_data,
+  quality_sf = fc_data,
   network_list = river_network,
   discharge_sf = overstorten_uitlaat_vha,
   max_dist_m = 5000,       # Max 5km stroomopwaarts
@@ -288,5 +289,31 @@ mi_met_fc_overstorten <- match_upstream(
   col_date_quality = "monsternamedatum",
   selection_mode = "closest_distance"
 )
+print(paste("Aantal matches:", sum(!is.na(mi_met_fc_overstorten$qual_meetplaats))))
 
 # --- STAP 4: Voer de matching uit (pesticiden TU) ---
+if (!file.exists(here("data", "verwerkt", "koppeling", "pesticide_meetpunten_datum.gpkg"))) {
+  load(here("data", "verwerkt", "tu_resultaten.rdata"))
+  fc_data <- st_read(here("data", "ruw", "fys_chem", "fc_meetpunten.gpkg"), quiet = T) %>%
+    filter(monsternamedatum > '2007-12-31')
+  pesticide_meetpunten_datum <- tu_per_sample %>%
+    select(meetplaats, monsternamedatum) %>%
+    left_join(fc_data,
+              by = c("meetplaats", "monsternamedatum"))
+  st_write(pesticide_meetpunten_datum, dsn = here("data", "verwerkt", "koppeling", "pesticide_meetpunten_datum.gpkg"))
+}
+pesticide_data <- st_read(here("data", "verwerkt", "koppeling", "pesticide_meetpunten_datum.gpkg"), quiet = T)
+
+mi_met_pesticide <- match_upstream(
+  biota_sf = mi_data,
+  quality_sf = pesticide_data,
+  network_list = river_network,
+  discharge_sf = NULL,
+  max_dist_m = 5000,       # Max 5km stroomopwaarts
+  days_before = 1095,       # Kwaliteit mag tot 180 dagen VOOR de biota meting zijn
+  days_after = 365,         # Kwaliteit mag tot 14 dagen NA de biota meting zijn
+  col_date_biota = "monsternamedatum",
+  col_date_quality = "monsternamedatum",
+  selection_mode = "closest_distance"
+)
+print(paste("Aantal matches:", sum(!is.na(mi_met_pesticide$qual_meetplaats))))
