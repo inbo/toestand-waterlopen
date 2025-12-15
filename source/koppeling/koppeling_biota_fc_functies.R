@@ -204,7 +204,7 @@ match_upstream <- function(biota_sf,
   return(final_sf)
 }
 
-# --- STAP 0: Data Inladen ---
+# --- Data Inladen ---
 # (Laad hier je shapefiles in zoals je gewend bent)
 fd <- st_read(here("data", "ruw", "netwerk", "Flow_direction_coordinates.shp"), quiet = T)
 nodes <- st_read(here("data", "ruw", "waterlopen", "vha_network_junctions.shp"), quiet = T)
@@ -216,11 +216,11 @@ fc_data <- st_read(here("data", "ruw", "fys_chem", "fc_meetpunten.gpkg"), quiet 
   filter(monsternamedatum > '2007-12-31')
 
 
-# --- STAP 1: Bouw het netwerk (slechts 1x nodig!) ---
+# --- Bouw het netwerk (slechts 1x nodig!) ---
 river_network <- build_river_network(fd, nodes)
 
 
-# --- STAP 2: Voer de matching uit (Fysico-chemie) ---
+# --- matching uit (Fysico-chemie) ---
 # Hier kun je spelen met de parameters
 mi_met_fc <- match_upstream(
   biota_sf = mi_data,
@@ -241,9 +241,7 @@ save(mi_met_fc, file = "data/verwerkt/koppeling/mi_met_fc_matched.rdata")
 print(paste("Aantal matches:", sum(!is.na(mi_met_fc$qual_meetplaats))))
 
 
-# --- STAP 3: Voer de matching uit (Nutriënten - voorbeeld) ---
-# Stel dat je een aparte nutriënten laag hebt:
-
+# --- matching uit (Nutriënten - voorbeeld) ---
 
 if (!file.exists(here("data", "verwerkt", "koppeling", "nutrient_meetpunten_datum.gpkg"))) {
     load(here("data", "verwerkt", "fc_selectie.rdata"))
@@ -274,8 +272,9 @@ print(paste("Aantal matches:", sum(!is.na(mi_met_nutrient$qual_meetplaats))))
 save(mi_met_nutrient, file = "data/verwerkt/koppeling/mi_met_nutrient_matched.rdata")
 mi_met_nutrient %>% drop_na(qual_meetplaats) %>% nrow
 
-# --- STAP 4: Voer de matching uit (Nutriënten - maar met overstortenlaag bij) ---
+# ---  Voer de matching uit (Nutriënten - maar met overstortenlaag bij) ---
 overstorten_uitlaat_vha <- st_read(here("data", "ruw", "overstorten", "P_OS_uitlaat_VHA.shp"))
+meetpunten_lozingen <- st_read(here("data", "ruw", "afvalwater", "Lozmtput.shp"))
 
 mi_met_fc_overstorten <- match_upstream(
   biota_sf = mi_data,
@@ -311,9 +310,143 @@ mi_met_pesticide <- match_upstream(
   discharge_sf = NULL,
   max_dist_m = 5000,       # Max 5km stroomopwaarts
   days_before = 1095,       # Kwaliteit mag tot 180 dagen VOOR de biota meting zijn
-  days_after = 365,         # Kwaliteit mag tot 14 dagen NA de biota meting zijn
+  days_after = 730,         # Kwaliteit mag tot 14 dagen NA de biota meting zijn
   col_date_biota = "monsternamedatum",
   col_date_quality = "monsternamedatum",
   selection_mode = "closest_distance"
 )
 print(paste("Aantal matches:", sum(!is.na(mi_met_pesticide$qual_meetplaats))))
+
+load("data/verwerkt/mi_nat_sv.rdata")
+test <- mi_nat_sv %>%
+  left_join(mi_met_pesticide)
+test %>% drop_na(qual_meetplaats) %>% nrow
+
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(progress)
+
+# ==============================================================================
+# OPTIMALE TIJD EN AFSTANDSVENSTER???
+# ==============================================================================
+
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(sf)
+
+message("--- Start Diagnose & Analyse ---")
+
+# 1. Definieer scenarios
+time_steps <- c(90, 180, 270, 365)
+dist_steps <- c(100, 250, 500, 1000, 2500, 5000)
+
+# 2. Master Match uitvoeren (zoals eerder)
+# We zorgen dat we zeker 'mode = all' hebben
+message("1. Master Match uitvoeren...")
+master_match <- match_upstream(
+  biota_sf = mi_data %>% mutate(analyse_id = row_number()), # Zeker zijn van ID
+  quality_sf = nutrient_data,
+  network_list = river_network,
+  max_dist_m = 5000,
+  days_before = 365,
+  days_after = 14,
+  col_date_biota = "monsternamedatum",
+  col_date_quality = "monsternamedatum",
+  selection_mode = "all"
+)
+
+# 3. Data Check & Correctie (BELANGRIJK!)
+master_df <- st_drop_geometry(master_match) %>%
+  filter(!is.na(qual_meetplaats)) %>%
+  mutate(
+    # Zeker zijn dat het datums zijn
+    date_bio = as.Date(monsternamedatum),
+    date_qual = as.Date(qual_monsternamedatum),
+
+    # Bereken verschil in dagen (numeriek maken is cruciaal)
+    diff_days = as.numeric(date_bio - date_qual),
+
+    # Zeker zijn dat afstand numeriek is
+    qual_river_dist_m = as.numeric(qual_river_dist_m)
+  )
+
+# --- DIAGNOSE START ---
+message("\n--- DATA CHECK ---")
+message("Samenvatting Afstanden (meters):")
+print(summary(master_df$qual_river_dist_m))
+
+message("\nSamenvatting Tijdsverschillen (dagen, positief = qual eerder):")
+print(summary(master_df$diff_days))
+
+message("\nAantal rijen in master_df (totaal aantal mogelijke koppelingen):")
+print(nrow(master_df))
+# --- DIAGNOSE EINDE ---
+
+# 4. De Lus
+results_df <- data.frame()
+total_mi_points <- nrow(mi_data)
+
+message("\n2. Berekenen scenario's...")
+
+for (t_window in time_steps) {
+  for (d_window in dist_steps) {
+
+    # Filter de data
+    # We gebruiken expliciet de nieuwe kolommen
+    matches_in_scenario <- master_df %>%
+      filter(qual_river_dist_m <= d_window) %>%
+      filter(diff_days <= t_window & diff_days >= -14)
+
+    # Tel unieke biota punten
+    n_matches <- n_distinct(matches_in_scenario$analyse_id)
+
+    results_df <- rbind(results_df, data.frame(
+      Dagen_Terug = t_window,
+      Afstand_Max = d_window,
+      Aantal_Matches = n_matches,
+      Percentage = (n_matches / total_mi_points) * 100
+    ))
+  }
+}
+
+# Print de tabel om te zien of de getallen echt verschillen
+message("\n--- RESULTATEN PREVIEW ---")
+print(head(results_df, 10))
+print(tail(results_df, 10))
+
+
+# ==============================================================================
+# PLOT
+# ==============================================================================
+
+# Maak een factor met de juiste volgorde voor de legenda
+results_df$Label_Tijd <- factor(paste(results_df$Dagen_Terug, "dagen"),
+                                levels = paste(time_steps, "dagen"))
+
+p <- ggplot(results_df, aes(x = Afstand_Max, y = Aantal_Matches, color = Label_Tijd, group = Label_Tijd)) +
+  # Gebruik 'position_dodge' zodat overlappende lijnen iets verschuiven
+  # en alpha zodat je door de lijnen heen kijkt
+  geom_line(linewidth = 1, alpha = 0.7, position = position_dodge(width = 0.05)) +
+  geom_point(size = 3, position = position_dodge(width = 0.05)) +
+
+  # Logaritmische schaal kan helpen als 100-500 heel dicht op elkaar zit tov 5000
+  # We gebruiken hier een gewone schaal met vaste breaks
+  scale_x_continuous(breaks = dist_steps, guide = guide_axis(n.dodge = 2)) +
+
+  # Y-as begint bij 0
+  scale_y_continuous(limits = c(0, NA), expand = expansion(mult = c(0, 0.1))) +
+
+  scale_color_viridis_d(option = "D", end = 0.9) +
+  theme_minimal() +
+  labs(
+    title = "Sensitiviteitsanalyse Matches",
+    subtitle = "Als lijnen samenvallen, geeft extra tijd geen extra matches.",
+    x = "Afstand (m)",
+    y = "Aantal Unieke Matches",
+    color = "Tijdsvenster"
+  ) +
+  theme(legend.position = "bottom")
+
+print(p)
