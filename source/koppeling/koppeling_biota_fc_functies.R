@@ -211,11 +211,19 @@ fd <- st_read(here("data", "ruw", "netwerk", "Flow_direction_coordinates.shp"), 
 nodes <- st_read(here("data", "ruw", "waterlopen", "vha_network_junctions.shp"), quiet = T)
 # strahler <- st_read(here("data", "ruw", "waterlopen", "strahler_orde.shp"), quiet = T)
 
+meetnetten <- read.delim("data/ruw/vmm/meetnetten.txt")
+
 mi_data <- st_read(here("data", "ruw", "macroinvertebraten", "mi_meetpunten_datum.gpkg"), quiet = T) %>%
-  filter(monsternamedatum > '2009-12-31')
+  filter(monsternamedatum > '2009-12-31') %>%
+  left_join(meetnetten %>%
+              select(vhas, nummer),
+            by = c("meetplaats" = "nummer"))
 
 fc_data <- st_read(here("data", "ruw", "fys_chem", "fc_meetpunten.gpkg"), quiet = T) %>%
-  filter(monsternamedatum > '2007-12-31')
+  filter(monsternamedatum > '2007-12-31') %>%
+  left_join(meetnetten %>%
+              select(vhas, nummer),
+            by = c("meetplaats" = "nummer"))
 
 # --- Bouw het netwerk (slechts 1x nodig!) ---
 river_network <- build_river_network(fd, nodes)
@@ -254,7 +262,10 @@ if (!file.exists(here("data", "verwerkt", "koppeling", "nutrient_meetpunten_datu
                 by = c("meetplaats", "monsternamedatum"))
     st_write(nutrient_meetpunten_datum, dsn = here("data", "verwerkt", "koppeling", "nutrient_meetpunten_datum.gpkg"))
   }
-nutrient_data <- st_read(dsn = here("data", "verwerkt", "koppeling", "nutrient_meetpunten_datum.gpkg"), quiet = T)
+nutrient_data <- st_read(dsn = here("data", "verwerkt", "koppeling", "nutrient_meetpunten_datum.gpkg"), quiet = T) %>%
+  left_join(meetnetten %>%
+              select(vhas, nummer),
+            by = c("meetplaats" = "nummer"))
 
 mi_met_nutrient <- match_upstream(
   biota_sf = mi_data,
@@ -302,7 +313,10 @@ if (!file.exists(here("data", "verwerkt", "koppeling", "pesticide_meetpunten_dat
   st_write(pesticide_meetpunten_datum, dsn = here("data", "verwerkt", "koppeling", "pesticide_meetpunten_datum.gpkg"))
 }
 
-pesticide_data <- st_read(here("data", "verwerkt", "koppeling", "pesticide_meetpunten_datum.gpkg"), quiet = T)
+pesticide_data <- st_read(here("data", "verwerkt", "koppeling", "pesticide_meetpunten_datum.gpkg"), quiet = T) %>%
+  left_join(meetnetten %>%
+              select(vhas, nummer),
+            by = c("meetplaats" = "nummer"))
 
 mi_met_pesticide <- match_upstream(
   biota_sf = mi_data,
@@ -333,22 +347,26 @@ strahler <- st_read("data/ruw/waterlopen/strahler_orde.shp") %>%
   st_transform(., crs = st_crs(fd))
 
 match_upstream_strahler <- function(biota_sf,
-                                        quality_sf,
-                                        network_list,
-                                        discharge_sf = NULL,
-                                        strahler_sf = NULL,
-                                        use_strahler = FALSE,
-                                        strahler_col = "ORDE",
-                                        max_dist_m = 5000,
-                                        snap_tolerance = 100,
-                                        days_before = 14,
-                                        days_after = 30,
-                                        col_date_biota = "monsternamedatum",
-                                        col_date_quality = "monsternamedatum",
-                                        selection_mode = "closest_distance",
-                                        aggr_method = "mean",
-                                        aggr_cols = NULL,
-                                        grouping_col = NULL) {
+                                     quality_sf,
+                                     network_list,
+                                     discharge_sf = NULL,
+                                     strahler_sf = NULL,
+                                     use_strahler = FALSE,
+                                     strahler_col = "ORDE",
+                                     max_dist_m = 5000,
+                                     max_downstream_m = 200,   # NIEUW: Max afstand vogelvlucht (ook downstream)
+                                     snap_tolerance = 25,
+                                     days_before = 14,
+                                     days_after = 30,
+                                     col_date_biota = "monsternamedatum",
+                                     col_date_quality = "monsternamedatum",
+                                     selection_mode = "closest_distance",
+                                     aggr_method = "mean",
+                                     aggr_cols = NULL,
+                                     grouping_col = NULL,
+                                     vhas_col_network = "VHAS",
+                                     vhas_col_biota = NULL,
+                                     vhas_col_quality = NULL) {
 
   # --- 1. Validatie ---
   valid_modes <- c("closest_distance", "closest_time", "all", "aggregate")
@@ -357,12 +375,9 @@ match_upstream_strahler <- function(biota_sf,
   valid_aggr <- c("mean", "min", "max")
   if (!aggr_method %in% valid_aggr) stop("aggr_method moet zijn: 'mean', 'min' of 'max'")
 
-  # Check of de opgegeven aggr_cols wel bestaan in de input
   if (!is.null(aggr_cols)) {
     missing_cols <- setdiff(aggr_cols, names(quality_sf))
-    if (length(missing_cols) > 0) {
-      stop(paste("De volgende aggr_cols bestaan niet in quality_sf:", paste(missing_cols, collapse = ", ")))
-    }
+    if (length(missing_cols) > 0) stop(paste("aggr_cols niet gevonden in quality_sf:", paste(missing_cols, collapse=", ")))
   }
 
   if (use_strahler) {
@@ -384,40 +399,74 @@ match_upstream_strahler <- function(biota_sf,
   quality_sf[[col_date_quality]] <- as.Date(quality_sf[[col_date_quality]])
   biota_sf$tmp_join_id <- seq_len(nrow(biota_sf))
 
-  message("1/5 Snapping points to river network (with tolerance check)...")
+  # We voegen een index toe aan quality_sf om later geometries terug te vinden
+  quality_sf$orig_index_geo <- seq_len(nrow(quality_sf))
 
-  # --- Slimme Snap Functie ---
-  snap_and_attribute <- function(points, network, grp_col, tol) {
-    nearest_idx <- st_nearest_feature(points, network)
-    dists <- st_distance(points, network[nearest_idx, ], by_element = TRUE)
-    dists_num <- as.numeric(dists)
+  message("1/5 Snapping points to river network...")
 
-    valid_snaps <- dists_num <= tol
-
-    n_dropped <- sum(!valid_snaps)
-    if (n_dropped > 0) message(paste("   ->", n_dropped, "punten liggen verder dan", tol, "m van het netwerk en worden genegeerd."))
-
+  # --- HYBRID SNAP FUNCTIE ---
+  snap_and_attribute <- function(points, network, grp_col, tol, vhas_col_pts, vhas_col_net) {
     points$node_id <- NA
-    points$node_id[valid_snaps] <- as.character(network$from_node[nearest_idx[valid_snaps]])
+    if (!is.null(grp_col)) points$match_group_val <- NA
 
-    if (!is.null(grp_col)) {
-      points$match_group_val <- NA
-      points$match_group_val[valid_snaps] <- network[[grp_col]][nearest_idx[valid_snaps]]
+    # 1. VHAS MATCHING
+    has_vhas_config <- !is.null(vhas_col_pts) && !is.null(vhas_col_net)
+    can_use_vhas <- has_vhas_config && (vhas_col_pts %in% names(points)) && (vhas_col_net %in% names(network))
+
+    if (can_use_vhas) {
+      pts_with_vhas_idx <- which(!is.na(points[[vhas_col_pts]]))
+      if (length(pts_with_vhas_idx) > 0) {
+        unique_codes <- unique(points[[vhas_col_pts]][pts_with_vhas_idx])
+        for (code in unique_codes) {
+          net_idx <- which(network[[vhas_col_net]] == code)
+          if (length(net_idx) > 0) {
+            p_subset_idx <- which(points[[vhas_col_pts]] == code)
+            rel_nearest <- st_nearest_feature(points[p_subset_idx,], network[net_idx,])
+            abs_nearest <- net_idx[rel_nearest]
+            points$node_id[p_subset_idx] <- as.character(network$from_node[abs_nearest])
+            if (!is.null(grp_col)) points$match_group_val[p_subset_idx] <- network[[grp_col]][abs_nearest]
+          }
+        }
+      }
+    }
+
+    # 2. GEOMETRIC FALLBACK
+    missing_idx <- which(is.na(points$node_id))
+    if (length(missing_idx) > 0) {
+      subset_pts <- points[missing_idx, ]
+      nearest_idx <- st_nearest_feature(subset_pts, network)
+      dists <- st_distance(subset_pts, network[nearest_idx, ], by_element = TRUE)
+      dists_num <- as.numeric(dists)
+      dists_num[is.na(dists_num)] <- Inf
+
+      valid_snaps <- dists_num <= tol
+      valid_global_idx <- missing_idx[valid_snaps]
+      valid_net_idx <- nearest_idx[valid_snaps]
+
+      if (length(valid_global_idx) > 0) {
+        points$node_id[valid_global_idx] <- as.character(network$from_node[valid_net_idx])
+        if (!is.null(grp_col)) points$match_group_val[valid_global_idx] <- network[[grp_col]][valid_net_idx]
+      }
+
+      n_dropped <- length(missing_idx) - length(valid_global_idx)
+      if (n_dropped > 0) message(paste("      ->", n_dropped, "points dropped (too far/no VHAS match)."))
     }
     return(points)
   }
 
-  biota_sf <- snap_and_attribute(biota_sf, net_sf, grouping_col, snap_tolerance)
-  quality_sf <- snap_and_attribute(quality_sf, net_sf, grouping_col, snap_tolerance)
+  biota_sf <- snap_and_attribute(biota_sf, net_sf, grouping_col, snap_tolerance, vhas_col_biota, vhas_col_network)
+  quality_sf <- snap_and_attribute(quality_sf, net_sf, grouping_col, snap_tolerance, vhas_col_quality, vhas_col_network)
 
   # --- Strahler Snapping ---
   if (use_strahler) {
-    message("    -> Determining Strahler order (with tolerance check)...")
+    message("    -> Determining Strahler order...")
     get_strahler_order <- function(pts, str_layer, str_col, tol) {
       idx <- st_nearest_feature(pts, str_layer)
       dists <- st_distance(pts, str_layer[idx, ], by_element = TRUE)
+      dists_num <- as.numeric(dists)
+      dists_num[is.na(dists_num)] <- Inf
       vals <- rep(NA, nrow(pts))
-      valid <- as.numeric(dists) <= tol
+      valid <- dists_num <= tol
       vals[valid] <- str_layer[[str_col]][idx[valid]]
       return(vals)
     }
@@ -433,43 +482,36 @@ match_upstream_strahler <- function(biota_sf,
     message("    -> Snapping discharge points...")
     idx_dis <- st_nearest_feature(discharge_sf, net_sf)
     dists_dis <- st_distance(discharge_sf, net_sf[idx_dis, ], by_element = TRUE)
-    valid_dis <- as.numeric(dists_dis) <= snap_tolerance
+    dists_num <- as.numeric(dists_dis)
+    dists_num[is.na(dists_num)] <- Inf
+    valid_dis <- dists_num <= snap_tolerance
     if (sum(valid_dis) > 0) {
       discharge_nodes <- unique(as.character(net_sf$from_node[idx_dis[valid_dis]]))
     }
   }
 
-  message(paste0("2/5 Matching upstream points (Mode: ", selection_mode, ")..."))
+  message(paste0("2/5 Matching points (Mode: ", selection_mode, " | Upstream: ", max_dist_m, "m OR Local: ", max_downstream_m, "m)..."))
 
   results <- list()
-
-  pb <- progress_bar$new(
-    format = "  [:bar] :percent eta: :eta",
-    total = nrow(biota_sf), clear = FALSE, width = 60
-  )
+  pb <- progress_bar$new(format = "  [:bar] :percent eta: :eta", total = nrow(biota_sf), clear = FALSE, width = 60)
 
   for (i in seq_len(nrow(biota_sf))) {
     pb$tick()
-
     b_pt <- biota_sf[i, ]
     b_node <- b_pt$node_id
     b_id   <- b_pt$tmp_join_id
-
     match <- NA
     n_matches_found <- 0
 
-    # 1. SCENARIO: PUNT LIGT TE VER VAN NETWERK
     if (is.na(b_node)) {
       match <- quality_df[1, ]
-      match[] <- NA
-      match$river_dist_m <- NA
+      match[] <- NA; match$river_dist_m <- NA
     } else {
-      # 2. SCENARIO: PUNT IS GESNAPT
       b_date <- b_pt[[col_date_biota]]
 
+      # STAP 1: Pas eerst alle niet-ruimtelijke filters toe (Datum, Groep, Strahler)
       subset_quality <- quality_df %>% filter(!is.na(node_id))
 
-      # Filter Grouping
       if (!is.null(grouping_col)) {
         b_group_val <- b_pt$match_group_val
         if (!is.na(b_group_val)) {
@@ -479,130 +521,127 @@ match_upstream_strahler <- function(biota_sf,
         }
       }
 
-      # Filter Strahler
       if (use_strahler && nrow(subset_quality) > 0) {
         b_strahler <- b_pt$strahler_val
         if (!is.na(b_strahler)) {
-          subset_quality <- subset_quality %>%
-            filter(!is.na(strahler_val)) %>%
-            filter(abs(strahler_val - b_strahler) <= 1)
+          subset_quality <- subset_quality %>% filter(!is.na(strahler_val), abs(strahler_val - b_strahler) <= 1)
         } else {
           subset_quality <- subset_quality[0, ]
         }
       }
 
+      # Filter op tijd
       if (nrow(subset_quality) > 0) {
-        upstream_nodes <- names(subcomponent(g, v = b_node, mode = "in"))
-
-        candidates <- subset_quality %>%
-          filter(node_id %in% upstream_nodes) %>%
+        subset_quality <- subset_quality %>%
           mutate(
             temp_diff_days = as.numeric(difftime(b_date, .[[col_date_quality]], units = "days")),
             abs_time_diff  = abs(temp_diff_days)
           ) %>%
           filter(temp_diff_days >= -days_after & temp_diff_days <= days_before)
+      }
 
+      if (nrow(subset_quality) > 0) {
+
+        # STAP 2: Bereken afstanden (Graaf EN Euclidisch)
+
+        # A. Graaf Afstand (alleen upstream werkt hier, downstream geeft Inf)
+        upstream_nodes <- names(subcomponent(g, v = b_node, mode = "in"))
+        subset_quality$is_upstream <- subset_quality$node_id %in% upstream_nodes
+
+        # Bereken graafafstand (alleen zinvol voor upstream, maar we runnen voor subset)
+        d_matrix <- distances(g, v = subset_quality$node_id, to = b_node, mode = "out")
+        subset_quality$graph_dist <- as.numeric(d_matrix)
+
+        # B. Euclidische Afstand (Vogelvlucht)
+        # We moeten de geometry ophalen uit de originele quality_sf
+        # Dit doen we via de index die we eerder hebben opgeslagen
+        target_geoms <- quality_sf[subset_quality$orig_index_geo, ]
+        euclid_dists <- st_distance(b_pt, target_geoms)
+        subset_quality$euclid_dist <- as.numeric(euclid_dists)
+
+        # STAP 3: De 'OR' Filter
+        # Kandidaat is geldig als:
+        # (Is Upstream EN GraphDist <= 5000) OF (EuclidDist <= 200)
+
+        candidates <- subset_quality %>%
+          filter(
+            (is_upstream & graph_dist <= max_dist_m) |
+            (euclid_dist <= max_downstream_m)
+          )
+
+        # STAP 4: Bepaal de 'definitive' afstand voor sortering
+        # Als het upstream is -> Graph dist
+        # Als het downstream is (graph=Inf) -> Euclid dist
+        # Als het beide is (kortbij upstream) -> Graph dist (consistentie)
         if (nrow(candidates) > 0) {
-          d_matrix <- distances(g, v = candidates$node_id, to = b_node, mode = "out")
-          candidates$river_dist_m <- as.numeric(d_matrix)
+           candidates$river_dist_m <- ifelse(is.finite(candidates$graph_dist),
+                                             candidates$graph_dist,
+                                             candidates$euclid_dist)
 
-          candidates_within <- candidates %>% filter(river_dist_m <= max_dist_m)
+           # Topology check (Lozingen) - enkel relevant voor upstream paden!
+           # Als een punt downstream ligt, heeft een lozing stroomopwaarts (tussen biota en qual) geen invloed op qual.
+           if (length(discharge_nodes) > 0) {
+             # We checken alleen de kandidaten die 'upstream' zijn volgens de graaf
+             to_check_idx <- which(candidates$is_upstream & candidates$river_dist_m > 0)
 
-          # Topology Check
-          if (nrow(candidates_within) > 0 && length(discharge_nodes) > 0) {
-            keep_candidate <- sapply(candidates_within$node_id, function(cand_node) {
-              if (cand_node == b_node) return(TRUE)
-              path_res <- shortest_paths(g, from = cand_node, to = b_node, mode = "out")
-              intermediate_nodes <- setdiff(names(path_res$vpath[[1]]), c(cand_node, b_node))
-              if (any(intermediate_nodes %in% discharge_nodes)) return(FALSE) else return(TRUE)
-            })
-            candidates_within <- candidates_within[keep_candidate, ]
-          }
+             if(length(to_check_idx) > 0) {
+               keep_flags <- rep(TRUE, nrow(candidates))
 
-          # --- SELECTIE LOGICA ---
-          if (nrow(candidates_within) > 0) {
+               checks <- sapply(candidates$node_id[to_check_idx], function(cand_node) {
+                 if (cand_node == b_node) return(TRUE)
+                 path_res <- shortest_paths(g, from = cand_node, to = b_node, mode = "out")
+                 intermediate_nodes <- setdiff(names(path_res$vpath[[1]]), c(cand_node, b_node))
+                 if (any(intermediate_nodes %in% discharge_nodes)) return(FALSE) else return(TRUE)
+               })
 
-            if (selection_mode == "closest_distance") {
-              match <- candidates_within[which.min(candidates_within$river_dist_m), ]
-              n_matches_found <- 1
+               keep_flags[to_check_idx] <- checks
+               candidates <- candidates[keep_flags, ]
+             }
+           }
 
-            } else if (selection_mode == "closest_time") {
-              match <- candidates_within[which.min(candidates_within$abs_time_diff), ]
-              n_matches_found <- 1
+           candidates_within <- candidates # Naamgeving consistent houden
 
-            } else if (selection_mode == "all") {
-              match <- candidates_within
-              n_matches_found <- nrow(candidates_within)
+           if (nrow(candidates_within) > 0) {
+             # ... (Selectie logica blijft hetzelfde) ...
+             if (selection_mode == "closest_distance") {
+               match <- candidates_within[which.min(candidates_within$river_dist_m), ]; n_matches_found <- 1
+             } else if (selection_mode == "closest_time") {
+               match <- candidates_within[which.min(candidates_within$abs_time_diff), ]; n_matches_found <- 1
+             } else if (selection_mode == "all") {
+               match <- candidates_within; n_matches_found <- nrow(candidates_within)
+             } else if (selection_mode == "aggregate") {
+               n_matches_found <- nrow(candidates_within)
+               if (!is.null(aggr_cols)) { cols_to_agg <- aggr_cols } else {
+                 tech_cols <- c("node_id", "river_dist_m", "temp_diff_days", "abs_time_diff", "strahler_val", "match_group_val", "orig_index_geo", "graph_dist", "euclid_dist", "is_upstream")
+                 num_cols <- names(select_if(candidates_within, is.numeric))
+                 cols_to_agg <- setdiff(num_cols, tech_cols)
+               }
+               agg_fun <- switch(aggr_method, "mean"=function(x) mean(x, na.rm=T), "min"=function(x) min(x, na.rm=T), "max"=function(x) max(x, na.rm=T))
 
-            } else if (selection_mode == "aggregate") {
-              # --- AGGREGATIE LOGICA ---
-              n_matches_found <- nrow(candidates_within)
-
-              # Bepaal welke kolommen we moeten aggregeren
-              if (!is.null(aggr_cols)) {
-                # Gebruik de expliciet opgegeven kolommen
-                cols_to_agg <- aggr_cols
-              } else {
-                # Auto-detectie (Fallback)
-                tech_cols <- c("node_id", "river_dist_m", "temp_diff_days", "abs_time_diff", "strahler_val", "match_group_val")
-                num_cols <- names(select_if(candidates_within, is.numeric))
-                cols_to_agg <- setdiff(num_cols, tech_cols)
-              }
-
-              # Bepaal de functie
-              agg_fun <- switch(aggr_method,
-                                "mean" = function(x) mean(x, na.rm = TRUE),
-                                "min"  = function(x) min(x, na.rm = TRUE),
-                                "max"  = function(x) max(x, na.rm = TRUE))
-
-              if (length(cols_to_agg) > 0) {
-                # Bereken de aggregatie
-                agg_values <- candidates_within %>%
-                  summarise(across(all_of(cols_to_agg), agg_fun))
-
-                # We nemen de structuur van de eerste rij over (voor char/factor kolommen)
-                match <- candidates_within[1, ]
-
-                # Overschrijf de numerieke meetwaarden met de aggregatie
-                match[, cols_to_agg] <- agg_values
-              } else {
-                # Als er geen kolommen zijn om te aggregeren, pakken we gewoon de eerste rij
-                # maar waarschuwen we in het resultaat? Of gedragen als 'closest'?
-                match <- candidates_within[1, ]
-              }
-
-              # Zet afstand op gemiddelde afstand van de cluster
-              match$river_dist_m <- mean(candidates_within$river_dist_m)
-            }
-          }
+               if (length(cols_to_agg) > 0) {
+                   agg_values <- candidates_within %>% summarise(across(all_of(cols_to_agg), agg_fun))
+                   match <- candidates_within[1, ]
+                   match[, cols_to_agg] <- agg_values
+               } else { match <- candidates_within[1, ] }
+               match$river_dist_m <- mean(candidates_within$river_dist_m)
+             }
+           }
         }
       }
-
-      if (!is.data.frame(match)) {
-        match <- quality_df[1, ]
-        match[] <- NA
-        match$river_dist_m <- NA
-      }
+      if (!is.data.frame(match)) { match <- quality_df[1, ]; match[] <- NA; match$river_dist_m <- NA }
     }
-
-    # 3. CENTRALE CLEANUP
     match$biota_match_id <- b_id
     match$n_matches <- n_matches_found
-
-    cols_to_remove <- c("temp_diff_days", "abs_time_diff", "match_group_val", "strahler_val")
-    cols_present <- intersect(names(match), cols_to_remove)
-    if(length(cols_present) > 0) match[, cols_present] <- NULL
-
+    # Cleanup extra kolommen
+    cols_to_remove <- c("temp_diff_days", "abs_time_diff", "match_group_val", "strahler_val", "orig_index_geo", "graph_dist", "euclid_dist", "is_upstream")
+    match[, base::intersect(names(match), cols_to_remove)] <- NULL
     results[[i]] <- match
   }
 
   message("3/5 Merging results...")
   matched_quality_df <- do.call(rbind, results)
-
   cols_to_rename <- setdiff(names(matched_quality_df), "biota_match_id")
-  names(matched_quality_df)[names(matched_quality_df) %in% cols_to_rename] <-
-    paste0("qual_", cols_to_rename)
-
+  names(matched_quality_df)[names(matched_quality_df) %in% cols_to_rename] <- paste0("qual_", cols_to_rename)
   final_sf <- left_join(biota_sf, matched_quality_df, by = c("tmp_join_id" = "biota_match_id"))
 
   final_sf$tmp_join_id <- NULL
@@ -612,13 +651,12 @@ match_upstream_strahler <- function(biota_sf,
   return(final_sf)
 }
 
-
 nutrient_data <- match_upstream_strahler(
   biota_sf = mi_data,
   quality_sf = nutrient_data,
   network_list = river_network,
   strahler_sf = strahler,
-  use_strahler = TRUE,
+  use_strahler = FALSE,
   strahler_col = "orde",
   max_dist_m = 5000,       # Max 5km stroomopwaarts
   days_before = 180,       # Kwaliteit mag tot 180 dagen VOOR de biota meting zijn
@@ -626,8 +664,13 @@ nutrient_data <- match_upstream_strahler(
   col_date_biota = "monsternamedatum",
   col_date_quality = "monsternamedatum",
   selection_mode = "closest_distance",
-  grouping_col = "VHAG"
+  grouping_col = "VHAG",
+  vhas_col_network = "VHAS",
+  vhas_col_biota = "vhas",
+  vhas_col_quality = "vhas"
 )
+print(paste("Aantal matches:", sum(!is.na(nutrient_data$qual_meetplaats))))
+
 
 library(ggplot2)
 library(dplyr)
