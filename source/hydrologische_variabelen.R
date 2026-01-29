@@ -111,7 +111,7 @@ print(r_template)
 message("Raster succesvol aangemaakt met vaste resolutie.")
 
 # 2.2 Watersheds transformeren naar raster CRS
-# We transformeren de polygonen naar het coördinatenstelsel van het raster (WGS84)
+# We transformeren de polygonen naar het coördinatenstelsel van het raster
 watersheds_unique <- afstroomgebieden %>%
   distinct(meetplaats, .keep_all = TRUE) %>%
   st_transform(st_crs(r_template))
@@ -274,78 +274,108 @@ if (!exists("samples_geo")) {
 }
 
 # ==============================================================================
-# DEEL A: SPEI-6 BEREKENING (ROBUUSTE VERSIE)
+# DEEL A: SPEI-6 BEREKENING (DEFINITIEVE VERSIE)
 # ==============================================================================
-message("Start berekening SPEI-6 (Geoptimaliseerd)...")
+library(SPEI)
+library(data.table)
+library(tidyverse)
+
+message("Start berekening SPEI-6...")
 
 # 1. Aggregeren van Dag -> Maand
+# We zorgen eerst dat we zeker weten dat we met jaartallen werken
+dt_catchment_daily[, year := year(day)]
+dt_catchment_daily[, month := month(day)]
+
 dt_monthly <- dt_catchment_daily[, .(
-  P_month = sum(P_mean, na.rm = TRUE),
+  P_month = sum(P_mean, na.rm = TRUE), # gebiedsgemiddelde dagelijkse neerslag en ET
   E_month = sum(E_mean, na.rm = TRUE)
-), by = .(meetplaats, year = year(day), month = month(day))]
+), by = .(meetplaats, year, month)]
 
-# 2. ROBUUSTHEIDS-CHECK: Vul ontbrekende maanden aan
-# Als er ergens een maand data mist (bvb door een data-foutje),
-# moet die wel bestaan als NA, anders schuift de hele tijdreeks op.
+# 2. HET SKELET MAKEN (Cruciaal tegen gaten)
+# We dwingen de reeks om te starten in 1991 en door te lopen tot het einde
+min_yr_global <- 1991
+max_yr_global <- max(dt_monthly$year)
 
-# Maak een "skelet" van alle maanden die er moeten zijn (1991-2025)
-# We gaan ervan uit dat je data start in jan 1991.
-min_yr <- 1991
-max_yr <- max(dt_monthly$year)
-all_months <- CJ(
+# Maak alle mogelijke combinaties (Meetplaats x Jaar x Maand)
+all_combinations <- CJ(
   meetplaats = unique(dt_monthly$meetplaats),
-  year = min_yr:max_yr,
+  year = min_yr_global:max_yr_global,
   month = 1:12
 )
 
-# Koppel de data aan het skelet. Maanden zonder data worden NA (of 0).
-# Voor P en E is 0 veiliger dan NA bij ontbrekende records,
-# maar voor SPEI mag het NA blijven (dan wordt de output ook NA).
-dt_monthly_full <- merge(all_months, dt_monthly,
+# Merge data aan skelet
+dt_monthly_full <- merge(all_combinations, dt_monthly,
                          by = c("meetplaats", "year", "month"),
                          all.x = TRUE)
 
-# Sorteer cruciaal op tijd!
+# 3. NA's VULLEN
+# Omdat we weten dat je dag-data geen NA's heeft, betekent een NA hier
+# dat er gewoon die maand geen records waren in de daily set.
+# We vullen dit met 0 (of een heel klein getal).
+dt_monthly_full[is.na(P_month), P_month := 0]
+dt_monthly_full[is.na(E_month), E_month := 0]
+
+# 4. SORTEREN (Heel belangrijk voor TS objecten!)
 setorder(dt_monthly_full, meetplaats, year, month)
 
-# 3. Functie om SPEI te berekenen per meetplaats
+# ------------------------------------------------------------------------------
+# De Rekenfunctie (Met checks)
+# ------------------------------------------------------------------------------
 calc_spei_catchment <- function(df_sub) {
 
-  # Check: als er te veel NA's zijn, return NA
-  # (SPEI heeft een minimum aantal datapunten nodig)
-  if (sum(!is.na(df_sub$P_month)) < 360) { # Minstens 30 jaar data nodig voor betrouwbare index
+  # A. Check lengte
+  # We verwachten (2025 - 1991 + 1) * 12 maanden = 420 maanden
+  expected_rows <- (max_yr_global - min_yr_global + 1) * 12
+
+  if(nrow(df_sub) < expected_rows) {
+    # Als dit gebeurt, is de merge mislukt
+    message(paste("LET OP: Te weinig data voor", unique(df_sub$meetplaats)))
     df_sub$spei6 <- NA
     return(df_sub)
   }
 
-  # Bereken balans
+  # B. Waterbalans
   balance <- df_sub$P_month - df_sub$E_month
 
-  # --- HIER ZAT DE FOUT ---
-  # We maken nu expliciet een Time Series object (ts)
-  # We vertellen R: "Dit start in 1991, maand 1, en frequentie is 12"
-  ts_balance <- ts(balance, start = c(1991, 1), frequency = 12)
+  # C. Maak Time Series
+  # We weten zeker dat de data gesorteerd is en start bij min_yr_global, maand 1
+  ts_balance <- ts(balance, start = c(min_yr_global, 1), frequency = 12)
 
-  # Nu roepen we spei aan. Omdat ts_balance nu "weet" dat het 1991 is,
-  # werkt de ref.start = c(1991, 1) perfect.
+  # D. SPEI Berekenen
   tryCatch({
-    spei_obj <- spei(ts_balance, scale = 6, ref.start = c(1991, 1), ref.end = c(2020, 12), verbose = FALSE)
-    df_sub$spei6 <- as.numeric(spei_obj$fitted)
+    # We gebruiken de data van 1991-2020 als referentie voor de verdeling
+    spei_obj <- spei(ts_balance, scale = 6,
+                     ref.start = c(1991, 1), ref.end = c(2020, 12),
+                     verbose = FALSE)
+
+    # We halen de waarden eruit als numerieke vector
+    vals <- as.numeric(spei_obj$fitted)
+    df_sub$spei6 <- vals
+
   }, error = function(e) {
-    # Fallback als berekening faalt (bvb door reeks van 0-en)
+    message(paste("SPEI Error bij", unique(df_sub$meetplaats), ":", e$message))
     df_sub$spei6 <- NA
   })
 
   return(df_sub)
 }
 
-# 4. Pas toe op elk afstroomgebied
-message("   -> SPEI berekenen per meetplaats (dit duurt even)...")
+# 5. UITVOEREN (syntax data.table)
+message("   -> SPEI berekenen (even geduld)...")
 dt_monthly_spei <- dt_monthly_full[, calc_spei_catchment(.SD), by = meetplaats]
 
-# Datum kolom toevoegen voor latere koppeling
-dt_monthly_spei[, month_date := as.Date(paste(year, month, "01", sep = "-"))]
+# 6. Datum kolom toevoegen
+dt_monthly_spei[, month_date := as.Date(paste(year, month, "01", sep="-"))]
 
+# 7. VALIDATIE RESULTAAT
+valid_rows <- sum(!is.na(dt_monthly_spei$spei6))
+total_rows <- nrow(dt_monthly_spei)
+message(sprintf("Klaar! %d rijen berekend. %d rijen hebben een SPEI waarde (%.1f%%).",
+                total_rows, valid_rows, (valid_rows/total_rows)*100))
+
+# Toon de eerste paar niet-NA resultaten
+print(head(dt_monthly_spei[!is.na(spei6)]))
 message("SPEI-6 berekend.")
 
 # ==============================================================================
@@ -369,78 +399,154 @@ message("Drempelwaarden bepaald. Voorbeeld: Meetplaats ", thresholds$meetplaats[
         " heeft extreme grens > ", round(thresholds$p95_threshold[1], 1), " mm.")
 
 # ==============================================================================
-# DEEL C: KOPPELEN AAN DE SAMPLES
+# DEEL C: KOPPELEN AAN SAMPLES (TURBO VERSIE - VECTORIZED)
 # ==============================================================================
-message("Koppelen aan macroinvertebraten metingen...")
+library(data.table)
 
-# We maken een lijst van samples
 samples_df <- samples_geo %>%
   st_drop_geometry() %>%
   distinct(meetplaats, monsternamedatum) %>%
   select(meetplaats, monsternamedatum)
 
-# Functie om alles op te halen voor 1 sample
-get_climate_vars <- function(curr_mp, curr_date) {
+message("Start razendsnelle koppeling...")
 
-  curr_date <- as.Date(curr_date)
+# 1. Voorbereiden data.tables
+# Zorg dat alles data.tables zijn
+setDT(samples_df)
+setDT(dt_catchment_daily)
+setDT(thresholds)
+setDT(dt_monthly_spei)
 
-  # --- 1. SPEI Ophalen ---
-  # We pakken de SPEI van de maand waarin de monsterneming viel.
-  # (SPEI-6 zegt op dat moment: hoe was de balans in de 6 mnd hiervoor?)
-  spei_val <- dt_monthly_spei[
-    meetplaats == curr_mp &
-      year == year(curr_date) &
-      month == month(curr_date)
-  ]$spei6
+# Zorg dat datums Date objecten zijn
+samples_df[, monsternamedatum := as.Date(monsternamedatum)]
+dt_catchment_daily[, day := as.Date(day)]
 
-  if (length(spei_val) == 0) spei_val <- NA
+# ------------------------------------------------------------------------------
+# STAP 1: BEREKEN SPEI (Gewone Join)
+# ------------------------------------------------------------------------------
+# We maken join-sleutels (jaar en maand)
+samples_df[, `:=`(year = year(monsternamedatum), month = month(monsternamedatum))]
 
-  # --- 2. Extremen Tellen ---
-  # Periode: 3 maanden (90 dagen) voor de meting
-  date_start_3m <- curr_date - 90
+# Join SPEI aan de samples
+# We koppelen samples aan de maand-tabel op meetplaats+jaar+maand
+results_spei <- merge(
+  samples_df,
+  dt_monthly_spei[, .(meetplaats, year, month, spei6)], # Pak alleen wat nodig is
+  by = c("meetplaats", "year", "month"),
+  all.x = TRUE
+)
 
-  # Haal de threshold op
-  thresh <- thresholds[meetplaats == curr_mp]$p95_threshold
-  if (length(thresh) == 0) return(list(spei6 = spei_val, n_extreme_3m = NA))
+# ------------------------------------------------------------------------------
+# STAP 2: BEREKEN EXTREMEN (Non-Equi Join)
+# ------------------------------------------------------------------------------
+message("   -> Extremen tellen via Non-Equi Join...")
 
-  # Filter dagdata
-  # Let op: 'dt_catchment_daily' is een data.table met key, dus dit filtert snel
-  subset_rain <- dt_catchment_daily[meetplaats == curr_mp & day >= date_start_3m & day < curr_date]
+# A. Markeer eerst welke dagen extreem waren in de grote tabel
+# We koppelen de threshold aan de dagdata
+dt_daily_flagged <- merge(dt_catchment_daily, thresholds, by = "meetplaats")
+# Maak een boolean kolom (1 = extreem, 0 = normaal)
+dt_daily_flagged[, is_extreme := as.integer(P_mean > p95_threshold)]
 
-  # Tel aantal dagen boven de drempel
-  n_ext <- sum(subset_rain$P_mean > thresh, na.rm = TRUE)
+# B. Definieer de zoekperiode per sample
+# Startdatum is 90 dagen voor de monstername
+samples_df[, start_window := monsternamedatum - 90]
 
-  return(list(spei6 = spei_val, n_extreme_3m = n_ext))
-}
+# C. De Magische Non-Equi Join
+# Dit zegt: "Voor elke sample, pak de rijen uit daily_flagged waar:
+# 1. meetplaats gelijk is
+# 2. de dag >= start_window
+# 3. de dag < monsternamedatum"
+# En tel vervolgens de 'is_extreme' kolom op.
 
-# Uitvoeren (met progress bar)
-results_final <- samples_df %>%
-  mutate(climate = map2(meetplaats, monsternamedatum, get_climate_vars, .progress = TRUE)) %>%
-  unnest_wider(climate)
+extremes_counted <- dt_daily_flagged[samples_df,
+                                     .(n_extreme_3m = sum(is_extreme, na.rm = TRUE)),
+                                     on = .(meetplaats,
+                                            day >= start_window,
+                                            day < monsternamedatum),
+                                     by = .EACHI] # .EACHI zorgt dat het per sample gebeurt
+
+# ------------------------------------------------------------------------------
+# STAP 3: ALLES SAMENVOEGEN
+# ------------------------------------------------------------------------------
+
+# De output van de non-equi join heeft dezelfde volgorde als samples_df
+# We plakken het aan elkaar
+results_final <- results_spei
+results_final[, n_extreme_3m := extremes_counted$n_extreme_3m]
+
+# Opruimen hulpkolommen
+results_final[, c("year", "month", "start_window") := NULL]
+
+message("Klaar! Check het resultaat:")
+print(head(results_final))
 
 # ==============================================================================
-# DEEL D: SAMENVOEGEN EN OPSLAAN
+# DEEL D: OPSLAAN (Hetzelfde als voorheen)
+# ==============================================================================
+file_prev <- here("data", "verwerkt", "neerslag_variabelen_watersheds.gpkg")
+prev_sf <- st_read(file_prev, quiet = TRUE) %>%
+  mutate(meetplaats = as.character(meetplaats),
+         monsternamedatum = as.Date(monsternamedatum))
+
+# Zorg dat results_final ook character/date is voor de join
+results_final[, meetplaats := as.character(meetplaats)]
+
+final_dataset <- prev_sf %>%
+  left_join(results_final, by = c("meetplaats", "monsternamedatum"))
+
+outfile <- here("data", "verwerkt", "mi_metingen_met_klimaat_compleet.gpkg")
+st_write(final_dataset, outfile, delete_dsn = TRUE)
+message("✅ Opgeslagen: ", outfile)
+
+hydro_data <- final_dataset %>%
+  st_drop_geometry()
+save(hydro_data, file = here("data", "verwerkt", "hydro_data.rdata"))
+
+# ==============================================================================
+# DEEL F: CHECK
 # ==============================================================================
 
-# Voeg dit toe aan je vorige resultaat (P_sum_7d)
-# We laden even het bestand uit de vorige stap
-file_prev <- here("data", "verwerkt", "hydrologisch", "neerslag_variabelen_watersheds.gpkg")
-if (file.exists(file_prev)) {
-  prev_sf <- st_read(file_prev, quiet = TRUE)
+library(tidyverse)
 
-  # Joinen
-  # Let op: convert datums naar Date om zeker te zijn van match
-  final_dataset <- prev_sf %>%
-    mutate(monsternamedatum = as.Date(monsternamedatum)) %>%
-    left_join(results_final, by = c("meetplaats", "monsternamedatum"))
+# 1. Check op Oneindige waarden of NaN
+n_inf <- sum(is.infinite(final_dataset$spei6))
+n_nan <- sum(is.nan(final_dataset$spei6))
+n_na  <- sum(is.na(final_dataset$spei6))
 
-  # Opslaan
-  outfile <- here("data", "verwerkt", "hydrologisch", "mi_metingen_met_klimaat_compleet.gpkg")
-  st_write(final_dataset, outfile, delete_dsn = TRUE)
+print(sprintf("Aantal Inf: %d | Aantal NaN: %d | Aantal NA: %d", n_inf, n_nan, n_na))
 
-  message("Klaar! Bestand opgeslagen: ", outfile)
-  print(head(final_dataset))
+# 2. Bekijk de extremen
+summary(final_dataset$spei6)
 
-} else {
-  message("Let op: Het bestand uit de vorige stap is niet gevonden.")
-}
+# 3. Hoeveel procent valt buiten het 'normale' bereik (-3 tot 3)?
+buiten_bereik <- final_dataset %>%
+  filter(spei6 < -3 | spei6 > 3) %>%
+  nrow()
+
+totaal <- nrow(final_dataset)
+print(sprintf("Aantal extreme waarden (>3 of <-3): %d (%.2f%%)", buiten_bereik, (buiten_bereik/totaal)*100))
+
+ggplot(final_dataset, aes(x = spei6)) +
+  geom_histogram(binwidth = 0.2, fill = "steelblue", color = "white") +
+  geom_vline(xintercept = c(-2, 0, 2), linetype = "dashed", color = "red") +
+  labs(title = "Verdeling van berekende SPEI waarden",
+       subtitle = "Zou eruit moeten zien als een 'Bell Curve' rond 0",
+       x = "SPEI Waarde", y = "Aantal Samples") +
+  theme_minimal()
+
+# Bereken gemiddelde SPEI over alle meetpunten per maand
+tijdreeks_check <- final_dataset %>%
+  group_by(monsternamedatum) %>%
+  summarise(gem_spei = mean(spei6, na.rm = TRUE)) %>%
+  ungroup()
+
+ggplot(tijdreeks_check, aes(x = monsternamedatum, y = gem_spei)) +
+  geom_line() +
+  geom_hline(yintercept = 0, color = "black") +
+  # Markeer 2018 (Droogte)
+  annotate("rect", xmin = as.Date("2018-05-01"), xmax = as.Date("2018-10-01"),
+           ymin = -3, ymax = 3, alpha = 0.2, fill = "red") +
+  annotate("text", x = as.Date("2018-07-01"), y = -2.5, label = "Droogte 2018", color = "red") +
+  labs(title = "Gemiddeld SPEI verloop in Vlaanderen (in jouw dataset)",
+       y = "Gemiddelde SPEI") +
+  theme_minimal()

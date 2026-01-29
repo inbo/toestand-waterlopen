@@ -47,7 +47,7 @@ mi_meetpunten0 <- st_read(here("data", "ruw", "macroinvertebraten", "mi_meetpunt
   filter(monsternamedatum > "2006-12-31") %>%
   mutate(monsternamedatum = as.Date(monsternamedatum))
 
-afstroomgebieden_geo <- st_read(here("data", "verwerkt", "hydrologisch", "mi_meetpunten_watersheds_buffered_all.gpkg")) %>%
+afstroomgebieden_geo <- st_read(here("data", "verwerkt", "hydrologisch", "mi_meetpunten_watersheds_buffered_5000m.gpkg")) %>%
   select(meetplaats, geom) %>%
   mutate(meetplaats = as.character(meetplaats))
 
@@ -61,7 +61,7 @@ samples_met_geo <- mi_meetpunten0 %>%
 
 
 # 1.3 Definitie van het SpatRaster Template
-vlaanderen_lambert <- st_read(here("vlaanderen_lambert.shp"))
+vlaanderen_lambert <- st_read(here("data", "ruw", "vlaanderen", "vlaanderen_wgs84.shp"))
 bbox_sf <- st_bbox(vlaanderen_lambert)
 res_meters <- 5000
 crs_lambert <- "EPSG:31370"

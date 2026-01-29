@@ -29,11 +29,15 @@ meta_data <- read_delim(
   rename(latitude = PIXEL_LAT_CENTER, longitude = PIXEL_LON_CENTER) %>%
   mutate(pixel_id = as.factor(PIXEL_ID)) %>%
   select(-PIXEL_ID)
+meta_data
 
 path_kmi <- here("data", "ruw", "neerslag", "kmi")
 bestandslijst <- list.files(
   path = path_kmi, pattern = "climategrid_.*\\.csv$", full.names = TRUE
 )
+
+neerslag_vb <- read.csv("data/ruw/neerslag/kmi/climategrid_199101.csv", sep = ";")
+head(neerslag_vb)
 
 gecombineerde_neerslag_data <- map_df(
   .x = bestandslijst, .f = read_delim, delim = ";", locale = locale(decimal_mark = ".")
@@ -184,3 +188,4 @@ str(finale_resultaten_sequentieel)
 
 # Opslaan van de resultaten
 save(finale_resultaten_sequentieel, file = here("data", "verwerkt", "neerslag_beide_periodes.rdata"))
+load(file = here("data", "verwerkt", "neerslag_beide_periodes.rdata"))

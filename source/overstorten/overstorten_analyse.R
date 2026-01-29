@@ -2,7 +2,7 @@ load(here("data", "verwerkt", "overstorten", "mi_meetpunten_vuilvracht_500m.rdat
 load(file = here("data", "verwerkt", "overstorten", "mi_meetpunten_aantal_overstorten_afstroomgebied.rdata"))
 load(here("data", "verwerkt", "mi_data.rdata"))
 vuilvracht_overstorten <- st_read(here("data", "ruw" , "overstorten", "vuilvracht", "OS_maart2025.shp"))
-watersheds_buffered <- st_read(here("data", "verwerkt", "hydrologisch", "mi_meetpunten_watersheds_buffered_all.gpkg"))
+watersheds_buffered <- st_read(here("data", "verwerkt", "hydrologisch", "mi_meetpunten_watersheds_buffered_5000m.gpkg"))
 points_in_watersheds <- st_join(vuilvracht_overstorten, watersheds_buffered, left = FALSE)
 
 
@@ -26,7 +26,7 @@ corrplot(cor_matrix, method = "circle", type = "upper", diag = FALSE, addCoef.co
 
 ###correlatie van cumulatieve vuilvrachtparameters per meetpunten
 
-numerieke_var <- cum_vuilvracht_watershed %>%
+numerieke_var <- cum_vuilvracht_watershed_500m %>%
   select(-meetplaats, -fid)
 cor_matrix <- cor(numerieke_var)
 corrplot(cor_matrix, method = "circle", type = "upper", diag = FALSE, addCoef.col = "black")

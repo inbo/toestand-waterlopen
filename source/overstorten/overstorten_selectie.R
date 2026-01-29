@@ -1,7 +1,7 @@
 source(here::here("source", "inladen_packages.R"))
 
 locations <- read_sf(here("data", "verwerkt", "hydrologisch", "mi_meetpunten_snapped_to_streams.shp"))
-afstroomgebieden <- st_read(here("data", "verwerkt", "hydrologisch", "mi_meetpunten_watersheds_buffered_all.gpkg"))
+afstroomgebieden <- st_read(here("data", "verwerkt", "hydrologisch", "mi_meetpunten_watersheds_buffered_5000m.gpkg"))
 bedekking <- st_read(here("data", "ruw" , "overstorten", "vuilvracht", "bedekking", "ZVG_OS_status_2021.shp")) %>%
   mutate(bedekking = case_when(
     Model_stat %in% c("2", "3", "4") ~ 1,

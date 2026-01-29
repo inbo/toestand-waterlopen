@@ -44,7 +44,7 @@ locations <- read_sf(here("data", "verwerkt", "hydrologisch", "mi_meetpunten_sna
 
 vuilvracht_overstorten <- st_read(here("data", "ruw" , "overstorten", "vuilvracht", "OS_maart2025.shp"))
 
-watersheds_buffered <- st_read(here("data", "verwerkt", "hydrologisch", "mi_meetpunten_watersheds_buffered_all.gpkg"))
+watersheds_buffered <- st_read(here("data", "verwerkt", "hydrologisch", "mi_meetpunten_watersheds_buffered_500m.gpkg"))
 
 points_in_watersheds <- st_join(vuilvracht_overstorten, watersheds_buffered, left = FALSE)
 
@@ -146,7 +146,7 @@ library(here)
 vuilvracht_overstorten1 <- st_transform(vuilvracht_overstorten, st_crs(locations)) %>%
   select(ID) %>%
   rename(id_overstort = ID)
-buffered_watersheds1 <- st_transform(buffered_watersheds, st_crs(locations))
+buffered_watersheds1 <- st_transform(watersheds_buffered, st_crs(locations))
 
 # 1. Hernoem meetplaats in buffered_watersheds zodat er geen naamconflict ontstaat
 buffered_watersheds2 <- buffered_watersheds1 %>%

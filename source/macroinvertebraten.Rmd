@@ -27,7 +27,7 @@ load(file = here("data", "verwerkt", "overstorten", "overstort_tellingen_df.rdat
 load(file = here("data", "verwerkt", "neerslag_beide_periodes.rdata"))
 load(here("data", "verwerkt", "landgebruik", "intensiteit_landbouw_scores.rdata"))
 load(file = here("data", "verwerkt", "tu_resultaten.rdata"))
-
+load(file = here("data", "verwerkt", "hydro_data.rdata"))
 
 
 # weglaten vijvers, meren, geisoleerd water en punten buiten Vlaanderen
@@ -151,7 +151,12 @@ landgebruik_data <- landgebruik_afstroomgebied_jaren %>%
             by = c("meetplaats", "monsternamedatum"), suffix = c("_afstr", "_oever")) %>%
   left_join(.,
             intensiteit_landbouw_scores,
-            by = c("meetplaats", "monsternamedatum"))
+            by = c("meetplaats", "monsternamedatum")) %>%
+  left_join(.,
+            landgebruik_buffer_100m_jaren %>%
+              select(-landgebruiksjaar) %>%
+              rename_with(~ paste0(., "_buffer"), !all_of(c("meetplaats", "monsternamedatum"))),
+            by = c("meetplaats", "monsternamedatum"), suffix = c("", "_buffer"))
 
 mi_full1 <- mi_data_analyse %>%
   left_join(overschrijdingen %>% 
@@ -160,7 +165,7 @@ mi_full1 <- mi_data_analyse %>%
                           mean(aantal_stoffen_met_overschrijding),
                         aantal_pesticiden_met_overschrijding =
                           mean(aantal_pesticiden_met_overschrijding),
-                        aantal_zware_metalen_met_overschrijding=
+                        aantal_zware_metalen_met_overschrijding =
                           mean(aantal_zware_metalen_met_overschrijding)),
             by = c("meetplaats", "jaar")) %>%
   left_join(landgebruik_data,
@@ -176,8 +181,10 @@ mi_full1 <- mi_data_analyse %>%
   left_join(finale_resultaten_sequentieel,
             by = c("meetplaats", "monsternamedatum")) %>%
   left_join(overstort_tellingen_df %>%
-              select(meetplaats, aantal_overstorten_500m),
+              select(meetplaats, aantal_overstorten_500m, score_overstorten_500m),
             by = "meetplaats") %>%
+  left_join(hydro_data,
+            by = c("meetplaats", "monsternamedatum")) %>%
   filter(jaar > 2009)
 
 # fc meetingen koppeling

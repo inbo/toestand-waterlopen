@@ -651,9 +651,30 @@ match_upstream_strahler <- function(biota_sf,
   return(final_sf)
 }
 
-nutrient_data <- match_upstream_strahler(
+nutrient_results <- match_upstream_strahler(
   biota_sf = mi_data,
   quality_sf = nutrient_data,
+  network_list = river_network,
+  strahler_sf = strahler,
+  use_strahler = FALSE,
+  strahler_col = "orde",
+  max_downstream_m = 200,
+  max_dist_m = 5000,       # Max 5km stroomopwaarts
+  days_before = 180,       # Kwaliteit mag tot 180 dagen VOOR de biota meting zijn
+  days_after = 30,         # Kwaliteit mag tot 14 dagen NA de biota meting zijn
+  col_date_biota = "monsternamedatum",
+  col_date_quality = "monsternamedatum",
+  selection_mode = "closest_distance",
+  grouping_col = "VHAG",
+  vhas_col_network = "VHAS",
+  vhas_col_biota = "vhas",
+  vhas_col_quality = "vhas"
+)
+print(paste("Aantal matches:", sum(!is.na(nutrient_results$qual_meetplaats))))
+
+pesticide_data <- match_upstream_strahler(
+  biota_sf = mi_data,
+  quality_sf = pesticide_data,
   network_list = river_network,
   strahler_sf = strahler,
   use_strahler = FALSE,
@@ -669,8 +690,7 @@ nutrient_data <- match_upstream_strahler(
   vhas_col_biota = "vhas",
   vhas_col_quality = "vhas"
 )
-print(paste("Aantal matches:", sum(!is.na(nutrient_data$qual_meetplaats))))
-
+print(paste("Aantal matches:", sum(!is.na(pesticide_data$qual_meetplaats))))
 
 library(ggplot2)
 library(dplyr)
@@ -689,22 +709,27 @@ library(sf)
 message("--- Start Diagnose & Analyse ---")
 
 # 1. Definieer scenarios
-time_steps <- c(90, 365, 730, 1095)
+time_steps <- c(30, 90, 180, 365, 730, 1095)
 dist_steps <- c(100, 250, 500, 1000, 2500, 5000)
 
 # 2. Master Match uitvoeren (zoals eerder)
 # We zorgen dat we zeker 'mode = all' hebben
 message("1. Master Match uitvoeren...")
-master_match <- match_upstream(
+master_match <- match_upstream_strahler(
   biota_sf = mi_data %>% mutate(analyse_id = row_number()), # Zeker zijn van ID
   quality_sf = pesticide_data,
   network_list = river_network,
   max_dist_m = 5000,
   days_before = 1095,
-  days_after = 365,
+  days_after = 30,
+  max_downstream_m = 200,
   col_date_biota = "monsternamedatum",
   col_date_quality = "monsternamedatum",
-  selection_mode = "all"
+  selection_mode = "all",
+  grouping_col = "VHAG",
+  vhas_col_network = "VHAS",
+  vhas_col_biota = "vhas",
+  vhas_col_quality = "vhas"
 )
 
 # 3. Data Check & Correctie (BELANGRIJK!)
@@ -801,3 +826,119 @@ p <- ggplot(results_df, aes(x = Afstand_Max, y = Aantal_Matches, color = Label_T
 
 print(p)
 
+# ==============================================================================
+# SENSITIVITEITSANALYSE: DAGEN NA DE METING (TOEKOMST)
+# ==============================================================================
+
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(sf)
+
+message("--- Start Diagnose & Analyse (Dagen NA meting) ---")
+
+# 1. Definieer scenarios
+# We variëren nu hoeveel dagen we 'vooruit' kijken
+after_steps <- c(0, 7, 14, 30, 60, 90, 180)
+dist_steps  <- c(100, 250, 500, 1000, 2500, 5000)
+
+# We kiezen een VAST aantal dagen terug voor deze analyse
+# (zodat we puur het effect van 'vooruit kijken' zien bovenop een standaard historie)
+fixed_days_before <- 180
+
+# 2. Master Match uitvoeren
+# BELANGRIJK: Zet days_after hier op de maximale waarde van je steps (of ruimer)
+message("1. Master Match uitvoeren...")
+master_match_after <- match_upstream_strahler(
+  biota_sf = mi_data %>% mutate(analyse_id = row_number()),
+  quality_sf = pesticide_data,
+  network_list = river_network,
+  max_dist_m = 5000,
+  days_before = fixed_days_before,  # We halen op wat we minimaal nodig hebben
+  days_after = max(after_steps),    # <--- HIER ZIT DE WIJZIGING (Max bereik ophalen)
+  max_downstream_m = 200,
+  col_date_biota = "monsternamedatum",
+  col_date_quality = "monsternamedatum",
+  selection_mode = "all",
+  grouping_col = "VHAG",
+  vhas_col_network = "VHAS",
+  vhas_col_biota = "vhas",
+  vhas_col_quality = "vhas"
+)
+
+# 3. Data Check & Correctie
+master_df_after <- st_drop_geometry(master_match_after) %>%
+  filter(!is.na(qual_meetplaats)) %>%
+  mutate(
+    date_bio = as.Date(monsternamedatum),
+    date_qual = as.Date(qual_monsternamedatum),
+
+    # Bereken verschil:
+    # Positief = Kwaliteit was EERDER (historie)
+    # Negatief = Kwaliteit was LATER (toekomst/na meting)
+    diff_days = as.numeric(date_bio - date_qual),
+
+    qual_river_dist_m = as.numeric(qual_river_dist_m)
+  )
+
+message("\nSamenvatting Tijdsverschillen (Negatief = NA de biota meting):")
+print(summary(master_df_after$diff_days))
+
+# 4. De Lus voor 'Dagen Na'
+results_after_df <- data.frame()
+total_mi_points <- nrow(mi_data)
+
+message("\n2. Berekenen scenario's...")
+
+for (t_window_after in after_steps) {
+  for (d_window in dist_steps) {
+
+    # Filter logica:
+    # 1. Afstand binnen het venster
+    # 2. Historie: vastgezet op fixed_days_before (diff_days <= 180)
+    # 3. Toekomst: diff_days moet groter zijn dan -t_window_after
+    #    (bv. window 30 dagen na -> diff_days >= -30)
+
+    matches_in_scenario <- master_df_after %>%
+      filter(qual_river_dist_m <= d_window) %>%
+      filter(diff_days <= fixed_days_before & diff_days >= -t_window_after)
+
+    # Tel unieke biota punten
+    n_matches <- n_distinct(matches_in_scenario$analyse_id)
+
+    results_after_df <- rbind(results_after_df, data.frame(
+      Dagen_Na = t_window_after,
+      Afstand_Max = d_window,
+      Aantal_Matches = n_matches,
+      Percentage = (n_matches / total_mi_points) * 100
+    ))
+  }
+}
+
+# ==============================================================================
+# PLOT
+# ==============================================================================
+
+# Factor maken voor mooie sortering in legenda
+results_after_df$Label_Tijd <- factor(paste(results_after_df$Dagen_Na, "dagen na"),
+                                      levels = paste(after_steps, "dagen na"))
+
+p_after <- ggplot(results_after_df, aes(x = Afstand_Max, y = Aantal_Matches, color = Label_Tijd, group = Label_Tijd)) +
+  geom_line(linewidth = 1, alpha = 0.7, position = position_dodge(width = 0.05)) +
+  geom_point(size = 3, position = position_dodge(width = 0.05)) +
+
+  scale_x_continuous(breaks = dist_steps, guide = guide_axis(n.dodge = 2)) +
+  scale_y_continuous(limits = c(0, NA), expand = expansion(mult = c(0, 0.1))) +
+
+  scale_color_viridis_d(option = "C", end = 0.9) + # Ander kleurtje (C = Plasma) voor onderscheid
+  theme_minimal() +
+  labs(
+    title = paste0("Effect van 'Dagen Na Meting' (bij ", fixed_days_before, " dagen historie)"),
+    subtitle = "Hoeveel extra biota-punten matchen we als we ook vooruit kijken in de tijd?",
+    x = "Afstand (m)",
+    y = "Aantal Unieke Matches",
+    color = "Toegelaten dagen NA meting"
+  ) +
+  theme(legend.position = "bottom")
+
+print(p_after)

@@ -38,12 +38,13 @@ landuse_reclass <- function(data, suffix) {
       !!sym(paste0("hooggroen_", suffix)) := VALUE_2_pct + VALUE_3_pct + VALUE_4_pct + VALUE_16_pct + VALUE_21_pct,
       !!sym(paste0("laaggroen_", suffix)) := VALUE_1_pct + VALUE_6_pct + VALUE_7_pct + VALUE_8_pct + VALUE_20_pct,
       !!sym(paste0("landbouw_extensief_", suffix)) := VALUE_13_pct + VALUE_17_pct,
-      !!sym(paste0("akker_", suffix)) := VALUE_11_pct
+      !!sym(paste0("akker_", suffix)) := VALUE_11_pct,
+      !!sym(paste0("natuur_", suffix)) := VALUE_2_pct + VALUE_3_pct + VALUE_4_pct + VALUE_16_pct + VALUE_21_pct + VALUE_1_pct + VALUE_6_pct + VALUE_7_pct + VALUE_8_pct + VALUE_20_pct + VALUE_5_pct + VALUE_9_pct + VALUE_10_pct,
     ) %>%
     select(meetplaats, starts_with("water_"), starts_with("verharding_"), starts_with("natte_natuur_"),
            starts_with("landbouw_intens_"), starts_with("hooggroen_"),
            starts_with("laaggroen_"), starts_with("landbouw_extensief_"),
-           starts_with("akker_")) %>%
+           starts_with("akker_"), starts_with("natuur_")) %>%
     st_drop_geometry()
   return(data)
 }

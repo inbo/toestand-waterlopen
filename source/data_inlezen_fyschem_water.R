@@ -138,7 +138,6 @@ fc_selectie <- fc_data %>%
                                        "Zuurstof, opgelost",
                                        "Geleidbaarheid (20°C)",
                                        "Geleidbaarheid (25°C)",
-                                       "Zuurstof, opgelost",
                                        "Temperatuur",
                                        "Chloride",
                                        "Nitriet",

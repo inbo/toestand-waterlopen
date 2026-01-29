@@ -2,13 +2,22 @@ load(file = here("data", "verwerkt", "spear_data.rdata"))
 load(file = "data/temp/fc_lu_data.rdata")
 load(file = "data/verwerkt/mi_nat_sv.rdata")
 load(file = "data/verwerkt/fc_data.rdata")
+load(here("data", "verwerkt", "tu_resultaten.rdata"))
 
 data0 <- mi_nat_sv %>%
   left_join(spear_data,
             by = c("meetplaats", "monsternamedatum")) %>%
   select(mmif, ep_tw, ns_tw, mt_sw, sw_dw, ta_xw, aantal_pesticiden_met_overschrijding, meetplaats, bekken, groep, jaar, landbouw_intens_afstr, akker, intensiteit_combo, hooggroen_afstr, spear_pesticides, tu_estimated, ekc2_waterlichaam, kjn, p_t, monsternamedatum) %>%
   tidyr::drop_na() %>%
-  filter(groep == "beek")
+  filter(groep == "beek") %>%
+  left_join(mi_met_pesticide %>%
+              drop_na(qual_meetplaats) %>%
+              st_drop_geometry() %>%
+              select(meetplaats, monsternamedatum, qual_meetplaats, qual_monsternamedatum) %>%
+              mutate(qual_monsternamedatum = as.Date(qual_monsternamedatum, origin = "1970-01-01")),
+            by = c("meetplaats", "monsternamedatum")) %>%
+  left_join(tu_per_sample,
+            by = c("qual_meetplaats" = "meetplaats", "qual_monsternamedatum" = "monsternamedatum"))
 
 overschrijdingen_soorten_stoffen <- openxlsx2::read_xlsx("data/ruw/fys_chem/tabel_overschrijdingen.xlsx")
 
@@ -57,7 +66,7 @@ data <- data0 %>%
   drop_na()
 
 model_mmif <- glmmTMB(data = data0,
-                      mmif ~ scale(spear_pesticides) + scale(akker) + scale(jaar) + (1 | bekken/meetplaats),
+                      mmif ~ scale(spear_pesticides) + scale(intensiteit_combo) + scale(TU_sum) + scale(jaar) + (1 | bekken/meetplaats),
                       family = ordbeta)
 summary(model_mmif)
 sjPlot::plot_model(model_mmif, "pred")
@@ -71,8 +80,8 @@ summary(model_mmif)
 sjPlot::plot_model(model_mmif, "pred")
 simulationOutput <- simulateResiduals(model_mmif, plot = TRUE)
 
-model_spear <- glmmTMB(data = data,
-                      spear_pesticides ~ scale(intensiteit_combo) + scale(aantal_pesticiden_met_overschrijding)  + scale(jaar) + (1 | meetplaats),
+model_spear <- glmmTMB(data = data0,
+                      spear_pesticides ~ scale(TU_sum) + scale(jaar) + (1 | meetplaats),
                       family = ordbeta)
 summary(model_spear)
 
