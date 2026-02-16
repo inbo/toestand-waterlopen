@@ -21,3 +21,4 @@ docs
 libs
 output
 renv/library
+data/verwerkt/hydrologisch/dagelijkse_reeksen_per_catchment.rds

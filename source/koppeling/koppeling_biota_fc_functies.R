@@ -672,7 +672,7 @@ nutrient_results <- match_upstream_strahler(
 )
 print(paste("Aantal matches:", sum(!is.na(nutrient_results$qual_meetplaats))))
 
-pesticide_data <- match_upstream_strahler(
+pesticide_result <- match_upstream_strahler(
   biota_sf = mi_data,
   quality_sf = pesticide_data,
   network_list = river_network,
@@ -680,17 +680,17 @@ pesticide_data <- match_upstream_strahler(
   use_strahler = FALSE,
   strahler_col = "orde",
   max_dist_m = 5000,       # Max 5km stroomopwaarts
-  days_before = 180,       # Kwaliteit mag tot 180 dagen VOOR de biota meting zijn
-  days_after = 14,         # Kwaliteit mag tot 14 dagen NA de biota meting zijn
+  days_before = 730,       # Kwaliteit mag tot 180 dagen VOOR de biota meting zijn
+  days_after = 730,         # Kwaliteit mag tot 14 dagen NA de biota meting zijn
   col_date_biota = "monsternamedatum",
   col_date_quality = "monsternamedatum",
   selection_mode = "closest_distance",
-  grouping_col = "VHAG",
+  grouping_col = "WTRLICHC",
   vhas_col_network = "VHAS",
   vhas_col_biota = "vhas",
   vhas_col_quality = "vhas"
 )
-print(paste("Aantal matches:", sum(!is.na(pesticide_data$qual_meetplaats))))
+print(paste("Aantal matches:", sum(!is.na(pesticide_result$qual_meetplaats))))
 
 library(ggplot2)
 library(dplyr)

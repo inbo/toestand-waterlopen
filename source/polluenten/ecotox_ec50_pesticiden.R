@@ -321,8 +321,8 @@ pesticiden_ec50 <- pesticiden_target %>%
 # --- Resultaat Bekijken ---
 cat("\n📊 ANALYSE VOLTOOID\n")
 cat("Totaal aantal pesticiden in lijst:", nrow(pesticiden_target), "\n")
-cat("Aantal pesticiden met gevonden EC50 data:", sum(!is.na(resultaat_pesticiden$final_ec50_ug_L)), "\n")
+cat("Aantal pesticiden met gevonden EC50 data:", sum(!is.na(pesticiden_ec50$final_ec50_ug_L)), "\n")
 cat("Dekking:", round(sum(!is.na(pesticiden_ec50$final_ec50_ug_L)) / nrow(pesticiden_target) * 100, 1), "%\n")
 
 # Opslaan
-save(pesticiden_ec50, file = here("data", "verwerkt", "pesticiden_ec50.rdata"))
+save(pesticiden_ec50, file = here("data", "verwerkt", "polluenten", "pesticiden_ec50.rdata"))

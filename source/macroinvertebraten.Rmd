@@ -19,7 +19,7 @@ load(here("data", "verwerkt", "hm_data.rdata"))
 load(here("data", "verwerkt", "mi_fd.rdata"))
 
 load(file = here("data", "verwerkt", "afstroomgebieden_binnen_vlaanderen.rdata"))
-load(file = here("data", "verwerkt", "landgebruik", "landgebruik_buffer.Rdata"))
+load(file = here("data", "verwerkt", "landgebruik", "landgebruik_buffer_100m_jaren.Rdata"))
 load(file = here("data", "verwerkt", "landgebruik", "landgebruik_afstroomgebied_jaren.rdata"))
 load(file = here("data", "verwerkt", "landgebruik", "landgebruik_oever_jaren.rdata"))
 load(file = here("data", "verwerkt", "overstorten", "mi_meetpunten_aantal_overstorten_afstroomgebied.rdata"))
@@ -28,6 +28,7 @@ load(file = here("data", "verwerkt", "neerslag_beide_periodes.rdata"))
 load(here("data", "verwerkt", "landgebruik", "intensiteit_landbouw_scores.rdata"))
 load(file = here("data", "verwerkt", "tu_resultaten.rdata"))
 load(file = here("data", "verwerkt", "hydro_data.rdata"))
+load(file = here("data", "verwerkt", "spear_data.rdata"))
 
 
 # weglaten vijvers, meren, geisoleerd water en punten buiten Vlaanderen
@@ -184,6 +185,9 @@ mi_full1 <- mi_data_analyse %>%
               select(meetplaats, aantal_overstorten_500m, score_overstorten_500m),
             by = "meetplaats") %>%
   left_join(hydro_data,
+            by = c("meetplaats", "monsternamedatum")) %>%
+  left_join(spear_data %>%
+              select(meetplaats, monsternamedatum, tu_estimated, spear_pesticides),
             by = c("meetplaats", "monsternamedatum")) %>%
   filter(jaar > 2009)
 

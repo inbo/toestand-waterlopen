@@ -4,9 +4,9 @@ load("data/verwerkt/mi_nat_sv.rdata")
 source("source/inladen_packages.R")
 # Selecteer alleen de noodzakelijke variabelen en verwijder NA's
 data_sem_clean0 <- mi_nat_sv %>%
-  dplyr::select(groep, monsternamedatum, bekken, statuut, meetplaats, owl.x, ep_tw, ta_xw, ns_tw, sw_dw, mt_sw, mmif, mmif_20, n_t, ph, t_fc, ec_20_fc, o2_verz_fc, o2_fc, p_t, landbouw_intens_afstr, akker_afstr, hooggroen_afstr, hooggroen_oever, jaar, kjn, aantal_pesticiden_met_overschrijding, aantal_zware_metalen_met_overschrijding, Neerslag_som_10dagen, Neerslag_som_1jaar, ekc2_waterlichaam,ekc2_traject, aantal_overstorten_500m, score_overstorten_500m, verharding_afstr, verharding_oever, spei6, n_extreme_3m, p_sum_7d, intensiteit_combo) %>%
+  dplyr::select(groep, monsternamedatum, bekken, statuut, meetplaats, owl.x, ep_tw, ta_xw, ns_tw, sw_dw, mt_sw, mmif, mmif_20, n_t, ph, t_fc, ec_20_fc, o2_verz_fc, o2_fc, p_t, czv, natuur_oever, landbouw_intens_afstr, akker_afstr, hooggroen_afstr, hooggroen_oever, jaar, kjn, aantal_pesticiden_met_overschrijding, aantal_zware_metalen_met_overschrijding, Neerslag_som_10dagen, Neerslag_som_1jaar, ekc2_waterlichaam,ekc2_traject, aantal_overstorten_500m, score_overstorten_500m, verharding_afstr, spear_pesticides, verharding_oever, spei6, n_extreme_3m, p_sum_7d, intensiteit_combo) %>%
   tidyr::drop_na() %>%
-  filter(groep %in% c("kempen")) %>%
+  filter(groep %in% c("beek")) %>%
   mutate(across(.cols = n_t:intensiteit_combo, # Selects n_t and all columns to the end
                 .fns = ~as.numeric(scale(.x)),
                 .names = "{.col}_s"))
@@ -50,58 +50,59 @@ data_sem_clean <- data_sem_clean0 %>%
 
 # M1: N_T (Gaussian)
 m1 <- glmmTMB(data = data_sem_clean,
-              n_t_log ~ intensiteit_combo_s + ekc2_waterlichaam_s + jaar_s + spei6_s + n_extreme_3m_s + score_overstorten_500m_s + verharding_oever_s + (1 | meetplaats),
+              n_t_log ~ intensiteit_combo_s + ekc2_waterlichaam_s + jaar_s + spei6_s + n_extreme_3m_s + score_overstorten_500m_s + verharding_afstr_s + (1 | meetplaats),
               family = gaussian)
 
 
 m3 <- glmmTMB(data = data_sem_clean,
               p_t_log ~ intensiteit_combo_s + ekc2_waterlichaam_s  + n_t_log + jaar_s + score_overstorten_500m_s +
-                spei6_s + n_extreme_3m_s + natuur_oever_s  + (1 | meetplaats),
+                spei6_s + n_extreme_3m_s + verharding_afstr_s  + (1 | meetplaats),
               family = gaussian)
 
 m4 <- glmmTMB(data = data_sem_clean,
-              o2_fc_s ~  intensiteit_combo_s + p_t_log + n_t_log  + score_overstorten_500m_s +  spei6_s + n_extreme_3m_s + verharding_oever_s + ec_20_fc_s +
+              o2_verz_fc_s ~  intensiteit_combo_s + p_t_log + n_t_log  + score_overstorten_500m_s +  spei6_s + n_extreme_3m_s + verharding_afstr_s + czv_s +
                 ekc2_waterlichaam_s + jaar_s + (1 | meetplaats),
               family = gaussian)
 
 m5 <- glmmTMB(data = data_sem_clean,
-              ec_20_fc_s ~  intensiteit_combo_s + score_overstorten_500m_s +  spei6_s + n_extreme_3m_s + verharding_oever_s + p_t_log + n_t_log + ekc2_waterlichaam_s + jaar_s + (1 | meetplaats),
+              czv_s ~  intensiteit_combo_s + score_overstorten_500m_s +  spei6_s + n_extreme_3m_s + verharding_afstr_s + p_t_log + n_t_log + ekc2_waterlichaam_s + jaar_s + (1 | meetplaats),
               family = gaussian)
 
+# m2 <- glmmTMB(
+#   mmif ~ n_t_log + intensiteit_combo_s + spei6_s + n_extreme_3m_s + verharding_afstr_s  + ekc2_waterlichaam_s + o2_verz_fc_s + jaar_s + p_t_log + score_overstorten_500m_s + czv_s + (1 | meetplaats),
+#   family = ordbeta,
+#   data = data_sem_clean)
+#
 m2 <- glmmTMB(
-  mmif ~ n_t_log + intensiteit_combo_s + spei6_s + n_extreme_3m_s + verharding_oever_s  + ekc2_waterlichaam_s + o2_fc_s + jaar_s + p_t_log + score_overstorten_500m_s + ec_20_fc_s + (1 | meetplaats),
-  family = ordbeta,
-  data = data_sem_clean)
-
-m2 <- glmmTMB(
-  ept_prop ~ n_t_log + intensiteit_combo_s + spei6_s + n_extreme_3m_s + verharding_oever_s  + ekc2_waterlichaam_s + o2_fc_s + jaar_s + p_t_log + score_overstorten_500m_s + ec_20_fc_s + (1 | meetplaats),
+  ept_prop ~ n_t_log + intensiteit_combo_s + spei6_s + n_extreme_3m_s + verharding_afstr_s  + ekc2_waterlichaam_s + o2_verz_fc_s + jaar_s + p_t_log + score_overstorten_500m_s + czv_s + (1 | meetplaats),
   weights = data_sem_clean$ta_xw,
   data = data_sem_clean,
   family =  binomial)
-
-m2 <- glmmTMB(
-  ta_xw ~ n_t_log + intensiteit_combo_s + spei6_s + n_extreme_3m_s + verharding_oever_s  + ekc2_waterlichaam_s + o2_fc_s + jaar_s + p_t_log + score_overstorten_500m_s + ec_20_fc_s + (1 | meetplaats),
-  family = poisson,
-  data = data_sem_clean)
-
+#
 # m2 <- glmmTMB(
-#   mt_sw_prop ~ n_t_log + intensiteit_combo_s + spei6_s + n_extreme_3m_s + verharding_oever_s  + ekc2_waterlichaam_s + o2_fc_s + jaar_s + p_t_log + score_overstorten_500m_s + ec_20_fc_s + (1 | meetplaats),
+#   ta_xw ~ n_t_log + intensiteit_combo_s + spei6_s + n_extreme_3m_s + verharding_afstr_s  + ekc2_waterlichaam_s + o2_verz_fc_s + jaar_s + p_t_log + score_overstorten_500m_s + czv_s + (1 | meetplaats),
+#   family = poisson,
+#   data = data_sem_clean)
+#
+# m2 <- glmmTMB(
+#   mt_sw_prop ~ n_t_log + intensiteit_combo_s + spei6_s + n_extreme_3m_s + verharding_afstr_s  + ekc2_waterlichaam_s + o2_verz_fc_s + jaar_s + p_t_log + score_overstorten_500m_s + czv_s + (1 | meetplaats),
 #   family = ordbeta,
 #   data = data_sem_clean)
-# #
-# # m2 <- glmmTMB(
-# #   mt_sw ~ kjn + landbouw_intens_afstr + scaled_neerslag_jaar + scaled_neerslag_piek  + ekc2_waterlichaam + o2 + jaar_scaled + p_t  + aantal_overstorten_500m  + (1 | bekken/meetplaats),
-# #   data = data_sem_clean)
-# #
+#
 # m2 <- glmmTMB(
-#   nst_prop ~ n_t_log + intensiteit_combo_s + spei6_s + n_extreme_3m_s + verharding_oever_s  + ekc2_waterlichaam_s + o2_fc_s + jaar_s + p_t_log + score_overstorten_500m_s + ec_20_fc_s + (1 | meetplaats),
+#   sw_dw ~ n_t_log + intensiteit_combo_s + spei6_s + n_extreme_3m_s + verharding_afstr_s  + ekc2_waterlichaam_s + o2_verz_fc_s + jaar_s + p_t_log + score_overstorten_500m_s + czv_s + (1 | meetplaats),
+#   family = gaussian,
+#   data = data_sem_clean)
+#
+# m2 <- glmmTMB(
+#   nst_prop ~ n_t_log + intensiteit_combo_s + spei6_s + n_extreme_3m_s + verharding_afstr_s  + ekc2_waterlichaam_s + o2_verz_fc_s + jaar_s + p_t_log + score_overstorten_500m_s + czv_s + (1 | meetplaats),
 #   weights = data_sem_clean$ta_xw,
 #   data = data_sem_clean,
 #   family =  binomial(link = "logit"))
 # #
-
+#
 # m2 <- glmmTMB(
-#   stress_prop ~ n_t_log + intensiteit_combo_s + spei6_s + n_extreme_3m_s + verharding_oever_s  + ekc2_waterlichaam_s + o2_fc_s + jaar_s + p_t_log + score_overstorten_500m_s + ec_20_fc_s + (1 | meetplaats),
+#   stress_prop ~ n_t_log + intensiteit_combo_s + spei6_s + n_extreme_3m_s + verharding_afstr_s  + ekc2_waterlichaam_s + o2_verz_fc_s + jaar_s + p_t_log + score_overstorten_500m_s + czv_s + (1 | meetplaats),
 #   weights = data_sem_clean$ta_xw,
 #   data = data_sem_clean,
 #   family =  binomial(link = "logit"))
@@ -117,11 +118,6 @@ summary(sem_resultaat)
 # coefs(sem_resultaat)
 # plot(sem_resultaat)
 
-
-library(piecewiseSEM)
-library(dplyr)
-library(igraph)
-
 # 1️⃣ Extract coëfficiënten uit je SEM
 coefs_df <- coefs(sem_resultaat)[,-9]
 
@@ -129,35 +125,7 @@ source("source/sem/sem_standardised_coef_manually_enkel_ordbeta.R")
 
 coef_df <- coefs_df
 # 2️⃣ Filter enkel significante paden (p < 0.05)
-sig_coefs <- coef_df %>%
-  filter(P.Value < 0.05)
 
-# 3️⃣ Maak een igraph-object van de significante relaties
-g <- igraph::graph_from_data_frame(
-  d = sig_coefs %>%
-    select(Predictor, Response, Std.Estimate),
-  directed = TRUE
-)
+source(here("source", "sem", "figuur_sem.R"))
 
-# 4️⃣ Pijldikte & kleur volgens effectgrootte
-E(g)$width <- abs(sig_coefs$Std.Estimate) * 6
-E(g)$color <- ifelse(sig_coefs$Std.Estimate > 0, "darkgreen", "firebrick")
 
-# 5️⃣ Labels toevoegen met effectwaarden (afgerond)
-E(g)$label <- round(sig_coefs$Std.Estimate, 2)
-E(g)$label.cex <- 1
-E(g)$label.color <- "black"
-
-# 6️⃣ Maak een nette plot
-plot(
-  g,
-  # layout = layout_as_tree(g, root = "landbouw_intens_afstr"),
-  vertex.size = 30,
-  vertex.color = "lightblue",
-  vertex.frame.color = "grey40",
-  vertex.label.color = "black",
-  vertex.label.cex = 1.1,
-  edge.arrow.size = 0.6,
-  edge.curved = 0.1,
-  main = "Significante paden (p < 0.05) met effectgroottes"
-)

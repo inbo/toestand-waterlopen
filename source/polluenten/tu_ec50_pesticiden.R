@@ -1,5 +1,5 @@
 
-load(here("data", "verwerkt", "pesticiden_ec50.rdata"))
+load(here("data", "verwerkt", "polluenten", "pesticiden_ec50.rdata"))
 
 load(here("data", "verwerkt", "fc_data.rdata"))
 
@@ -15,7 +15,7 @@ ec50_clean <- pesticiden_ec50 %>%
   select(stof_symbool, cas, stof_naam, final_ec50_ug_L, sensitive_group, sensitive_species) %>%
   distinct(stof_symbool, .keep_all = TRUE)
 
-tu_dataset <- fc_data %>%
+tu_dataset_ruw <- fc_data %>%
   # Selecteer relevante kolommen uit meetdata
   select(meetplaats, monsternamedatum, parameter_symbool, resultaat_ug_L) %>%
 
@@ -33,7 +33,7 @@ tu_dataset <- fc_data %>%
 # STAP 3: AGGREGEREN (SOMMEREN PER STAAL)
 # -------------------------------------------------------------------------
 
-tu_per_sample <- tu_dataset %>%
+tu_per_sample <- tu_dataset_ruw %>%
   group_by(meetplaats, monsternamedatum) %>%
   summarise(
     # 1. De TU Som (msPAF benadering via Concentration Addition)
@@ -58,10 +58,10 @@ pesticiden_subtype <- chemische_stoffen %>%
   filter(type == "pesticide")
 
 classificatie_info <- pesticiden_subtype %>%
-  select(stof_symbool, subtype) %>% # Zorg dat kolomnamen matchen met tu_dataset
+  select(stof_symbool, subtype) %>% # Zorg dat kolomnamen matchen met tu_dataset_ruw
   distinct()
 
-tu_specific_groups <- tu_dataset %>%
+tu_specific_groups <- tu_dataset_ruw %>%
   # Koppel de classificatie (als die er nog niet in zat)
   left_join(classificatie_info, by = c("parameter_symbool" = "stof_symbool")) %>%
 
@@ -101,7 +101,9 @@ summary(tu_per_sample$aantal_pesticiden_gemeten, na.rm = T)
 print(tu_per_sample %>% arrange(desc(TU_sum)) %>% head(10))
 
 # Opslaan
-save(tu_per_sample, tu_dataset, file = here("data", "verwerkt", "tu_resultaten.rdata"))
+tu_pesticiden_per_sample <- tu_per_sample
+tu_pesticiden_ruw <- tu_dataset_ruw
+save(tu_pesticiden_per_sample, tu_pesticiden_ruw, file = here("data", "verwerkt", "polluenten", "tu_ec50_pesticiden.rdata"))
 
 #### Aggregatie TU pesticiden per jaar ####
 # -------------------------------------------------------------------------

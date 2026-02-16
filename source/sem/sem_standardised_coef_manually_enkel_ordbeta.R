@@ -1,6 +1,7 @@
-#
-# coefs_df <- coefs(sem_resultaat)[,-9]
-#
+# --- Check: Bevat de tabel NA's voor gestandaardiseerde estimates? ---
+# We kijken specifiek naar de kolom die je wilt invullen (meestal Std.Estimate)
+if (any(coefs_df$Std.Estimate == "-")) {
+  message("NA waarden gevonden in de estimates. Script voor ordbeta berekening wordt uitgevoerd...")
 
 # Aanname: de objecten data_sem_clean, m5 en coefs_df zijn geladen in uw R-sessie.
 
@@ -87,3 +88,9 @@ cat("----------------------------------------------------------------------\n")
 cat("--- Controle van de ingevulde Std.Estimate waarden (Rijen 8-18) ---\n")
 print(coefs_df[c(8:19), c("Response", "Predictor", "Estimate", "Std.Estimate")])
 cat("----------------------------------------------------------------------\n")
+
+} else {
+  message("Geen NA waarden gevonden. De estimates zijn al compleet. Script overgeslagen.")
+  # Optioneel: stop het script hier als je source() gebruikt
+  # stop("Script gestopt omdat data al compleet is")
+}

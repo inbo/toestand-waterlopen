@@ -1,0 +1,73 @@
+---
+title: "macroinvertebraten_sem_270126"
+author: "Emiel De Lombaerde"
+date: "2026-01-27"
+output: html_document
+---
+
+# Data inlezen + laden packages
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+source(here::here("source", "inladen_packages.R"))
+
+load(here("data", "verwerkt", "mi_data.rdata"))
+load(here("data", "verwerkt", "fc_selectie.rdata"))
+load(here("data", "verwerkt", "overschrijdingen.rdata"))
+load(here("data", "verwerkt", "hm_data.rdata"))
+load(here("data", "verwerkt", "mi_fd.rdata"))
+
+load(file = here("data", "verwerkt", "afstroomgebieden_binnen_vlaanderen.rdata"))
+load(file = here("data", "verwerkt", "landgebruik", "landgebruik_buffer.Rdata"))
+load(file = here("data", "verwerkt", "landgebruik", "landgebruik_afstroomgebied_jaren.rdata"))
+load(file = here("data", "verwerkt", "landgebruik", "landgebruik_oever_jaren.rdata"))
+load(file = here("data", "verwerkt", "overstorten", "mi_meetpunten_aantal_overstorten_afstroomgebied.rdata"))
+load(file = here("data", "verwerkt", "overstorten", "overstort_tellingen_df.rdata"))
+load(file = here("data", "verwerkt", "neerslag_beide_periodes.rdata"))
+load(here("data", "verwerkt", "landgebruik", "intensiteit_landbouw_scores.rdata"))
+load(file = here("data", "verwerkt", "tu_resultaten.rdata"))
+
+
+
+# weglaten vijvers, meren, geisoleerd water en punten buiten Vlaanderen
+mi_data_analyse <- mi_data %>%
+  filter(categorie != "Vijver") %>%
+  filter(waterlooptype != "Geïsoleerd water") %>%
+  filter(waterlichaamcategorie != "meer") %>%
+  filter(!meetplaats %in% c("OW113500", "OW12000", "OW179000", "OW536050", "OW669032", "OW690015", "OW917000", "OW981010", "OW981200"))
+
+```
+
+Koppeling via de output koppeling
+
+```{r}
+match_key_mi_pesticiden <- pesticide_result %>%
+  st_drop_geometry() %>%
+  select(
+    # De unieke ID van het MI staal (pas aan indien je een unieke ID kolom hebt, bv 'analyse_id')
+    meetplaats, monsternamedatum,
+
+    # De match resultaten (De sleutels naar de pesticiden data)
+    qual_meetplaats, qual_monsternamedatum,
+
+    # Metadata over de match (optioneel, maar handig voor filtering later)
+    qual_river_dist_m, qual_n_matches
+  ) %>%
+  mutate(
+    monsternamedatum = as.Date(monsternamedatum),
+    qual_monsternamedatum = as.Date(qual_monsternamedatum)
+  )
+
+gekoppelde_data_mi_tu <- mi_nat_sv %>%
+  # 1. Koppel de match-informatie aan je MI data
+  # (Zodat we weten WELK pesticiden staal bij welk MI staal hoort)
+  left_join(match_key_mi_pesticiden, by = c("meetplaats", "monsternamedatum")) %>%
+
+  # 2. Koppel nu de daadwerkelijke pesticiden waarden
+  # LET OP DE 'BY': We koppelen de 'qual_' kolommen van links aan de originele kolommen van rechts
+  left_join(tu_pesticiden_per_sample,
+            by = c("qual_meetplaats" = "meetplaats",
+                   "qual_monsternamedatum" = "monsternamedatum"))
+```
+
