@@ -754,7 +754,7 @@ mi_met_overstort_druk_blootstelling <- calculate_upstream_pressure(
   col_net_discharge = "VHAS"   # Kolom in netwerk voor lozingen
 ) %>%
   rename(overstorten_blootstelling_index = sum_ie_weighted,
-         count_cso_weighted = count_sources)
+         aantal_overstorten_weighted = count_sources)
 
 ###########################################
 # Data joinen voor SEM
