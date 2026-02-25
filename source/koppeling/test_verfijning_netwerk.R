@@ -1,14 +1,6 @@
 library(sf)
 library(dplyr)
-# Installeer lwgeom als je die nog niet hebt: install.packages("lwgeom")
 library(lwgeom)
-
-library(sf)
-library(dplyr)
-library(lwgeom)
-
-hpunt <- st_read("data/ruw/vmm/elina_koppeling/input NARA/input NARA/hpten.shp", quiet = TRUE) %>%
-  st_transform(st_crs(fd_fine))
 
 split_lines_equal_length <- function(lines_sf, max_length = 200) {
 
