@@ -6,7 +6,7 @@ source("source/inladen_packages.R")
 data_sem_clean0 <- mi_nat_sv %>%
   dplyr::select(groep, monsternamedatum, bekken, statuut, meetplaats, owl.x, ep_tw, ta_xw, ns_tw, sw_dw, mt_sw, mmif, mmif_20, n_t, ph, t_fc, ec_20_fc, o2_verz_fc, o2_fc, p_t, czv, natuur_oever, landbouw_intens_afstr, akker_afstr, hooggroen_afstr, hooggroen_oever, jaar, kjn, aantal_pesticiden_met_overschrijding, aantal_zware_metalen_met_overschrijding, Neerslag_som_10dagen, Neerslag_som_1jaar, ekc2_waterlichaam, ekc2_traject, sinuositeit, aantal_overstorten_500m, score_overstorten_500m, overstorten_index, overstorten_blootstelling_index, lozingen_rwzi_ie, lozingen_rwzi_p_t, lozingen_riool_ie, lozingen_industrie_ie, verharding_afstr, spear_pesticides, verharding_oever, spei6, n_extreme_3m, p_sum_7d, intensiteit_combo) %>%
   tidyr::drop_na() %>%
-  filter(groep %in% c("polder")) %>%
+  filter(groep %in% c("beek")) %>%
   mutate(across(.cols = n_t:intensiteit_combo, # Selects n_t and all columns to the end
                 .fns = ~as.numeric(scale(.x)),
                 .names = "{.col}_s"))
