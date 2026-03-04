@@ -1,6 +1,7 @@
 # Installeer en laad benodigde packages als ze nog niet geïnstalleerd zijn
-source(here::here("source", "inladen_packages.R"))
-
+if (!exists("packages_geladen")) {
+  source(here::here("source", "inladen_packages.R"))
+}
 # Laad de benodigde data
 load(here("data", "verwerkt", "mi_data.rdata"))
 
@@ -44,6 +45,8 @@ hydmo_variabelen <- hydromorf_nieuw_traject %>%
 meetpunten_prep <- mi_meetpunten %>%
   mutate(vhag = as.character(vhag))
 
+st_crs(mi_meetpunten) == st_crs(hydmo_variabelen)
+
 #---------------------------------------------------------------------------------------------------
 # Stap 2: Koppeling meetpunten aan alle mogelijke trajecten via vhag
 #---------------------------------------------------------------------------------------------------
@@ -55,97 +58,78 @@ meetpunten_met_trajecten <- meetpunten_prep %>%
               mutate(vhag = as.character(vhag)), by = "vhag")
 
 #---------------------------------------------------------------------------------------------------
-# Stap 3: Vind het dichtstbijzijnde traject per meetpunt binnen dezelfde vhag
-# Belangrijk!
-# De code groepeert de data per meetpunt en selecteert het dichtstbijzijnde traject.
+# STAP 3: Hybride koppeling (VHAG eerst, daarna Afstand)
 #---------------------------------------------------------------------------------------------------
 
-hydromorf_traject_vhag <- meetpunten_prep %>%
-  # Gebruik `nest_by` om een geneste dataset te maken per meetplaats
-  nest_by(meetplaats) %>%
-  # Itereren over elke geneste dataset
-  mutate(gekoppeld = list(
-    data %>%
-      mutate(
-        # Filter de hydmolaag op de vhag van het meetpunt
-        vhag_hydmo = list(hydmo_variabelen %>%
-                                filter(vhag == data$vhag)),
-        # Zoek het dichtstbijzijnde morfotype binnen deze vhag-subset
-        nearest_index = ifelse(nrow(vhag_hydmo[[1]]) > 0,
-                               st_nearest_feature(., vhag_hydmo[[1]]),
-                               NA_integer_)
-      ) %>%
-      # Voeg de variabelen van het dichtstbijzijnde traject toe
-      bind_cols(hydmo_variabelen[.$nearest_index, ] %>%
-                  st_drop_geometry() %>%
-                  select(traj_code, ekc_r, sin_s3, opst_sco_t, stroomsnelheid_kmu, rec_width, bd_depth, bd_wd_rat, ekc_r_owl2_sgbp4, pt_sco_r, bs_sco_r, dh_sco_r)) %>%
-      # Selecteer de relevante kolommen en maak de output 'plat'
-      ungroup()
-  )) %>%
-  # Unnest om terug te keren naar een enkel dataframe
-  unnest(gekoppeld) %>%
-  ungroup() %>%
-  # Selecteer de uiteindelijke kolommen
-  select(meetplaats, owl, traj_code, ekc2_traject = ekc_r,
-         ekc2_waterlichaam = ekc_r_owl2_sgbp4,
-         profiel = pt_sco_r,
-         bodemsub = bs_sco_r,
-         sinuositeit = sin_s3,
-         doodhout = dh_sco_r,
-         verstuwing = opst_sco_t,
-         stroomsnelheid = stroomsnelheid_kmu,
-         breedte = rec_width,
-         diepte = bd_depth,
-         breedte_diepte_ratio = bd_wd_rat)
+# 1. Voorbereiding: zorg voor SF objecten en consistent CRS
+meetpunten_sf <- meetpunten_prep %>% st_as_sf()
+hydmo_sf <- hydmo_variabelen %>% st_as_sf()
+
+# Controleer of CRS gelijk is (cruciaal voor st_distance)
+if(st_crs(meetpunten_sf) != st_crs(hydmo_sf)) {
+  meetpunten_sf <- st_transform(meetpunten_sf, st_crs(hydmo_sf))
+}
+
+# 2. De koppelingsfunctie
+hm_gekoppeld_totaal <- meetpunten_sf %>%
+  split(.$meetplaats) %>%
+  purrr::map_dfr(function(punt) {
+
+    # --- POGING 1: Match op basis van VHAG ---
+    doel_vhag <- as.character(punt$vhag)
+    trajecten_vhag_subset <- hydmo_sf %>% filter(as.character(vhag) == doel_vhag)
+
+    match_gevonden <- FALSE
+    res <- NULL
+
+    if (nrow(trajecten_vhag_subset) > 0) {
+      idx <- st_nearest_feature(punt, trajecten_vhag_subset)
+      res <- bind_cols(st_drop_geometry(punt),
+                       st_drop_geometry(trajecten_vhag_subset[idx, ]) %>% select(-vhag))
+      match_gevonden <- TRUE
+    }
+
+    # --- POGING 2: Match op basis van afstand (indien poging 1 mislukte) ---
+    if (!match_gevonden) {
+      # Zoek het absoluut dichtstbijzijnde traject in de GEHELE hydmo-laag
+      idx_nearest <- st_nearest_feature(punt, hydmo_sf)
+      afstand <- st_distance(punt, hydmo_sf[idx_nearest, ])
+
+      if (as.numeric(afstand) <= 25) {
+        res <- bind_cols(st_drop_geometry(punt),
+                         st_drop_geometry(hydmo_sf[idx_nearest, ]) %>% select(-vhag))
+        # Optioneel: vlag toevoegen dat dit via afstand is gebeurd
+        res$koppelmethode <- "afstand_25m"
+      } else {
+        # Echt geen match gevonden binnen 25m
+        res <- st_drop_geometry(punt)
+        res$koppelmethode <- "geen_match"
+      }
+    } else {
+      res$koppelmethode <- "vhag_match"
+    }
+
+    return(res)
+  })
+
+# 3. Opschonen en hernoemen naar jouw format
+hm_data0 <- hm_gekoppeld_totaal %>%
+  rename(
+    ekc2_traject = ekc_r,
+    ekc2_waterlichaam = ekc_r_owl2_sgbp4,
+    profiel = pt_sco_r,
+    bodemsub = bs_sco_r,
+    sinuositeit = sin_s3,
+    doodhout = dh_sco_r,
+    verstuwing = opst_sco_t,
+    stroomsnelheid = stroomsnelheid_kmu,
+    breedte = rec_width,
+    diepte = bd_depth,
+    breedte_diepte_ratio = bd_wd_rat
+  )
 
 #---------------------------------------------------------------------------------------------------
-# Stap 4: Koppelen ekc2 op waterlichaamniveau (niet meer nodig want zit ook in de
-#trajectendata van hierboven)
-#---------------------------------------------------------------------------------------------------
-# deze zou beter beeld kunnen geven dan lokale toestand
-
-hm_data0 <- hydromorf_traject_vhag
-# %>%
-#   left_join(., hydromorf_nieuw_waterloop %>%
-#               select(owl_code, ekc_r_owl2),
-#             by = c("owl" = "owl_code")) %>%
-#   rename(ekc2_waterlichaam = ekc_r_owl2)
-#
-# #---------------------------------------------------------------------------------------------------
-# # Stap 5: Meetplaatsen met NA (traj_code) via vhag koppelen op afstand 20m
-# #---------------------------------------------------------------------------------------------------
-# #controleren op kaart en lijken goed gekoppelde punten op afstand 20m
-#
-# missing_values <- hm_data0 %>%
-#   select(-geometry) %>%
-#   left_join(., mi_meetpunten) %>%
-#   st_as_sf %>%
-#   filter(is.na(traj_code)) %>%
-#   select(meetplaats)
-# mapview(missing_values) + mapview(hydromorf_nieuw)
-#
-# nearest_river_index <- st_nearest_feature(missing_values, hydromorf_nieuw)
-# distances <- st_distance(missing_values, hydromorf_nieuw[nearest_river_index, ], by_element = TRUE)
-#
-# # Assign NA for points further than tolerance
-# tolerance <- 25
-# nearest_river_index[as.numeric(distances) > tolerance] <- NA
-#
-# missing_values$traj_code <- as.character(hydromorf_nieuw$traj_code[nearest_river_index])
-#
-# hydmo_gekoppeld_afstand <- missing_values %>%
-#   left_join(., hydmo_variabelen %>%
-#               st_drop_geometry() %>%
-#               select(traj_code, ekc_r, sin_s3, opst_sco_t, stroomsnelheid_kmu, rec_width, bd_depth, bd_wd_rat))
-#
-# hydmo_gekoppeld_afstand$traj_code %>% is.na() %>% sum
-#
-#
-# dot <- hydmo_gekoppeld_afstand %>% filter(!is.na(traj_code))
-# mapview(dot) + mapview(hydromorf_nieuw_traject)
-
-#---------------------------------------------------------------------------------------------------
-# Stap 6: Opslaan data
+# Stap 4: Opslaan data
 #---------------------------------------------------------------------------------------------------
 
 hm_data <- hm_data0 %>%
