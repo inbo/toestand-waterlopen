@@ -2,8 +2,6 @@ source(here::here("source", "inladen_packages.R"))
 
 # data en functies inlezen
 
-
-
 fd <- st_read(here("data", "ruw", "netwerk", "Flow_direction_coordinates.shp"), quiet = T) %>%
   mutate(VHAS = as.character(VHAS),
          VHAG = as.character(VHAG))
@@ -350,6 +348,16 @@ zuiveringsgraad_vlaanderen <- tribble(
   2024,  88
 )
 
+gemeentes <- st_read("data/ruw/vlaanderen/Refgem_2022.shp", quiet = T) %>%
+  st_transform(crs = st_crs(fd))
+zuiveringsgraad_gemeentes <- read_excel("data/ruw/lozingen/zuiveringsgraad/AWIS_Riolerings- en zuiveringsgraden per gemeente - Jaren.xlsx") %>%
+  pivot_longer(., cols = 2:13, names_to = "jaar", values_to = "zuiveringsgraad")
+
+zuiveringsgraad <- gemeentes %>%
+  # st_drop_geometry() %>%
+  left_join(zuiveringsgraad_gemeentes,
+            by = c("NAAM" = "gemeente"))
+
 riool_proxy_2021 <- riool_ie_resultaat %>%
   filter(jaar == 2021) %>%
   # We groeperen voor de zekerheid op h_punt_nummer
@@ -364,23 +372,50 @@ riool_proxy_2021 <- riool_ie_resultaat %>%
     .groups = "drop"
   )
 
-# Haal het percentage van 2021 op als referentie
-perc_2021 <- zuiveringsgraad_vlaanderen %>%
-  filter(jaar == 2021) %>%
-  pull(percentage)
+zuiveringsgraad_clean <- zuiveringsgraad %>%
+  mutate(jaar = as.numeric(jaar),
+         zuiveringsgraad = zuiveringsgraad * 100) %>%
+  select(NAAM, jaar, zuiveringsgraad)
 
-riool_dynamisch_sf <- riool_proxy_2021 %>%
-  # Koppel alle jaren aan de 2021-data
-  tidyr::crossing(zuiveringsgraad_vlaanderen) %>%
-  # Bereken de geschaalde IE
-  # We berekenen de factor: (onbehandeld deel jaar X) / (onbehandeld deel 2021)
+riool_proxy_2021_sf <- riool_proxy_2021 %>%
+  st_as_sf(coords = c("x", "y"), crs = 31370, remove = FALSE) %>%
+  # Ruimtelijke join: welk punt ligt in welke gemeente?
+  st_join(gemeentes %>% select(NAAM), join = st_intersects)
+
+ref_2021_gemeente <- zuiveringsgraad_clean %>%
+  st_drop_geometry() %>%
+  filter(jaar == 2021) %>%
+  select(NAAM, zuiveringsgraad_2021 = zuiveringsgraad)
+
+# 4. De dynamische tijdreeks opbouwen
+riool_dynamisch_sf <- riool_proxy_2021_sf %>%
+  # 1. Koppel de referentiewaarde van 2021 van de specifieke gemeente
+  left_join(ref_2021_gemeente, by = "NAAM") %>%
+  # 2. Maak voor elk punt een rij voor elk beschikbaar jaar in de data
+  st_drop_geometry() %>% # even drop voor de crossing (sneller)
+  tidyr::crossing(jaar_calc = unique(zuiveringsgraad_clean$jaar)) %>%
+  # 3. Koppel de zuiveringsgraad van dat specifieke jaar en die gemeente
+  left_join(zuiveringsgraad_clean %>% st_drop_geometry(),
+            by = c("NAAM", "jaar_calc" = "jaar")) %>%
+  # 4. Bereken de dynamische IE op basis van gemeentelijke parameters
+  # Factor: (onbehandeld deel jaar X in gemeente) / (onbehandeld deel 2021 in gemeente)
   mutate(
-    schaal_factor = (100 - percentage) / (100 - perc_2021),
+    schaal_factor = (100 - zuiveringsgraad) / (100 - zuiveringsgraad_2021),
+    # Indien een gemeente 100% zuivering heeft (factor wordt 0) of data mist:
+    schaal_factor = ifelse(is.infinite(schaal_factor) | is.na(schaal_factor), 1, schaal_factor),
     ie_dynamisch = ie_meetput * schaal_factor
   ) %>%
-  # Maak het klaar voor de functie
-  select(h_punt_nummer, jaar, ie_waarde = ie_dynamisch, x, y, vhag, vhas) %>%
+  # 5. Afronden en opschonen
+  select(h_punt_nummer,
+         jaar = jaar_calc,
+         ie_waarde = ie_dynamisch,
+         x, y, vhag, vhas,
+         gemeente = NAAM) %>%
   st_as_sf(coords = c("x", "y"), crs = 31370)
+
+# Controleer het resultaat
+message("Dynamische riool-data gegenereerd op gemeenteniveau.")
+print(head(riool_dynamisch_sf))
 
 ### 2. optie door enkel 2018 te gebruiken over alle jaren
 

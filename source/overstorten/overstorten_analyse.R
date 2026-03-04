@@ -38,13 +38,13 @@ vuilvracht_data <- mi_nat_sv %>%
   mutate(ta_xw = as.integer(ta_xw),
          ep_tw = as.integer(ep_tw),
          ns_tw = as.integer(ns_tw)) %>%
-  select(starts_with("cum_"), ta_xw, mmif, mt_sw, ns_tw, ep_tw, bekken, meetplaats, o2) %>%
+  select(starts_with("cum_"), ta_xw, mmif, mt_sw, ns_tw, ep_tw, bekken, meetplaats, o2_verz) %>%
   filter(if_all(everything(), ~ !is.na(.))) %>%
   filter(cum_gewogen_BZV < 1000)
 
 
 model_vuilvracht <- glmmTMB(mmif ~
-                         scale(cum_gewogen_BZV)  + scale(o2) +
+                         scale(cum_gewogen_BZV)  + scale(o2_verz) +
                          (1 | bekken),
                        data = vuilvracht_data,
                       control = glmmTMBControl(optCtrl = list(iter.max = 5000, eval.max = 5000)))

@@ -108,7 +108,7 @@ print(samenvatting)
 # =====================================================================
 
 # Zorg dat overstorten in hetzelfde CRS staan
-overstorten_uitlaat_vha_prio_score <- st_transform(overstorten_uitlaat_vha_prio_score, st_crs(afstroomgebied_buffered_100m))
+overstorten_uitlaat_vha__score <- st_transform(overstorten_uitlaat_vha__score, st_crs(afstroomgebied_buffered_100m))
 
 # Definieer buffers en bijhorende objectnamen
 buffer_afstanden <- c(100, 250, 500, 1000, 2500, 5000)
@@ -122,7 +122,7 @@ tel_overstorten_per_buffer <- function(buffer_obj, afstand) {
 
   # Voer de ruimtelijke kruising uit
   # Dit geeft een lijst terug. Element 1 bevat de rij-nummers van overstorten in buffer 1, etc.
-  intersecties <- st_intersects(afstroom, overstorten_uitlaat_vha_prio_score)
+  intersecties <- st_intersects(afstroom, overstorten_uitlaat_vha__score)
 
   # Berekening 1: Aantal (Telling)
   aantallen <- lengths(intersecties)
@@ -134,7 +134,7 @@ tel_overstorten_per_buffer <- function(buffer_obj, afstand) {
       return(0)
     } else {
       # Haal de specifieke rijen op en sommeer de kolom
-      return(sum(overstorten_uitlaat_vha_prio_score$Blootstellingsfactor[indices], na.rm = TRUE))
+      return(sum(overstorten_uitlaat_vha__score$overstort_risk_score[indices], na.rm = TRUE))
     }
   })
 
@@ -217,228 +217,3 @@ ggplot(overstort_tellingen_long, aes(x = buffer_m, y = aantal_overstorten, group
     x = "Bufferafstand (m)",
     y = "Aantal overstorten"
   )
-
-#####
-# Analyse
-##########
-load(file = here("data", "verwerkt", "overstorten", "overstort_tellingen_df.rdata"))
-
-load(here("data", "verwerkt", "mi_nat_sv.rdata"))
-
-data_model <- overstort_tellingen_df %>%
-  # select(meetplaats, aantal_overstorten_250m) %>%
-  # mutate(pa_overstort_250m = as.factor(if_else(aantal_overstorten_250m > 0, 1, 0)),
-  #        aantal_overstorten_250m = as.factor(aantal_overstorten_250m)) %>%
-  right_join(mi_nat_sv, by = "meetplaats") %>%
-  select(meetplaats, bekken, jaar, groep, mmif, ta_xw, ep_tw, ns_tw, mt_sw, sw_dw, kjn, n_t, p_t, o2, ec_20, landbouw_intens_afstr, hooggroen_afstr, verharding_afstr, aantal_overstorten_500m.x, score_overstorten_500m) %>%
-  filter(if_all(everything(), ~ !is.na(.))) %>%
-  mutate(ep_tw = as.integer(ep_tw),
-         ta_xw = as.integer(ta_xw))
-
-model_mmif <- glmmTMB(mmif ~
-                              groep * (pa_overstort_250m + scale(jaar) + scale(verharding_afstr)) +
-                              (1 | bekken/meetplaats),
-                            data = data_model
-                            )
-summary(model_mmif)
-plot_model(model_mmif, "pred", terms = c("pa_overstort_250m", "groep"))
-
-model_ept <- glmmTMB(ep_tw ~
-                        pa_overstort_250m + scale(jaar) + scale(verharding_afstr) +
-                        (1 | bekken/meetplaats),
-                       family = poisson,
-                      data = data_model %>%
-                       filter(!groep %in% c("rivier", "polder"))
-
-)
-
-summary(model_ept)
-plot_model(model_ept, "pred", terms = c("pa_overstort_250m"))
-
-model_mt_sw <- glmmTMB(mt_sw ~
-                         pa_overstort_250m + scale(jaar) + scale(verharding_afstr) +
-                         (1 | bekken/meetplaats),
-                       data = data_model %>%
-                         filter(!groep %in% c("rivier", "polder"))
-
-)
-
-summary(model_ept)
-plot_model(model_ept, "pred", terms = c("pa_overstort_250m"))
-
-model_tax <- glmmTMB(ta_xw ~
-                       groep * (pa_overstort_250m + scale(jaar) + scale(verharding_afstr)) +
-                       (1 | bekken/meetplaats),
-                     family = poisson,
-                     data = data_model
-)
-
-summary(model_tax)
-plot_model(model_tax, "pred", terms = c("pa_overstort_250m", "groep"))
-
-model_o2 <- glmmTMB(o2 ~
-                       groep * (pa_overstort_250m + scale(jaar) + scale(verharding_afstr)) +
-                       (1 | bekken/meetplaats),
-                    data = data_model
-)
-
-summary(model_o2)
-plot_model(model_o2, "pred", terms = c("pa_overstort_250m", "groep"))
-
-model_kjn <- glmmTMB(kjn ~
-                      groep * (pa_overstort_250m + scale(jaar) + scale(verharding_afstr)) +
-                      (1 | bekken/meetplaats),
-                    data = data_model
-)
-
-summary(model_kjn)
-plot_model(model_kjn, "pred", terms = c("pa_overstort_250m", "groep"))
-
-
-data_model <- overstort_tellingen_df %>%
-  # select(meetplaats, aantal_overstorten_250m, aantal_overstorten_1000m) %>%
-  # mutate(pa_overstort_250m = as.factor(if_else(aantal_overstorten_250m > 0, 1, 0))) %>%
-         # mutate(aantal_overstorten_250m = as.factor(aantal_overstorten_250m)) %>%
-  right_join(mi_nat_sv %>%
-               select(-aantal_overstorten_500m), by = "meetplaats") %>%
-  select(meetplaats, bekken, jaar, groep, mmif, ta_xw, ep_tw, ns_tw, mt_sw, sw_dw, n_t, kjn, p_t, o2, ec_20, landbouw_intens_afstr, hooggroen_afstr, verharding_afstr,aantal_overstorten_500m, score_overstorten_500m, aantal_overstorten_100m, score_overstorten_100m) %>%
-  filter(if_all(everything(), ~ !is.na(.))) %>%
-  mutate(ep_tw = as.integer(ep_tw),
-         ta_xw = as.integer(ta_xw),
-         ns_tw = as.integer(ns_tw))
-
-model_mmif_beek_kempen <- glmmTMB(mmif ~
-                        scale(score_overstorten_100m) + scale(jaar) + scale(verharding_afstr) +
-                        (1 | bekken/meetplaats),
-                        family = ordbeta,
-                      data = data_model %>%
-                        filter(!groep %in% c("rivier", "polder"))
-)
-summary(model_mmif_beek_kempen)
-plot_model(model_mmif_beek_kempen, "pred", terms = c("aantal_overstorten_500m"))
-simulationOutput <- simulateResiduals(fittedModel = model_mmif_beek_kempen, plot = F)
-plot(simulationOutput)
-
-
-model_mts_beek_kempen <- glmmTMB(mt_sw ~
-                                    scale(score_overstorten_100m) + scale(jaar) + scale(verharding_afstr) + scale(n_t) + scale(o2) +
-                                    (1 | bekken/meetplaats),
-                                 family = ordbeta(),
-                                  data = data_model %>%
-                                    filter(!groep %in% c("rivier", "polder")) %>%
-                                             mutate(mt_sw = mt_sw/10))
-summary(model_mts_beek_kempen)
-plot_model(model_mts_beek_kempen, "pred", terms = c("aantal_overstorten_500m"))
-
-model_swd_beek_kempen <- glmmTMB(sw_dw ~
-                                   scale(aantal_overstorten_500m) + scale(jaar) + scale(verharding_afstr) + scale(n_t) + scale(o2) +
-                                   (1 | bekken/meetplaats),
-                                  data = data_model %>%
-                                   filter(!groep %in% c("rivier", "polder")) %>%
-                                   mutate(mt_sw = mt_sw/10))
-summary(model_swd_beek_kempen)
-
-plot(model_mts_beek_kempen)
-
-simulationOutput <- simulateResiduals(fittedModel = model_mts_beek_kempen, plot = F)
-plot(simulationOutput)
-testDispersion(simulationOutput) # geen overdispersie
-testZeroInflation(simulationOutput) # geen zero_inflation
-testUniformity(simulationOutput)
-
-model_ept_beek_kempen <- glmmTMB(ep_tw/ta_xw ~
-                                   scale(score_overstorten_100m) + scale(jaar) + scale(verharding_afstr) + scale(n_t) + scale(o2) +
-                                   (1 | bekken/meetplaats),
-                                 family = binomial(),
-                                 weights = ta_xw,
-                                 data = data_model %>%
-                                   filter(!groep %in% c("rivier", "polder")) %>%
-                                   mutate(mt_sw = mt_sw/10))
-summary(model_ept_beek_kempen)
-plot_model(model_ept_beek_kempen, "pred", terms = c("aantal_overstorten_500m"))
-simulationOutput <- simulateResiduals(fittedModel = model_ept_beek_kempen, plot = F)
-plot(simulationOutput)
-
-model_tax_beek_kempen <- glmmTMB(ta_xw ~
-                                   scale(score_overstorten_100m) + scale(jaar) + scale(verharding_afstr) + scale(n_t) + scale(o2) +
-                                   (1 | bekken/meetplaats),
-                                 family = poisson(),
-                                 data = data_model %>%
-                                   filter(!groep %in% c("rivier", "polder")) %>%
-                                   mutate(mt_sw = mt_sw/10))
-summary(model_tax_beek_kempen)
-plot_model(model_tax_beek_kempen, "pred", terms = c("aantal_overstorten_500m"))
-simulationOutput <- simulateResiduals(fittedModel = model_ept_beek_kempen, plot = F)
-plot(simulationOutput)
-
-model_nst_beek_kempen <- glmmTMB(ns_tw/ta_xw ~ scale(score_overstorten_100m) + scale(jaar) + scale(verharding_afstr) + scale(n_t) + scale(o2) + (1 | bekken/meetplaats),
-                                 family = binomial(),
-                                 weights = ta_xw,
-                                 data = data_model %>%
-                                   filter(!groep %in% c("rivier", "polder")) %>%
-                                   mutate(n_stress = as.integer(ep_tw + ns_tw)) %>%
-                                   mutate(mt_sw = mt_sw/10))
-summary(model_nst_beek_kempen)
-plot_model(model_nst_beek_kempen, "pred", terms = c("score_overstorten_100m"))
-simulationOutput <- simulateResiduals(fittedModel = model_ept_beek_kempen, plot = F)
-plot(simulationOutput)
-testZeroInflation(simulationOutput)
-
-
-
-model_stress_beek_kempen <- glmmTMB(n_stress ~
-                                      scale(score_overstorten_100m) + scale(jaar) + scale(verharding_afstr) + scale(n_t) + scale(o2) + scale(ec_20) +
-                                      (1 | bekken/meetplaats),
-                                    family = binomial,
-                                    weights = ta_xw,
-                                    data = data_model %>%
-                                      filter(!groep %in% c("rivier", "polder")) %>%
-                                      mutate(n_stress = (ep_tw + ns_tw) / ta_xw) %>%
-                                      mutate(mt_sw = mt_sw/10))
-summary(model_stress_beek_kempen)
-plot_model(model_stress_beek_kempen, "pred", terms = c("score_overstorten_100m"))
-simulationOutput <- simulateResiduals(fittedModel = model_stress_beek_kempen, plot = F)
-plot(simulationOutput)
-
-model_stikstof_beek_kempen <- glmmTMB(log(n_t) ~
-                                      scale(score_overstorten_500m) + scale(jaar) + scale(verharding_afstr) + scale(o2) + scale(ec_20) +
-                                      (1 | bekken/meetplaats),
-                                    family = gaussian,
-                                   data = data_model %>%
-                                      filter(!groep %in% c("rivier", "polder")) %>%
-                                      mutate(n_stress = (ep_tw + ns_tw) / ta_xw) %>%
-                                      mutate(mt_sw = mt_sw/10))
-summary(model_stikstof_beek_kempen)
-plot_model(model_stikstof_beek_kempen, "pred", terms = c("score_overstorten_500m"))
-
-# overdispersion
-
-model_stress_beek_kempen <- glmmTMB(cbind(n_stress, ta_xw - n_stress) ~
-                                      scale(aantal_overstorten_500m) + scale(jaar) + scale(hooggroen_afstr) + scale(n_t) + scale(o2) +
-                                      (1 | meetplaats),
-                                    family = betabinomial,
-                                    data = data_model %>%
-                                      filter(!groep %in% c("rivier", "polder")) %>%
-                                      mutate(n_stress = as.integer(ep_tw + ns_tw)) %>%
-                                      mutate(mt_sw = mt_sw/10))
-summary(model_stress_beek_kempen)
-plot_model(model_stress_beek_kempen, "pred", terms = c("aantal_overstorten_500m"))
-plot_model(model_stress_beek_kempen, "pred", terms = c("aantal_overstorten_500m"))
-simulationOutput <- simulateResiduals(fittedModel = model_stress_beek_kempen, plot = F)
-plot(simulationOutput)
-
-
-model_stress_beek_kempen_positief <- glmmTMB(n_stress ~
-                                      scale(aantal_overstorten_500m) + scale(jaar) + scale(hooggroen_afstr) + scale(n_t) + scale(o2) + scale(ec_20) +
-                                      (1 | bekken/meetplaats),
-                                    family = betabinomial,
-                                    weights = ta_xw,
-                                    data = data_model %>%
-                                      filter(!groep %in% c("rivier", "polder")) %>%
-                                      mutate(n_stress = (ep_tw + ns_tw) / ta_xw) %>%
-                                      mutate(mt_sw = mt_sw/10))
-summary(model_stress_beek_kempen_positief)
-plot_model(model_stress_beek_kempen_positief, "pred", terms = c("aantal_overstorten_500m"))
-simulationOutput <- simulateResiduals(fittedModel = model_stress_beek_kempen_positief, plot = F)
-plot(simulationOutput)
-
