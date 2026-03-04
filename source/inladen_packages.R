@@ -25,14 +25,19 @@ library(performance)
 library(car)
 library(DHARMa)
 library(MuMIn)
+library(progress)
 library(knitr)
 library(corrplot)
 library(glue)
 library(piecewiseSEM)
 library(data.table)
 library(igraph)
+library(lwgeom)
+
 
 conflicted::conflict_prefer("select", "dplyr")
 conflicted::conflict_prefer("read_xlsx", "readxl")
 conflicted::conflicts_prefer(dplyr::filter)
 conflicted::conflicts_prefer(lmerTest::lmer)
+
+packages_geladen <- TRUE
