@@ -1,5 +1,7 @@
 # Installeer en laad benodigde packages als ze nog niet geïnstalleerd zijn
-source(here::here("source", "inladen_packages.R"))
+if (!exists("packages_geladen")) {
+  source(here::here("source", "inladen_packages.R"))
+}
 
 # Laad de benodigde data
 load(here("data", "verwerkt", "mi_data.rdata"))
@@ -16,6 +18,7 @@ meetpunten_rtnt <- mi_data_analyse %>%
   filter(type == "RtNt") %>%
   select(meetplaats, type, categorie, waterlooptype, vhag) %>%
   unique()
+
 # %>%
 #   filter(meetplaats %in% c("OW10005", "OW150500" , "OW115200", "OW196000", "OW695120", "OW897005", "OW190260")) # testje met twee NA en twee handmatig uit rtnt2script
 
@@ -40,7 +43,7 @@ tijdsreeks_rtnt <- mi_data_analyse %>%
 print(tijdsreeks_rtnt)
 hist(tijdsreeks_rtnt$n)
 
-#NVT
+#NVT -> Niet geclasseerde grachten, weining metingen achter 2010
 NVT <- mi_data_analyse %>% filter(type == "NVT")
 NVT %>% group_by(meetplaats) %>% summarise(n(),jaren = paste(unique(jaar), collapse = ", ")) %>% View()
 mapview(NVT) + mapview(wlas)

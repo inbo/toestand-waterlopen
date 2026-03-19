@@ -33,6 +33,9 @@ library(piecewiseSEM)
 library(data.table)
 library(igraph)
 library(lwgeom)
+library(corrr)
+library(patchwork)
+library(parallel)
 
 
 conflicted::conflict_prefer("select", "dplyr")

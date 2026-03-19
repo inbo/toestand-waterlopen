@@ -1,4 +1,6 @@
-source(here::here("source", "inladen_packages.R"))
+if (!exists("packages_geladen")) {
+  source(here::here("source", "inladen_packages.R"))
+}
 conflicted::conflicts_prefer(lubridate::year)
 # --- 1. Instellingen en Data Inladen ---
 
@@ -63,7 +65,11 @@ for (j in jaren) {
   # Optimalisatie: Filter percelen ruimtelijk
   # We houden alleen percelen over die daadwerkelijk een buffer raken
   # Dit voorkomt dat we heel Vlaanderen intersecten met een paar puntjes
-  percelen_sf_cropped <- percelen_sf[st_intersects(percelen_sf, st_union(buffers_jaar), sparse = FALSE)[,1], ]
+  # percelen_sf_cropped <- percelen_sf[st_intersects(percelen_sf, st_union(buffers_jaar), sparse = FALSE)[,1], ]
+
+  # Bepaal welke percelen de oeverzones van dit jaar raken
+  percelen_sf_cropped <- percelen_sf %>%
+    st_filter(buffers_jaar, .predicate = st_intersects)
 
   # Koppel scores
   percelen_met_scores <- percelen_sf_cropped %>%
@@ -107,7 +113,7 @@ intensiteit_landbouw_buffers <- bind_rows(resultaten_lijst)
 
 # Omdat buffers die GEEN landbouw bevatten niet in de intersectie voorkomen,
 # missen die nu in de resultaten. We voegen die terug toe met waarde 0.
-intensiteit_landbouw_compleet <- buffers_sf %>%
+intensiteit_landbouw_buffer_100m_jaren <- buffers_sf %>%
   st_drop_geometry() %>%
   left_join(intensiteit_landbouw_buffers, by = c("meetplaats", "monsternamedatum")) %>%
   mutate(
@@ -116,8 +122,8 @@ intensiteit_landbouw_compleet <- buffers_sf %>%
   )
 
 cat("\n✅ Scores Landbouwintensiteit voor buffers succesvol berekend.\n")
-print(head(intensiteit_landbouw_compleet))
+print(head(intensiteit_landbouw_buffer_100m_jaren))
 
 # Opslaan met dynamische naam o.b.v. straal
 bestandsnaam <- paste0("intensiteit_landbouw_scores_buffer_", straal, "m.rdata")
-save(intensiteit_landbouw_compleet, file = here("data", "verwerkt", "landgebruik", bestandsnaam))
+save(intensiteit_landbouw_buffer_100m_jaren, file = here("data", "verwerkt", "landgebruik", bestandsnaam))

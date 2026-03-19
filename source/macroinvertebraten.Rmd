@@ -29,6 +29,7 @@ load(here("data", "verwerkt", "landgebruik", "intensiteit_landbouw_scores.rdata"
 load(file = here("data", "verwerkt", "tu_resultaten.rdata"))
 load(file = here("data", "verwerkt", "hydro_data.rdata"))
 load(file = here("data", "verwerkt", "spear_data.rdata"))
+load(file = here("data", "verwerkt", "lozingen_data.rdata"))
 
 
 # weglaten vijvers, meren, geisoleerd water en punten buiten Vlaanderen
@@ -188,6 +189,8 @@ mi_full1 <- mi_data_analyse %>%
             by = c("meetplaats", "monsternamedatum")) %>%
   left_join(spear_data %>%
               select(meetplaats, monsternamedatum, tu_estimated, spear_pesticides),
+            by = c("meetplaats", "monsternamedatum")) %>%
+  left_join(lozingen_data,
             by = c("meetplaats", "monsternamedatum")) %>%
   filter(jaar > 2009)
 

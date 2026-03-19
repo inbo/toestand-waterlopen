@@ -15,7 +15,7 @@ fd <- st_read(here("data", "ruw", "netwerk", "Flow_direction_coordinates.shp"), 
 nodes <- st_read(here("data", "ruw", "waterlopen", "vha_network_junctions.shp"), quiet = T)
 
 hpunt <- st_read("data/ruw/vmm/elina_koppeling/input NARA/input NARA/hpten.shp", quiet = TRUE) %>%
-  st_transform(st_crs(fd_fine))
+  st_transform(st_crs(fd))
 
 strahler <- st_read("data/ruw/waterlopen/strahler_orde.shp") %>%
   st_transform(., crs = st_crs(fd))
@@ -59,6 +59,23 @@ pesticide_data <- st_read(here("data", "verwerkt", "koppeling", "pesticide_meetp
   left_join(meetnetten %>%
               select(vhas, nummer),
             by = c("meetplaats" = "nummer"))
+
+if (!file.exists(here("data", "verwerkt", "koppeling", "chlora_meetpunten_datum.gpkg"))) {
+  load(here("data", "verwerkt", "fc_selectie.rdata"))
+  fc_meetpunten_datum <- st_read(here("data", "ruw", "fys_chem", "fc_meetpunten.gpkg"), quiet = T) %>%
+    filter(monsternamedatum > '2007-12-31')
+  chlora_meetpunten_datum <- fc_selectie %>%
+    filter(!is.na(clfyl_a)) %>%
+    select(meetplaats, monsternamedatum) %>%
+    left_join(fc_meetpunten_datum,
+              by = c("meetplaats", "monsternamedatum"))
+  st_write(chlora_meetpunten_datum, dsn = here("data", "verwerkt", "koppeling", "chlora_meetpunten_datum.gpkg"))
+}
+
+chlora_data <- st_read(dsn = here("data", "verwerkt", "koppeling", "chlora_meetpunten_datum.gpkg"), quiet = T) %>%
+  left_join(meetnetten %>%
+              select(vhas, nummer),
+            by = c("meetplaats" = "nummer")) # om N en P te koppelen aan MI. Dataset met alle observaties (meetplaats, monsternamedatum, locatie)
 
 # netwerk bouwen
 build_river_network <- function(lines_sf, nodes_sf) {
@@ -147,9 +164,6 @@ split_lines_equal_length <- function(lines_sf, max_length = 200) {
 
   message(" -> Geometrieën daadwerkelijk knippen (dit kan even duren)...")
 
-  # --- FIX: GEBRUIK MAPPLY VOOR VEILIGE VERWERKING ---
-  # We voeren de functie regel voor regel uit om de vector-fout te voorkomen.
-
   list_geoms <- mapply(
     function(geom, f_start, f_end) {
       st_linesubstring(geom, from = f_start, to = f_end, tolerance = 0.001)
@@ -226,8 +240,8 @@ build_river_network_auto_nodes <- function(lines_sf) {
   coords_end   <- st_coordinates(p_end)
 
   # Maak Node ID's (afgerond op 1mm)
-  node_id_start <- paste(round(coords_start[,1], 3), round(coords_start[,2], 3), sep="_")
-  node_id_end   <- paste(round(coords_end[,1], 3),   round(coords_end[,2], 3),   sep="_")
+  node_id_start <- paste(round(coords_start[,1], 3), round(coords_start[,2], 3), sep = "_")
+  node_id_end   <- paste(round(coords_end[,1], 3),   round(coords_end[,2], 3),   sep = "_")
 
   # --- STAP 2: ATTRIBUTEN ---
 
@@ -254,8 +268,8 @@ river_network_fine <- build_river_network_auto_nodes(fd_fine)
 
 # strahler mag maar 1 verschillen, grouping_col -> puntn moeten tot zelfde groep behoren ("VHAG" of "WTRLICH" (owl)); selection_mode = "aggregate" -> om een gemiddelde of min of max (aggr_method) van alle matches te nemen voor een variabele (aggr_cols)
 
-match_upstream_strahler <- function(biota_sf,
-                                    quality_sf,
+match_upstream_strahler <- function(biota_sf, # meetpunten biota
+                                    quality_sf, # meetpunten te koppelen variabelen
                                     network_list,
                                     discharge_sf = NULL, # hier kan je Hpunt of andere lozingslagen toevoegen
                                     strahler_sf = NULL,
@@ -264,8 +278,8 @@ match_upstream_strahler <- function(biota_sf,
                                     max_dist_m = 5000,
                                     max_downstream_m = 200,   # NIEUW: Max afstand vogelvlucht (ook downstream)
                                     snap_tolerance = 25,
-                                    days_before = 14,
-                                    days_after = 30,
+                                    days_before = 30,
+                                    days_after = 10,
                                     col_date_biota = "monsternamedatum",
                                     col_date_quality = "monsternamedatum",
                                     selection_mode = "closest_distance",
@@ -602,6 +616,30 @@ pesticide_result <- match_upstream_strahler(
   vhas_col_quality = "vhas"
 )
 print(paste("Aantal matches:", sum(!is.na(pesticide_result$qual_meetplaats))))
+
+koppeling_mi_chlora <- match_upstream_strahler(
+  biota_sf = mi_data,
+  quality_sf = chlora_data,
+  network_list = river_network_fine,
+  strahler_sf = strahler,
+  use_strahler = FALSE,
+  strahler_col = "orde",
+  max_downstream_m = 200,
+  max_dist_m = 5000,       # Max 5km stroomopwaarts
+  days_before = 180,       # Kwaliteit mag tot 180 dagen VOOR de biota meting zijn
+  days_after = 30,         # Kwaliteit mag tot 30dagen NA de biota meting zijn
+  col_date_biota = "monsternamedatum",
+  col_date_quality = "monsternamedatum",
+  selection_mode = "closest_distance", # neemt dichtste punt
+  grouping_col = "VHAG", # moeten op zelfde vhag segment liggen
+  vhas_col_network = "VHAS",
+  vhas_col_biota = "vhas",
+  vhas_col_quality = "vhas"
+)
+print(paste("Aantal matches:", sum(!is.na(koppeling_mi_chlora$qual_meetplaats))))
+
+save(koppeling_mi_chlora, file = "data/verwerkt/koppeling/koppeling_mi_chlora.rdata")
+
 
 # ==============================================================================
 # OPTIMALE TIJD EN AFSTANDSVENSTER analyses
