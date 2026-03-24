@@ -47,6 +47,8 @@ data_subset <- mi_nat_sv_beek %>%
 
 # 1. Definieer je ruwe lijsten met variabelen (nog niet gefilterd)
 # -----------------------------------------------------------
+raw_responses <- c("mmif", "ta_xw", "ns_tw", "mt_sw", "ep_tw", "sw_dw", "stress_prop")
+
 raw_fysico        <- c("t_s", "p_h_s", "o2_s", "ec_20_s", "zs_s") # o2_verz_s weg en keuze o2
 raw_nutrients     <- c("czv_log", "n_t_log", "no2_log", "no3_log", "nh4_log", "p_t_log")
 raw_hydmo         <- c("breedte_diepte_ratio_s", "sinuositeit_s", "bodemsub_s", "doodhout_s", "profiel_s", "ekc2_waterlichaam_s", "ekc2_traject_s", "stroomsnelheid_s")
@@ -57,6 +59,8 @@ raw_klimaat       <- c("spei6_s", "n_extreme_3m_s", "p_sum_7d_s")
 # ==============================================================================
 # FUNCTIE: MAAK EEN MOOI CORRELOGRAM
 # ==============================================================================
+
+plot_groep_correlogram(data_subset, raw_responses, "Responsen (Beken)")
 
 plot_groep_correlogram(data_subset, raw_fysico, "Fysico-chemie basisvariablen (Beken)")
 plot_groep_correlogram(data_subset, raw_lozingen, "Lozingen & Overstorten (Beken)")
@@ -78,181 +82,111 @@ clean_klimaat       <- filter_collinear_vars(data_subset, raw_klimaat)
 raw_all <- c(clean_fysico, clean_nutrients, clean_landuse, clean_hydmo, clean_lozingen, clean_klimaat)
 clean_all <- filter_collinear_vars(data_subset, raw_all)
 
+# cat("\n--- Screening voor Biologie (MMIF) ---\n")
+# # Stel dat N_T en O2 de belangrijkste chemische variabelen bleken:
+# vars_voor_bio <- c(clean_nutrients, clean_fysico, clean_lozingen, clean_hydmo, clean_landuse, clean_klimaat)
+#
+# res_mmif <- screen_predictors(
+#   data = data_subset %>% drop_na,
+#   response_var = "mmif",
+#   candidate_vars = vars_voor_bio,
+#   family = glmmTMB::ordbeta # Of gaussian voor snelle check
+# )
+# print(head(res_mmif, 10))
+#
+# data_subset2 <- data_subset %>%
+#   na.omit
+# res_mmif_no_na <- screen_predictors(
+#   data = data_subset2,
+#   response_var = "mmif",
+#   candidate_vars = clean_all,
+#   family = glmmTMB::ordbeta # Of gaussian voor snelle check
+# )
+# print(head(res_mmif_no_na, 10))
+#
+#
+# hydmo_test <- glmmTMB(mmif ~ breedte_diepte_ratio_s + sinuositeit_s + bodemsub_s + doodhout_s + profiel_s + ekc2_waterlichaam_s + ekc2_traject_s + stroomsnelheid_s, data = data_subset2)
 
-# 4. STAP B: Selectie per SEM-pad (Screening)
-# -----------------------------------------------------------
-
-# --- PATH 1: Nutriënten (N_T) ---
-# Hypothese: Gedreven door Afstroomgebied Landgebruik + Lozingen
-cat("\n--- Screening voor Nutriënten (N_T) ---\n")
-res_nt <- screen_predictors(
-  data = data_subset,
-  response_var = "n_t_log",
-  candidate_vars = c(clean_landuse, clean_lozingen, clean_klimaat), # GEEN oever hier
-  family = gaussian
-)
-print(head(res_nt, 5))
-
-# --- PATH 2: Zuurstof (O2) ---
-# Hypothese: Gedreven door Nutriënten (algen), Organische belasting (CZV) & Fysica (Temp/Stroming)
-# We testen hier welke nutriënt/fysica variabelen het beste werken
-cat("\n--- Screening voor Zuurstof (O2) ---\n")
-res_o2 <- screen_predictors(
-  data = data_subset,
-  response_var = "o2_verz_s",
-  candidate_vars = c("n_t_log", "p_t_log", "czv_s", "t_s", "stroomsnelheid_s"),
-  family = gaussian
-)
-print(head(res_o2, 5))
-
-
-# --- PATH 3: Biologie (MMIF) ---
-# Hypothese: Gedreven door:
-# 1. Chemie (selecteer de winnaars van hierboven, bvb n_t_log en o2)
-# 2. Water Habitat (uit clean_habitat)
-# 3. Oever Habitat (uit clean_land_oever -> DIRECT effect op adulten)
-# 4. Klimaat (uit raw_klimaat)
-
-cat("\n--- Screening voor Biologie (MMIF) ---\n")
-# Stel dat N_T en O2 de belangrijkste chemische variabelen bleken:
-vars_voor_bio <- c(clean_nutrients, clean_fysico, clean_lozingen, clean_hydmo, clean_landuse, clean_klimaat)
-
-res_mmif <- screen_predictors(
-  data = data_subset %>% drop_na,
-  response_var = "mmif",
-  candidate_vars = vars_voor_bio,
-  family = glmmTMB::ordbeta # Of gaussian voor snelle check
-)
-print(head(res_mmif, 10))
+plot_model_vif(hydmo_test, "VIF Check: Hydmo Model") # "intensiteit_combo_oeverzone_s" weggelaten
 
 data_subset2 <- data_subset %>%
+  select(
+    meetplaats, monsternamedatum, jaar_s,
+    mmif, ept_prop, ta_xw, sw_dw, mt_sw_prop, nst_prop, stress_prop,
+    n_t_log, p_t_log, czv_log,
+    ekc2_waterlichaam_s,
+    all_of(clean_klimaat),
+    all_of(clean_lozingen),
+    all_of(clean_landuse),
+    all_of(clean_fysico),
+  ) %>%
   na.omit
-res_mmif_no_na <- screen_predictors(
-  data = data_subset2,
-  response_var = "mmif",
-  candidate_vars = clean_all,
-  family = glmmTMB::ordbeta # Of gaussian voor snelle check
-)
-print(head(res_mmif_no_na, 10))
-
-# Installeer de packages als je ze nog niet hebt:
-# install.packages(c("performance", "ggplot2", "scales"))
-
-library(performance)
-library(ggplot2)
-library(dplyr)
-
-# ==============================================================================
-# FUNCTIE: MAAK EEN VIF BARCHART VOOR EEN FIT MODEL
-# ==============================================================================
-
-
-# 1. Fit je geselecteerde model
-m_habitat <- glmmTMB(
-  mmif ~ verharding_afstr_s + intensiteit_combo_afstr_s + verharding_oever_s + natuur_oever_s +
-    jaar_s,
-  data = data_subset,
-  family = gaussian,
-  na.action = "na.omit"
-)
-summary(m_habitat)
-# 2. Check de VIF visueel
-plot_model_vif(m_habitat, "VIF Check: Habitat Model")
-
-m_hydmo <- glmmTMB(
-  mmif ~ breedte_diepte_ratio_s + sinuositeit_s + bodemsub_s + doodhout_s + profiel_s + ekc2_waterlichaam_s + stroomsnelheid_s + jaar_s,
-  data = data_subset,
-  family = glmmTMB::ordbeta,
-  REML = FALSE
-)
-
-m_hydmo <- glmmTMB(
-  mmif ~ breedte_diepte_ratio_s + doodhout_s + profiel_s + ekc2_waterlichaam_s + stroomsnelheid_s + jaar_s,
-  data = data_subset,
-  family = glmmTMB::ordbeta,
-  REML = FALSE
-)
-
-summary(m_hydmo)
-plot_model_vif(m_hydmo, "VIF Check: Hydmo Model")
-check_outliers(data_subset2$n_t)
 
 ################################################################################
-# model fitten BIOLOGIE
+# model fitten MMIF
 ################################################################################
 
-data_subset2 <- data_subset %>%
-  na.omit
-options(na.action = "na.fail") # Verplicht voor dredge
-
-mmif_variabelen <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s", "profiel_s", "breedte_diepte_ratio_s")
-
-x_vars_schoon <- setdiff(mmif_variabelen, "jaar_s")
-
-# 2. Plak alle overgebleven voorspellers (X) aan elkaar met een " + "
-x_string <- paste(x_vars_schoon, collapse = " + ")
 y_var <- "mmif"
+predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s")
 
-# 3. Bouw de formule: Y ~ X'en + vaste jaar_s + random meetplaats
-# (Als x_string leeg is, fit hij netjes alleen jaar_s en het random effect)
-if (nchar(x_string) > 0) {
-  formule_string <- paste(y_var, "~", x_string, "+ jaar_s + (1 | meetplaats)")
-} else {
-  formule_string <- paste(y_var, "~ jaar_s + (1 | meetplaats)")
-}
+source(here("source", "analyse", "sem", "dredge_formula.R"))
 
-# Zet de tekst om naar een échte R-formule
-formula_obj <- as.formula(formule_string)
+options(na.action = "na.fail") # Verplicht voor dredge
+model <- glmmTMB(data = data_subset2, formula = formula_obj,
+                 REML = FALSE,
+                 family = ordbeta)
 
+source(here("source" , "analyse", "sem", "dredge.R"))
 
-m_mmif <- glmmTMB(data = data_subset2, formula = formula_obj,
-                  REML = FALSE,
-                  family = ordbeta)
-
-model_family <- ordbeta
-# --- START TIMER ---
-start_tijd <- Sys.time()
-cat("Timer gestart om:", format(start_tijd, "%H:%M:%S"), "\n")
-
-aantal_cores <- detectCores() - 1
-cat("We gaan parallel rekenen op", aantal_cores, "cores...\n")
-
-# STAP 2 & 3: Cluster opzetten met een NIEUWE NAAM
-mijn_cluster <- makeCluster(aantal_cores)
-
-# Exporteer naar de nieuwe clusternaam
-clusterExport(mijn_cluster, varlist = c("data_subset2", "m_mmif"))
-
-clusterEvalQ(mijn_cluster, {
-  library(glmmTMB)
-  options(na.action = "na.fail")
-})
-
-cat("Dredge is bezig over meerdere cores...\n")
-
-
-dredge_model <- dredge(
-  global.model = m_mmif,
-  cluster = mijn_cluster,     # <--- Hier geven we het door
-  rank = "AICc",
-  m.lim = c(1, 6),
-  fixed = "cond(jaar_s)",
-  trace = 2
-)
-
-# STAP 5: Netjes opruimen
-stopCluster(mijn_cluster)
-options(na.action = "na.omit")
-
-# --- STOP TIMER ---
-eind_tijd <- Sys.time()
-cat("\n--- KLAAR! ---\n")
-cat("Totale rekentijd: ")
-print(eind_tijd - start_tijd)
-cat("----------------\n\n")
-
-print(head(dredge_model, 10))
 mmif_dredge <- dredge_model
+# m_mmif <- glmmTMB(data = data_subset2, formula = formula_obj,
+#                   REML = FALSE,
+#                   family = ordbeta)
+#
+#
+# # --- START TIMER ---
+# start_tijd <- Sys.time()
+# cat("Timer gestart om:", format(start_tijd, "%H:%M:%S"), "\n")
+#
+# aantal_cores <- detectCores() - 1
+# cat("We gaan parallel rekenen op", aantal_cores, "cores...\n")
+#
+# # STAP 2 & 3: Cluster opzetten met een NIEUWE NAAM
+# mijn_cluster <- makeCluster(aantal_cores)
+#
+# # Exporteer naar de nieuwe clusternaam
+# clusterExport(mijn_cluster, varlist = c("data_subset2", "m_mmif"))
+#
+# clusterEvalQ(mijn_cluster, {
+#   library(glmmTMB)
+#   options(na.action = "na.fail")
+# })
+#
+# cat("Dredge is bezig over meerdere cores...\n")
+#
+#
+# dredge_model <- dredge(
+#   global.model = m_mmif,
+#   cluster = mijn_cluster,     # <--- Hier geven we het door
+#   rank = "AICc",
+#   m.lim = c(1, 4),
+#   fixed = "cond(jaar_s)",
+#   trace = 2
+# )
+#
+# # STAP 5: Netjes opruimen
+# stopCluster(mijn_cluster)
+# options(na.action = "na.omit")
+#
+# # --- STOP TIMER ---
+# eind_tijd <- Sys.time()
+# cat("\n--- KLAAR! ---\n")
+# cat("Totale rekentijd: ")
+# print(eind_tijd - start_tijd)
+# cat("----------------\n\n")
+#
+# print(head(dredge_model, 10))
+# mmif_dredge <- dredge_model
 
 # 1. Haal het absolute topmodel (nummer 1) uit je dredge object
 # subset = 1 pakt de bovenste rij (laagste AICc)
@@ -271,17 +205,570 @@ summary(mmif_best_model_REML)
 
 plot_model_vif(best_model_REML, "VIF Check: Hydmo Model") # "intensiteit_combo_oeverzone_s" weggelaten
 
+################################################################################
+# model fitten EPT
+################################################################################
+
+options(na.action = "na.fail") # Verplicht voor dredge
+
+ept_variabelen <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s")
+
+x_vars_schoon <- setdiff(ept_variabelen, "jaar_s")
+
+# 2. Plak alle overgebleven voorspellers (X) aan elkaar met een " + "
+x_string <- paste(x_vars_schoon, collapse = " + ")
+y_var <- "ept_prop"
+
+# 3. Bouw de formule: Y ~ X'en + vaste jaar_s + random meetplaats
+# (Als x_string leeg is, fit hij netjes alleen jaar_s en het random effect)
+if (nchar(x_string) > 0) {
+  formule_string <- paste(y_var, "~", x_string, "+ jaar_s + (1 | meetplaats)")
+} else {
+  formule_string <- paste(y_var, "~ jaar_s + (1 | meetplaats)")
+}
+
+# Zet de tekst om naar een échte R-formule
+formula_obj <- as.formula(formule_string)
+
+
+m_ept <- glmmTMB(data = data_subset2, formula = formula_obj,
+                  REML = FALSE,
+                  family = binomial(link = "logit"),
+                 weights = data_subset2$ta_xw)
+
+
+# --- START TIMER ---
+start_tijd <- Sys.time()
+cat("Timer gestart om:", format(start_tijd, "%H:%M:%S"), "\n")
+
+aantal_cores <- detectCores() - 1
+cat("We gaan parallel rekenen op", aantal_cores, "cores...\n")
+
+# STAP 2 & 3: Cluster opzetten met een NIEUWE NAAM
+mijn_cluster <- makeCluster(aantal_cores)
+
+# Exporteer naar de nieuwe clusternaam
+clusterExport(mijn_cluster, varlist = c("data_subset2", "m_ept"))
+
+clusterEvalQ(mijn_cluster, {
+  library(glmmTMB)
+  options(na.action = "na.fail")
+})
+
+cat("Dredge is bezig over meerdere cores...\n")
+
+
+dredge_model <- dredge(
+  global.model = m_ept,
+  cluster = mijn_cluster,     # <--- Hier geven we het door
+  rank = "AICc",
+  m.lim = c(1, 4),
+  fixed = "cond(jaar_s)",
+  trace = 2
+)
+
+# STAP 5: Netjes opruimen
+stopCluster(mijn_cluster)
+options(na.action = "na.omit")
+
+# --- STOP TIMER ---
+eind_tijd <- Sys.time()
+cat("\n--- KLAAR! ---\n")
+cat("Totale rekentijd: ")
+print(eind_tijd - start_tijd)
+cat("----------------\n\n")
+
+print(head(dredge_model, 10))
+ept_dredge <- dredge_model
+
+# 1. Haal het absolute topmodel (nummer 1) uit je dredge object
+# subset = 1 pakt de bovenste rij (laagste AICc)
+best_model_ML <- get.models(ept_dredge, subset = 1)[[1]]
+
+# 2. Update het model naar REML = TRUE
+# De update() functie neemt je ML-model, behoudt de winnende formule,
+# maar herberekent de wiskunde onder de motorkap via REML.
+ept_best_model_REML <- update(best_model_ML, REML = TRUE)
+
+# 3. Bekijk je definitieve, publiceerbare sub-model
+summary(ept_best_model_REML)
+
+# 4. Check (optioneel) of je residuals nu mooi verdeeld zijn
+# DHARMa::simulateResiduals(best_model_REML, plot = TRUE)
+
+plot_model_vif(ept_best_model_REML , "VIF Check") # "intensiteit_combo_oeverzone_s" weggelaten
+
+################################################################################
+# model fitten tax
+################################################################################
+
+options(na.action = "na.fail") # Verplicht voor dredge
+
+tax_variabelen <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s")
+
+x_vars_schoon <- setdiff(tax_variabelen, "jaar_s")
+
+# 2. Plak alle overgebleven voorspellers (X) aan elkaar met een " + "
+x_string <- paste(x_vars_schoon, collapse = " + ")
+y_var <- "ta_xw"
+
+# 3. Bouw de formule: Y ~ X'en + vaste jaar_s + random meetplaats
+# (Als x_string leeg is, fit hij netjes alleen jaar_s en het random effect)
+if (nchar(x_string) > 0) {
+  formule_string <- paste(y_var, "~", x_string, "+ jaar_s + (1 | meetplaats)")
+} else {
+  formule_string <- paste(y_var, "~ jaar_s + (1 | meetplaats)")
+}
+
+# Zet de tekst om naar een échte R-formule
+formula_obj <- as.formula(formule_string)
+
+
+m_tax <- glmmTMB(data = data_subset2, formula = formula_obj,
+                 REML = FALSE,
+                 family = poisson)
+
+
+# --- START TIMER ---
+start_tijd <- Sys.time()
+cat("Timer gestart om:", format(start_tijd, "%H:%M:%S"), "\n")
+
+aantal_cores <- detectCores() - 1
+cat("We gaan parallel rekenen op", aantal_cores, "cores...\n")
+
+# STAP 2 & 3: Cluster opzetten met een NIEUWE NAAM
+mijn_cluster <- makeCluster(aantal_cores)
+
+# Exporteer naar de nieuwe clusternaam
+clusterExport(mijn_cluster, varlist = c("data_subset2", "m_tax"))
+
+clusterEvalQ(mijn_cluster, {
+  library(glmmTMB)
+  options(na.action = "na.fail")
+})
+
+cat("Dredge is bezig over meerdere cores...\n")
+
+
+dredge_model <- dredge(
+  global.model = m_tax,
+  cluster = mijn_cluster,     # <--- Hier geven we het door
+  rank = "AICc",
+  m.lim = c(1, 4),
+  fixed = "cond(jaar_s)",
+  trace = 2
+)
+
+# STAP 5: Netjes opruimen
+stopCluster(mijn_cluster)
+options(na.action = "na.omit")
+
+# --- STOP TIMER ---
+eind_tijd <- Sys.time()
+cat("\n--- KLAAR! ---\n")
+cat("Totale rekentijd: ")
+print(eind_tijd - start_tijd)
+cat("----------------\n\n")
+
+print(head(dredge_model, 10))
+tax_dredge <- dredge_model
+
+# 1. Haal het absolute topmodel (nummer 1) uit je dredge object
+# subset = 1 pakt de bovenste rij (laagste AICc)
+best_model_ML <- get.models(tax_dredge, subset = 1)[[1]]
+
+# 2. Update het model naar REML = TRUE
+# De update() functie neemt je ML-model, behoudt de winnende formule,
+# maar herberekent de wiskunde onder de motorkap via REML.
+tax_best_model_REML <- update(best_model_ML, REML = TRUE)
+
+# 3. Bekijk je definitieve, publiceerbare sub-model
+summary(tax_best_model_REML)
+
+# 4. Check (optioneel) of je residuals nu mooi verdeeld zijn
+# DHARMa::simulateResiduals(best_model_REML, plot = TRUE)
+
+plot_model_vif(tax_best_model_REML , "VIF Check") # "intensiteit_combo_oeverzone_s" weggelaten
+
+################################################################################
+# model fitten nst
+################################################################################
+
+options(na.action = "na.fail") # Verplicht voor dredge
+
+nst_variabelen <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s")
+
+x_vars_schoon <- setdiff(nst_variabelen, "jaar_s")
+
+# 2. Plak alle overgebleven voorspellers (X) aan elkaar met een " + "
+x_string <- paste(x_vars_schoon, collapse = " + ")
+y_var <- "nst_prop"
+
+# 3. Bouw de formule: Y ~ X'en + vaste jaar_s + random meetplaats
+# (Als x_string leeg is, fit hij netjes alleen jaar_s en het random effect)
+if (nchar(x_string) > 0) {
+  formule_string <- paste(y_var, "~", x_string, "+ jaar_s + (1 | meetplaats)")
+} else {
+  formule_string <- paste(y_var, "~ jaar_s + (1 | meetplaats)")
+}
+
+# Zet de tekst om naar een échte R-formule
+formula_obj <- as.formula(formule_string)
+
+
+m_nst <- glmmTMB(data = data_subset2, formula = formula_obj,
+                 REML = FALSE,
+                 family = binomial(link = "logit"),
+                 weights = data_subset2$ta_xw)
+
+
+# --- START TIMER ---
+start_tijd <- Sys.time()
+cat("Timer gestart om:", format(start_tijd, "%H:%M:%S"), "\n")
+
+aantal_cores <- detectCores() - 1
+cat("We gaan parallel rekenen op", aantal_cores, "cores...\n")
+
+# STAP 2 & 3: Cluster opzetten met een NIEUWE NAAM
+mijn_cluster <- makeCluster(aantal_cores)
+
+# Exporteer naar de nieuwe clusternaam
+clusterExport(mijn_cluster, varlist = c("data_subset2", "m_nst"))
+
+clusterEvalQ(mijn_cluster, {
+  library(glmmTMB)
+  options(na.action = "na.fail")
+})
+
+cat("Dredge is bezig over meerdere cores...\n")
+
+
+dredge_model <- dredge(
+  global.model = m_nst,
+  cluster = mijn_cluster,     # <--- Hier geven we het door
+  rank = "AICc",
+  m.lim = c(1, 4),
+  fixed = "cond(jaar_s)",
+  trace = 2
+)
+
+# STAP 5: Netjes opruimen
+stopCluster(mijn_cluster)
+options(na.action = "na.omit")
+
+# --- STOP TIMER ---
+eind_tijd <- Sys.time()
+cat("\n--- KLAAR! ---\n")
+cat("Totale rekentijd: ")
+print(eind_tijd - start_tijd)
+cat("----------------\n\n")
+
+print(head(dredge_model, 10))
+nst_dredge <- dredge_model
+
+# 1. Haal het absolute topmodel (nummer 1) uit je dredge object
+# subset = 1 pakt de bovenste rij (laagste AICc)
+best_model_ML <- get.models(nst_dredge, subset = 1)[[1]]
+
+# 2. Update het model naar REML = TRUE
+# De update() functie neemt je ML-model, behoudt de winnende formule,
+# maar herberekent de wiskunde onder de motorkap via REML.
+nst_best_model_REML <- update(best_model_ML, REML = TRUE)
+
+# 3. Bekijk je definitieve, publiceerbare sub-model
+summary(nst_best_model_REML)
+
+# 4. Check (optioneel) of je residuals nu mooi verdeeld zijn
+# DHARMa::simulateResiduals(best_model_REML, plot = TRUE)
+
+plot_model_vif(nst_best_model_REML , "VIF Check") # "intensiteit_combo_oeverzone_s" weggelaten
+
+################################################################################
+# model fitten stress
+################################################################################
+
+options(na.action = "na.fail") # Verplicht voor dredge
+
+stress_variabelen <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s")
+
+x_vars_schoon <- setdiff(stress_variabelen, "jaar_s")
+
+# 2. Plak alle overgebleven voorspellers (X) aan elkaar met een " + "
+x_string <- paste(x_vars_schoon, collapse = " + ")
+y_var <- "stress_prop"
+
+# 3. Bouw de formule: Y ~ X'en + vaste jaar_s + random meetplaats
+# (Als x_string leeg is, fit hij netjes alleen jaar_s en het random effect)
+if (nchar(x_string) > 0) {
+  formule_string <- paste(y_var, "~", x_string, "+ jaar_s + (1 | meetplaats)")
+} else {
+  formule_string <- paste(y_var, "~ jaar_s + (1 | meetplaats)")
+}
+
+# Zet de tekst om naar een échte R-formule
+formula_obj <- as.formula(formule_string)
+
+
+m_stress <- glmmTMB(data = data_subset2, formula = formula_obj,
+                 REML = FALSE,
+                 family = binomial(link = "logit"),
+                 weights = data_subset2$ta_xw)
+
+
+# --- START TIMER ---
+start_tijd <- Sys.time()
+cat("Timer gestart om:", format(start_tijd, "%H:%M:%S"), "\n")
+
+aantal_cores <- detectCores() - 1
+cat("We gaan parallel rekenen op", aantal_cores, "cores...\n")
+
+# STAP 2 & 3: Cluster opzetten met een NIEUWE NAAM
+mijn_cluster <- makeCluster(aantal_cores)
+
+# Exporteer naar de nieuwe clusternaam
+clusterExport(mijn_cluster, varlist = c("data_subset2", "m_stress"))
+
+clusterEvalQ(mijn_cluster, {
+  library(glmmTMB)
+  options(na.action = "na.fail")
+})
+
+cat("Dredge is bezig over meerdere cores...\n")
+
+
+dredge_model <- dredge(
+  global.model = m_stress,
+  cluster = mijn_cluster,     # <--- Hier geven we het door
+  rank = "AICc",
+  m.lim = c(1, 4),
+  fixed = "cond(jaar_s)",
+  trace = 2
+)
+
+# STAP 5: Netjes opruimen
+stopCluster(mijn_cluster)
+options(na.action = "na.omit")
+
+# --- STOP TIMER ---
+eind_tijd <- Sys.time()
+cat("\n--- KLAAR! ---\n")
+cat("Totale rekentijd: ")
+print(eind_tijd - start_tijd)
+cat("----------------\n\n")
+
+print(head(dredge_model, 10))
+stress_dredge <- dredge_model
+
+# 1. Haal het absolute topmodel (nummer 1) uit je dredge object
+# subset = 1 pakt de bovenste rij (laagste AICc)
+best_model_ML <- get.models(stress_dredge, subset = 1)[[1]]
+
+# 2. Update het model naar REML = TRUE
+# De update() functie neemt je ML-model, behoudt de winnende formule,
+# maar herberekent de wiskunde onder de motorkap via REML.
+stress_best_model_REML <- update(best_model_ML, REML = TRUE)
+
+# 3. Bekijk je definitieve, publiceerbare sub-model
+summary(stress_best_model_REML)
+
+# 4. Check (optioneel) of je residuals nu mooi verdeeld zijn
+# DHARMa::simulateResiduals(best_model_REML, plot = TRUE)
+
+plot_model_vif(stress_best_model_REML , "VIF Check") # "intensiteit_combo_oeverzone_s" weggelaten
+
+################################################################################
+# model fitten mts
+################################################################################
+
+options(na.action = "na.fail") # Verplicht voor dredge
+
+mts_variabelen <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s")
+
+x_vars_schoon <- setdiff(mts_variabelen, "jaar_s")
+
+# 2. Plak alle overgebleven voorspellers (X) aan elkaar met een " + "
+x_string <- paste(x_vars_schoon, collapse = " + ")
+y_var <- "mt_sw_prop"
+
+# 3. Bouw de formule: Y ~ X'en + vaste jaar_s + random meetplaats
+# (Als x_string leeg is, fit hij netjes alleen jaar_s en het random effect)
+if (nchar(x_string) > 0) {
+  formule_string <- paste(y_var, "~", x_string, "+ jaar_s + (1 | meetplaats)")
+} else {
+  formule_string <- paste(y_var, "~ jaar_s + (1 | meetplaats)")
+}
+
+# Zet de tekst om naar een échte R-formule
+formula_obj <- as.formula(formule_string)
+
+
+m_mts <- glmmTMB(data = data_subset2, formula = formula_obj,
+                  REML = FALSE,
+                  family = ordbeta)
+
+
+# --- START TIMER ---
+start_tijd <- Sys.time()
+cat("Timer gestart om:", format(start_tijd, "%H:%M:%S"), "\n")
+
+aantal_cores <- detectCores() - 1
+cat("We gaan parallel rekenen op", aantal_cores, "cores...\n")
+
+# STAP 2 & 3: Cluster opzetten met een NIEUWE NAAM
+mijn_cluster <- makeCluster(aantal_cores)
+
+# Exporteer naar de nieuwe clusternaam
+clusterExport(mijn_cluster, varlist = c("data_subset2", "m_mts"))
+
+clusterEvalQ(mijn_cluster, {
+  library(glmmTMB)
+  options(na.action = "na.fail")
+})
+
+cat("Dredge is bezig over meerdere cores...\n")
+
+
+dredge_model <- dredge(
+  global.model = m_mts,
+  cluster = mijn_cluster,     # <--- Hier geven we het door
+  rank = "AICc",
+  m.lim = c(1, 4),
+  fixed = "cond(jaar_s)",
+  trace = 2
+)
+
+# STAP 5: Netjes opruimen
+stopCluster(mijn_cluster)
+options(na.action = "na.omit")
+
+# --- STOP TIMER ---
+eind_tijd <- Sys.time()
+cat("\n--- KLAAR! ---\n")
+cat("Totale rekentijd: ")
+print(eind_tijd - start_tijd)
+cat("----------------\n\n")
+
+print(head(dredge_model, 10))
+mts_dredge <- dredge_model
+
+# 1. Haal het absolute topmodel (nummer 1) uit je dredge object
+# subset = 1 pakt de bovenste rij (laagste AICc)
+best_model_ML <- get.models(mts_dredge, subset = 1)[[1]]
+
+# 2. Update het model naar REML = TRUE
+# De update() functie neemt je ML-model, behoudt de winnende formule,
+# maar herberekent de wiskunde onder de motorkap via REML.
+mts_best_model_REML <- update(best_model_ML, REML = TRUE)
+
+# 3. Bekijk je definitieve, publiceerbare sub-model
+summary(mts_best_model_REML)
+
+# 4. Check (optioneel) of je residuals nu mooi verdeeld zijn
+# DHARMa::simulateResiduals(best_model_REML, plot = TRUE)
+
+plot_model_vif(mts_best_model_REML, "VIF Check: Hydmo Model") # "intensiteit_combo_oeverzone_s" weggelaten
+
+################################################################################
+# model fitten swd
+################################################################################
+
+options(na.action = "na.fail") # Verplicht voor dredge
+
+swd_variabelen <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s")
+
+x_vars_schoon <- setdiff(swd_variabelen, "jaar_s")
+
+# 2. Plak alle overgebleven voorspellers (X) aan elkaar met een " + "
+x_string <- paste(x_vars_schoon, collapse = " + ")
+y_var <- "mt_sw_prop"
+
+# 3. Bouw de formule: Y ~ X'en + vaste jaar_s + random meetplaats
+# (Als x_string leeg is, fit hij netjes alleen jaar_s en het random effect)
+if (nchar(x_string) > 0) {
+  formule_string <- paste(y_var, "~", x_string, "+ jaar_s + (1 | meetplaats)")
+} else {
+  formule_string <- paste(y_var, "~ jaar_s + (1 | meetplaats)")
+}
+
+# Zet de tekst om naar een échte R-formule
+formula_obj <- as.formula(formule_string)
+
+
+m_swd <- glmmTMB(data = data_subset2, formula = formula_obj,
+                 REML = FALSE,
+                 family = gaussian)
+
+
+# --- START TIMER ---
+start_tijd <- Sys.time()
+cat("Timer gestart om:", format(start_tijd, "%H:%M:%S"), "\n")
+
+aantal_cores <- detectCores() - 1
+cat("We gaan parallel rekenen op", aantal_cores, "cores...\n")
+
+# STAP 2 & 3: Cluster opzetten met een NIEUWE NAAM
+mijn_cluster <- makeCluster(aantal_cores)
+
+# Exporteer naar de nieuwe clusternaam
+clusterExport(mijn_cluster, varlist = c("data_subset2", "m_swd"))
+
+clusterEvalQ(mijn_cluster, {
+  library(glmmTMB)
+  options(na.action = "na.fail")
+})
+
+cat("Dredge is bezig over meerdere cores...\n")
+
+
+dredge_model <- dredge(
+  global.model = m_swd,
+  cluster = mijn_cluster,     # <--- Hier geven we het door
+  rank = "AICc",
+  m.lim = c(1, 4),
+  fixed = "cond(jaar_s)",
+  trace = 2
+)
+
+# STAP 5: Netjes opruimen
+stopCluster(mijn_cluster)
+options(na.action = "na.omit")
+
+# --- STOP TIMER ---
+eind_tijd <- Sys.time()
+cat("\n--- KLAAR! ---\n")
+cat("Totale rekentijd: ")
+print(eind_tijd - start_tijd)
+cat("----------------\n\n")
+
+print(head(dredge_model, 10))
+swd_dredge <- dredge_model
+
+# 1. Haal het absolute topmodel (nummer 1) uit je dredge object
+# subset = 1 pakt de bovenste rij (laagste AICc)
+best_model_ML <- get.models(swd_dredge, subset = 1)[[1]]
+
+# 2. Update het model naar REML = TRUE
+# De update() functie neemt je ML-model, behoudt de winnende formule,
+# maar herberekent de wiskunde onder de motorkap via REML.
+swd_best_model_REML <- update(best_model_ML, REML = TRUE)
+
+# 3. Bekijk je definitieve, publiceerbare sub-model
+summary(swd_best_model_REML)
+
+# 4. Check (optioneel) of je residuals nu mooi verdeeld zijn
+# DHARMa::simulateResiduals(best_model_REML, plot = TRUE)
+
+plot_model_vif(swd_best_model_REML, "VIF Check: Hydmo Model") # "intensiteit_combo_oeverzone_s" weggelaten
 
 ################################################################################
 # model fitten Nutrienten
 ################################################################################
 
 # ntot
-data_subset2 <- data_subset %>%
-  na.omit
+
 options(na.action = "na.fail") # Verplicht voor dredge
 
-nutrienten_variabelen <- c(clean_klimaat, "ekc2_waterlichaam_s", "profiel_s", "breedte_diepte_ratio_s", clean_landuse, clean_lozingen)
+nutrienten_variabelen <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen)
 
 x_vars_schoon <- setdiff(nutrienten_variabelen, "jaar_s")
 
@@ -330,7 +817,7 @@ dredge_model <- dredge(
   global.model = m_ntot,
   cluster = mijn_cluster,     # <--- Hier geven we het door
   rank = "AICc",
-  m.lim = c(1, 6),
+  m.lim = c(1, 4),
   fixed = "cond(jaar_s)",
   trace = 2
 )
@@ -368,11 +855,9 @@ plot_model_vif(ntot_best_model_REML, "VIF Check: Hydmo Model") # "intensiteit_co
 
 # ptot
 
-data_subset2 <- data_subset %>%
-  na.omit
 options(na.action = "na.fail") # Verplicht voor dredge
 
-nutrienten_variabelen <- c(clean_klimaat, "ekc2_waterlichaam_s", "profiel_s", "breedte_diepte_ratio_s", clean_landuse, clean_lozingen)
+nutrienten_variabelen <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen)
 
 x_vars_schoon <- setdiff(nutrienten_variabelen, "jaar_s")
 
@@ -421,7 +906,7 @@ dredge_model <- dredge(
   global.model = m_ptot,
   cluster = mijn_cluster,     # <--- Hier geven we het door
   rank = "AICc",
-  m.lim = c(1, 6),
+  m.lim = c(1, 4),
   fixed = "cond(jaar_s)",
   trace = 2
 )
@@ -459,16 +944,14 @@ plot_model_vif(best_model_REML, "VIF Check: Hydmo Model") # "intensiteit_combo_o
 
 
 ################################################################################
-# model fitten Nutrienten
+# model fitten o2 + czv
 ################################################################################
 
-# O2
+# o2
 
-data_subset2 <- data_subset %>%
-  na.omit
 options(na.action = "na.fail") # Verplicht voor dredge
 
-fysico_variabelen <- c(clean_klimaat, "ekc2_waterlichaam_s", "profiel_s", "breedte_diepte_ratio_s", clean_landuse, clean_lozingen, "n_t_log", "p_t_log", "czv_log")
+fysico_variabelen <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen, "n_t_log", "p_t_log", "czv_log", "t_s", "ec_20_s")
 
 x_vars_schoon <- setdiff(fysico_variabelen, "jaar_s")
 
@@ -517,7 +1000,7 @@ dredge_model <- dredge(
   global.model = m_o2,
   cluster = mijn_cluster,     # <--- Hier geven we het door
   rank = "AICc",
-  m.lim = c(1, 6),
+  m.lim = c(1, 4),
   fixed = "cond(jaar_s)",
   trace = 2
 )
@@ -544,6 +1027,7 @@ best_model_ML <- get.models(o2_dredge, subset = 1)[[1]]
 # De update() functie neemt je ML-model, behoudt de winnende formule,
 # maar herberekent de wiskunde onder de motorkap via REML.
 o2_best_model_REML <- update(best_model_ML, REML = TRUE)
+test <- update(best_model_ML, . ~ . + n_t_log + p_t_log, REML = TRUE)
 
 # 3. Bekijk je definitieve, publiceerbare sub-model
 summary(o2_best_model_REML)
@@ -553,4 +1037,356 @@ summary(o2_best_model_REML)
 
 plot_model_vif(o2_best_model_REML, "VIF Check: Hydmo Model") # "intensiteit_combo_oeverzone_s" weggelaten
 
+# czv
 
+options(na.action = "na.fail") # Verplicht voor dredge
+
+fysico_variabelen <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen, "n_t_log", "p_t_log")
+
+x_vars_schoon <- setdiff(fysico_variabelen, "jaar_s")
+
+# 2. Plak alle overgebleven voorspellers (X) aan elkaar met een " + "
+x_string <- paste(x_vars_schoon, collapse = " + ")
+y_var <- "czv_log"
+
+# 3. Bouw de formule: Y ~ X'en + vaste jaar_s + random meetplaats
+# (Als x_string leeg is, fit hij netjes alleen jaar_s en het random effect)
+if (nchar(x_string) > 0) {
+  formule_string <- paste(y_var, "~", x_string, "+ jaar_s + (1 | meetplaats)")
+} else {
+  formule_string <- paste(y_var, "~ jaar_s + (1 | meetplaats)")
+}
+
+# Zet de tekst om naar een échte R-formule
+formula_obj <- as.formula(formule_string)
+
+
+m_czv <- glmmTMB(data = data_subset2, formula = formula_obj,
+                REML = FALSE,
+                family = gaussian)
+
+# --- START TIMER ---
+start_tijd <- Sys.time()
+cat("Timer gestart om:", format(start_tijd, "%H:%M:%S"), "\n")
+
+aantal_cores <- detectCores() - 1
+cat("We gaan parallel rekenen op", aantal_cores, "cores...\n")
+
+# STAP 2 & 3: Cluster opzetten met een NIEUWE NAAM
+mijn_cluster <- makeCluster(aantal_cores)
+
+# Exporteer naar de nieuwe clusternaam
+clusterExport(mijn_cluster, varlist = c("data_subset2", "m_czv"))
+
+clusterEvalQ(mijn_cluster, {
+  library(glmmTMB)
+  options(na.action = "na.fail")
+})
+
+cat("Dredge is bezig over meerdere cores...\n")
+
+
+dredge_model <- dredge(
+  global.model = m_czv,
+  cluster = mijn_cluster,     # <--- Hier geven we het door
+  rank = "AICc",
+  m.lim = c(1, 4),
+  fixed = "cond(jaar_s)",
+  trace = 2
+)
+
+# STAP 5: Netjes opruimen
+stopCluster(mijn_cluster)
+options(na.action = "na.omit")
+
+# --- STOP TIMER ---
+eind_tijd <- Sys.time()
+cat("\n--- KLAAR! ---\n")
+cat("Totale rekentijd: ")
+print(eind_tijd - start_tijd)
+cat("----------------\n\n")
+
+print(head(dredge_model, 10))
+czv_dredge <- dredge_model
+
+# 1. Haal het absolute topmodel (nummer 1) uit je dredge object
+# subset = 1 pakt de bovenste rij (laagste AICc)
+best_model_ML <- get.models(czv_dredge, subset = 1)[[1]]
+
+# 2. Update het model naar REML = TRUE
+# De update() functie neemt je ML-model, behoudt de winnende formule,
+# maar herberekent de wiskunde onder de motorkap via REML.
+czv_best_model_REML <- update(best_model_ML, REML = TRUE)
+test <- update(best_model_ML, . ~ . + n_t_log + p_t_log, REML = TRUE)
+
+# 3. Bekijk je definitieve, publiceerbare sub-model
+summary(czv_best_model_REML)
+
+# 4. Check (optioneel) of je residuals nu mooi verdeeld zijn
+# DHARMa::simulateResiduals(best_model_REML, plot = TRUE)
+
+plot_model_vif(czv_best_model_REML, "VIF Check: Hydmo Model") # "intensiteit_combo_oeverzone_s" weggelaten
+
+# ec20
+
+options(na.action = "na.fail") # Verplicht voor dredge
+
+fysico_variabelen <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen, "n_t_log", "p_t_log")
+
+x_vars_schoon <- setdiff(fysico_variabelen, "jaar_s")
+
+# 2. Plak alle overgebleven voorspellers (X) aan elkaar met een " + "
+x_string <- paste(x_vars_schoon, collapse = " + ")
+y_var <- "ec_20_s"
+
+# 3. Bouw de formule: Y ~ X'en + vaste jaar_s + random meetplaats
+# (Als x_string leeg is, fit hij netjes alleen jaar_s en het random effect)
+if (nchar(x_string) > 0) {
+  formule_string <- paste(y_var, "~", x_string, "+ jaar_s + (1 | meetplaats)")
+} else {
+  formule_string <- paste(y_var, "~ jaar_s + (1 | meetplaats)")
+}
+
+# Zet de tekst om naar een échte R-formule
+formula_obj <- as.formula(formule_string)
+
+
+m_ec_20 <- glmmTMB(data = data_subset2, formula = formula_obj,
+                 REML = FALSE,
+                 family = gaussian)
+
+# --- START TIMER ---
+start_tijd <- Sys.time()
+cat("Timer gestart om:", format(start_tijd, "%H:%M:%S"), "\n")
+
+aantal_cores <- detectCores() - 1
+cat("We gaan parallel rekenen op", aantal_cores, "cores...\n")
+
+# STAP 2 & 3: Cluster opzetten met een NIEUWE NAAM
+mijn_cluster <- makeCluster(aantal_cores)
+
+# Exporteer naar de nieuwe clusternaam
+clusterExport(mijn_cluster, varlist = c("data_subset2", "m_ec_20"))
+
+clusterEvalQ(mijn_cluster, {
+  library(glmmTMB)
+  options(na.action = "na.fail")
+})
+
+cat("Dredge is bezig over meerdere cores...\n")
+
+
+dredge_model <- dredge(
+  global.model = m_ec_20,
+  cluster = mijn_cluster,     # <--- Hier geven we het door
+  rank = "AICc",
+  m.lim = c(1, 4),
+  fixed = "cond(jaar_s)",
+  trace = 2
+)
+
+# STAP 5: Netjes opruimen
+stopCluster(mijn_cluster)
+options(na.action = "na.omit")
+
+# --- STOP TIMER ---
+eind_tijd <- Sys.time()
+cat("\n--- KLAAR! ---\n")
+cat("Totale rekentijd: ")
+print(eind_tijd - start_tijd)
+cat("----------------\n\n")
+
+print(head(dredge_model, 10))
+ec_20_dredge <- dredge_model
+
+# 1. Haal het absolute topmodel (nummer 1) uit je dredge object
+# subset = 1 pakt de bovenste rij (laagste AICc)
+best_model_ML <- get.models(ec_20_dredge, subset = 1)[[1]]
+
+# 2. Update het model naar REML = TRUE
+# De update() functie neemt je ML-model, behoudt de winnende formule,
+# maar herberekent de wiskunde onder de motorkap via REML.
+ec_20_best_model_REML <- update(best_model_ML, REML = TRUE)
+test <- update(best_model_ML, . ~ . + n_t_log + p_t_log, REML = TRUE)
+
+# 3. Bekijk je definitieve, publiceerbare sub-model
+summary(ec_20_best_model_REML)
+
+# 4. Check (optioneel) of je residuals nu mooi verdeeld zijn
+# DHARMa::simulateResiduals(best_model_REML, plot = TRUE)
+
+plot_model_vif(ec_20_best_model_REML, "VIF Check") # "intensiteit_combo_oeverzone_s" weggelaten
+
+
+################################################################################
+# sem model fitten
+################################################################################
+
+sem_mmif <- psem(
+  mmif_best_model_REML,
+  ntot_best_model_REML,
+  ptot_best_model_REML,
+  czv_best_model_REML,
+  o2_best_model_REML,
+  ec_20_best_model_REML
+)
+
+summary(sem_mmif)
+sem_resultaat <- sem_mmif
+# 1️⃣ Extract coëfficiënten uit je SEM
+coefs_missing <- coefs(sem_resultaat)[,-9]
+
+# source("source/sem/sem_standardised_coef_manually_enkel_ordbeta.R")
+source("source/analyse/sem/sem_standardised_coef_flexible.R")
+
+coefs_filled <- coefs_missing
+# 2️⃣ Filter enkel significante paden (p < 0.05)
+
+source(here("source", "analyse", "sem", "figuur_sem.R"))
+
+# # modellen updaten op basis van dSep _> eerst 3*
+# mmif_best_model_updated <- update(mmif_best_model_REML, . ~ . + intensiteit_combo_afstr_s + n_t_log + p_t_log + verharding_afstr_s + lozingen_riool_ie_log)
+# ntot_best_model_updated <- update(ntot_best_model_REML, . ~ . + t_s)
+# ptot_best_model_updated <- update(ptot_best_model_REML, . ~ . + t_s)
+# czv_best_model_updated <- czv_best_model_REML
+# ec_20_best_model_updated <- update(ec_20_best_model_REML, . ~ . + t_s)
+# o2_best_model_updated <- o2_best_model_REML
+
+mmif_best_model_updated <- update(mmif_best_model_REML, . ~ . + intensiteit_combo_afstr_s + t_s + n_t_log + p_t_log + o2_s  + verharding_afstr_s)
+ntot_best_model_updated <- update(ntot_best_model_REML, . ~ . + t_s + lozingen_industrie_ie_log)
+ptot_best_model_updated <- update(ptot_best_model_REML, . ~ . + t_s + lozingen_riool_ie_log)
+czv_best_model_updated <- czv_best_model_REML
+ec_20_best_model_updated <- update(ec_20_best_model_REML, . ~ . + t_s + intensiteit_combo_afstr_s + natuur_oever_s + verharding_afstr_s)
+o2_best_model_updated <- update(o2_best_model_REML, . ~ . + p_sum_7d_s)
+
+mmif_sem_nat_sv_beek <- psem(mmif_best_model_updated,
+                 ntot_best_model_updated,
+                 ptot_best_model_updated,
+                 czv_best_model_updated,
+                 o2_best_model_updated,
+                 ec_20_best_model_updated,
+                 n_t_log %~~% p_t_log)
+summary(mmif_sem_nat_sv_beek)
+
+save(mmif_sem_nat_sv_beek, file = here("source", "analyse", "sem", "mi_nat_sv_beek", "mmif_sem_nat_sv_beek.rdata"))
+
+sem_resultaat <- mmif_sem_nat_sv_beek
+# 1️⃣ Extract coëfficiënten uit je SEM
+coefs_missing <- coefs(sem_resultaat)[,-9]
+
+# source("source/sem/sem_standardised_coef_manually_enkel_ordbeta.R")
+source("source/analyse/sem/sem_standardised_coef_flexible.R")
+
+coefs_filled <- coefs_missing
+# 2️⃣ Filter enkel significante paden (p < 0.05)
+
+source(here("source", "analyse", "sem", "figuur_sem.R"))
+
+## ept
+
+sem_ept <- psem(
+  ept_best_model_REML,
+  ntot_best_model_REML,
+  ptot_best_model_REML,
+  czv_best_model_REML,
+  o2_best_model_REML,
+  ec_20_best_model_REML
+)
+
+summary(sem_ept)
+
+ept_best_model_updated <- update(ept_best_model_REML, . ~ . + czv_log + intensiteit_combo_afstr_s + verharding_afstr_s)
+ntot_best_model_updated <- update(ntot_best_model_REML, . ~ . + t_s + lozingen_industrie_ie_log)
+ptot_best_model_updated <- update(ptot_best_model_REML, . ~ . + t_s + lozingen_riool_ie_log)
+czv_best_model_updated <- czv_best_model_REML
+ec_20_best_model_updated <- update(ec_20_best_model_REML, . ~ . + t_s + intensiteit_combo_afstr_s + verharding_afstr_s)
+o2_best_model_updated <- update(o2_best_model_REML, . ~ . + p_sum_7d_s)
+
+ept_sem_nat_sv_beek <- psem(ept_best_model_updated,
+                             ntot_best_model_updated,
+                             ptot_best_model_updated,
+                             czv_best_model_updated,
+                             o2_best_model_updated,
+                             ec_20_best_model_updated,
+                             n_t_log %~~% p_t_log)
+summary(ept_sem_nat_sv_beek)
+
+save(ept_sem_nat_sv_beek, file = here("source", "analyse", "sem", "mi_nat_sv_beek", "ept_sem_nat_sv_beek.rdata"))
+
+sem_resultaat <- ept_sem_nat_sv_beek
+# 1️⃣ Extract coëfficiënten uit je SEM
+coefs_missing <- coefs(sem_resultaat)[,-9]
+
+# source("source/sem/sem_standardised_coef_manually_enkel_ordbeta.R")
+source("source/analyse/sem/sem_standardised_coef_flexible.R")
+
+coefs_filled <- coefs_missing
+# 2️⃣ Filter enkel significante paden (p < 0.05)
+
+source(here("source", "analyse", "sem", "figuur_sem.R"))
+
+
+## tax
+
+sem_tax <- psem(
+  tax_best_model_REML,
+  ntot_best_model_REML,
+  ptot_best_model_REML,
+  czv_best_model_REML,
+  o2_best_model_REML,
+  ec_20_best_model_REML
+)
+
+summary(sem_tax)
+
+## nst
+
+sem_nst <- psem(
+  nst_best_model_REML,
+  ntot_best_model_REML,
+  ptot_best_model_REML,
+  czv_best_model_REML,
+  o2_best_model_REML,
+  ec_20_best_model_REML
+)
+
+summary(sem_nst)
+
+## mts
+
+sem_mts <- psem(
+  mts_best_model_REML,
+  ntot_best_model_REML,
+  ptot_best_model_REML,
+  czv_best_model_REML,
+  o2_best_model_REML,
+  ec_20_best_model_REML
+)
+
+summary(sem_mts)
+
+## swd
+
+sem_swd <- psem(
+  swd_best_model_REML,
+  ntot_best_model_REML,
+  ptot_best_model_REML,
+  czv_best_model_REML,
+  o2_best_model_REML,
+  ec_20_best_model_REML
+)
+
+summary(sem_swd)
+
+## stress
+
+sem_stress <- psem(
+  stress_best_model_REML,
+  ntot_best_model_REML,
+  ptot_best_model_REML,
+  czv_best_model_REML,
+  o2_best_model_REML,
+  ec_20_best_model_REML
+)
+
+summary(sem_stress)
