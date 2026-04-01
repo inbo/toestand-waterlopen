@@ -68,10 +68,6 @@ m2 <- glmmTMB(
   family = ordbeta,
   data = data_sem_clean)
 
-m2 <- glmmTMB(
-  mmif ~ I(jaar_s)^2 + (1 | meetplaats),
-  family = ordbeta,
-  data = data_sem_clean)
 
 simulationOutput <- simulateResiduals(m2, plot = TRUE)
 testDispersion(simulationOutput) # geen overdispersie

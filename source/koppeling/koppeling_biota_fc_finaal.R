@@ -597,7 +597,7 @@ print(paste("Aantal matches:", sum(!is.na(koppeling_mi_nutrient$qual_meetplaats)
 save(koppeling_mi_nutrient, file = "data/verwerkt/koppeling/koppeling_mi_nutrient.rdata")
 
 
-pesticide_result <- match_upstream_strahler(
+koppeling_mi_pesticides <- match_upstream_strahler(
   biota_sf = mi_data,
   quality_sf = pesticide_data,
   network_list = river_network_fine,
@@ -615,7 +615,30 @@ pesticide_result <- match_upstream_strahler(
   vhas_col_biota = "vhas",
   vhas_col_quality = "vhas"
 )
-print(paste("Aantal matches:", sum(!is.na(pesticide_result$qual_meetplaats))))
+print(paste("Aantal matches:", sum(!is.na(koppeling_mi_pesticides$qual_meetplaats))))
+save(koppeling_mi_pesticides, file = "data/verwerkt/koppeling/koppeling_mi_pesticides.rdata")
+
+koppeling_mi_pesticides_strict <- match_upstream_strahler(
+  biota_sf = mi_data,
+  quality_sf = pesticide_data,
+  network_list = river_network_fine,
+  strahler_sf = strahler,
+  use_strahler = FALSE,
+  strahler_col = "orde",
+  max_dist_m = 1000,       # Max 5km stroomopwaarts
+  days_before = 365,       # Kwaliteit mag tot 180 dagen VOOR de biota meting zijn
+  days_after = 365,         # Kwaliteit mag tot 14 dagen NA de biota meting zijn
+  col_date_biota = "monsternamedatum",
+  col_date_quality = "monsternamedatum",
+  selection_mode = "closest_distance",
+  grouping_col = "VHAG",
+  vhas_col_network = "VHAS",
+  vhas_col_biota = "vhas",
+  vhas_col_quality = "vhas"
+)
+print(paste("Aantal matches:", sum(!is.na(koppeling_mi_pesticides_strict$qual_meetplaats))))
+save(koppeling_mi_pesticides, file = "data/verwerkt/koppeling/koppeling_mi_pesticides.rdata")
+
 
 koppeling_mi_chlora <- match_upstream_strahler(
   biota_sf = mi_data,

@@ -123,13 +123,13 @@ summary(sem_resultaat)
 # plot(sem_resultaat)
 
 # 1️⃣ Extract coëfficiënten uit je SEM
-coefs_df <- coefs(sem_resultaat)[,-9]
+coefs_missing <- coefs(sem_resultaat)[,-9]
 
 # source("source/sem/sem_standardised_coef_manually_enkel_ordbeta.R")
-source("source/sem/sem_standardised_coef_flexible.R")
+source("source/analyse/sem/sem_standardised_coef_flexible.R")
 
-coef_df <- coefs_df
+coefs_filled <- coefs_missing
 # 2️⃣ Filter enkel significante paden (p < 0.05)
 
-source(here("source", "sem", "figuur_sem.R"))
+source(here("source", "analyse", "sem", "figuur_sem.R"))
 
