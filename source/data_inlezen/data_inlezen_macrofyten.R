@@ -54,7 +54,16 @@ mafy_data0 <- mafy_deelmaatlatten0 %>%
   # filter(waterlooptype != "Geïsoleerd water" &
   #          !(waterlichaamcategorie %in% c("meer", "overgangswater"))) %>%
   left_join(waterlopen_groep, by = "type")
-mafy_data <- janitor::clean_names(mafy_data0)
+mafy_data1 <- janitor::clean_names(mafy_data0)
+
+meetnetten <- read.delim("data/ruw/vmm/meetnetten.txt") %>%
+  mutate(meetplaats_mafy = stringr::str_remove(nummer, "OW"))
+
+mafy_data <- mafy_data0 %>%
+  left_join(meetnetten %>%
+              select(meetplaats_mafy, vhas, vha_naam),
+            by = c("meetplaats" = "meetplaats_mafy"))
+
 save(mafy_data, file = here("data", "verwerkt", "mafy_data.rdata"))
 
 mafy_meetpunten_datum <- mafy_data %>%
