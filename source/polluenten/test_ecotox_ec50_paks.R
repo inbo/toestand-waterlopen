@@ -287,7 +287,7 @@ mutate(
     ec50_species_geomean = geomean(ec50_ug_L),
     n_studies = n(),
     # Even checken of we nu FW of SW hebben
-    used_media = paste(unique(media_final), collapse="|"),
+    used_media = paste(unique(media_final), collapse = "|"),
     .groups = "drop"
   ) %>%
 

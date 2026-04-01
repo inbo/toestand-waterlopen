@@ -1,3 +1,6 @@
+load(here("data", "verwerkt", "tu_resultaten.rdata"))
+meetnetten <- read.delim("data/ruw/vmm/meetnetten.txt")
+
 pesticide_data <- tu_per_sample %>%
   select(meetplaats, monsternamedatum, TU_sum) %>%
   left_join(meetnetten %>%
@@ -11,7 +14,7 @@ library(lubridate)
 # 1. Voorbereiden van de pesticide data
 # We berekenen eerst de maximale TU_sum per waterlichaam per jaar.
 pesticide_per_jaar <- pesticide_data %>%
-  mutate(jaar = year(monsternamedatum)) %>%
+  mutate(jaar = lubridate::year(monsternamedatum)) %>%
   group_by(owl_code, jaar) %>%
   summarise(max_tu_jaar = max(TU_sum, na.rm = TRUE), .groups = "drop")
 
@@ -35,7 +38,7 @@ pesticide_rolling_max <- pesticide_per_jaar %>%
 # We gaan ervan uit dat data_sem_clean ook een 'owl_code' kolom heeft
 # (of koppel deze eerst via meetplaats).
 data_met_pesticiden <- data_sem_clean %>%
-  mutate(jaar = year(monsternamedatum),
+  mutate(jaar = lubridate::year(monsternamedatum),
          owl_code = owl.x) %>%
   left_join(pesticide_rolling_max %>% select(owl_code, jaar, pesticide_max_3j),
             by = c("owl_code", "jaar"))

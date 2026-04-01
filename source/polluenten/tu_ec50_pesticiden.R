@@ -38,8 +38,9 @@ tu_per_sample <- tu_dataset_ruw %>%
   summarise(
     # 1. De TU Som (msPAF benadering via Concentration Addition)
     TU_sum = sum(TU_individual, na.rm = TRUE),
-
+    TU_max = max(TU_individual, na.rm = TRUE),
     # 2. Metadata (Handig voor analyse achteraf)
+    concentratie_pesticiden_sum = sum(resultaat_ug_L),
     aantal_pesticiden_gemeten = n(),
     aantal_pesticiden_met_TU = sum(!is.na(TU_individual)),
 
@@ -71,13 +72,19 @@ tu_specific_groups <- tu_dataset_ruw %>%
   summarise(
     # 1. De Totaalscore (zoals je al had)
     TU_sum = sum(TU_individual, na.rm = TRUE),
-
+    TU_max = max(TU_individual, na.rm = TRUE),
+    concentratie_pesticiden_sum = sum(resultaat_ug_L),
     # 2. Specifieke scores (Mode of Action)
     # Let op: check in je data of 'insecticide' met hoofdletter is of niet
     TU_insecticide = sum(TU_individual[subtype == "insecticide"], na.rm = TRUE),
+    TU_insecticide_max = if (any(subtype == "insecticide", na.rm = TRUE)) {
+      max(TU_individual[subtype == "insecticide"], na.rm = TRUE)
+    } else {
+      0  # Gebruik 0 (geen toxiciteit) of NA (geen data)
+    },
     TU_herbicide   = sum(TU_individual[subtype == "herbicide"], na.rm = TRUE),
     TU_fungicide   = sum(TU_individual[subtype == "fungicide"], na.rm = TRUE),
-
+    concentratie_insecticide = sum(resultaat_ug_L[subtype == "insecticide"], na.rm = TRUE),
     # 3. Neonicotinoïden specifiek (Optioneel, vaak interessant!)
     # Imidacloprid, Thiacloprid, Acetamiprid, etc.
     TU_neonicotinoids = sum(TU_individual[stof_naam %in% c("Imidacloprid", "Thiacloprid", "Acetamiprid", "Clothianidin", "Thiamethoxam")], na.rm = TRUE),
