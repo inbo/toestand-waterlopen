@@ -15,6 +15,10 @@ mi_meetpunten <- st_read(here("data", "ruw", "macroinvertebraten", "mi_meetpunte
 fc_meetpunten <- st_read(here("data", "ruw", "fys_chem", "fc_meetpunten.gpkg"), quiet = TRUE) %>%
   select(meetplaats)
 
+# Lees mafy meetpunten en behoud alleen de naam en de geometrie
+mafy_meetpunten <- st_read(here("data", "ruw", "macrofyten", "mafy_meetpunten_datum.gpkg"), quiet = T) %>%
+  select(meetplaats)
+
 if (st_crs(mi_meetpunten) != st_crs(fc_meetpunten)) {
   message("Coördinatensystemen verschillen. FC wordt getransformeerd naar MI CRS.")
   target_crs <- st_crs(mi_meetpunten)
@@ -23,7 +27,7 @@ if (st_crs(mi_meetpunten) != st_crs(fc_meetpunten)) {
 
 # --- Stap 3, 4 & 5: Samenvoegen, uniek maken en filteren op lege geometrie ---
 
-ow_meetpunten <- bind_rows(mi_meetpunten, fc_meetpunten) %>%
+ow_meetpunten <- bind_rows(mi_meetpunten, fc_meetpunten, mafy_meetpunten) %>%
   # Zorg dat we alleen unieke meetplaatsnamen overhouden.
   # .keep_all = TRUE zorgt dat de geometrie van de eerste 'hit' bewaard blijft.
   distinct(meetplaats, .keep_all = TRUE) %>%
@@ -150,7 +154,7 @@ if (!file.exists(here("data", "verwerkt", "hydrologisch",
 # =====================================================================
 # 9. Afstroomgebieden converteren naar polygonen
 # =====================================================================
-watershed_files <- paste0("ow_meetpunten_watersheds_nested_", 1:61, ".tif")
+watershed_files <- paste0("ow_meetpunten_watersheds_nested_", 1:106, ".tif")
 
 watersheds_list <- map(watershed_files, ~ {
   rast(here("data", "verwerkt", "hydrologisch", .x)) %>%
