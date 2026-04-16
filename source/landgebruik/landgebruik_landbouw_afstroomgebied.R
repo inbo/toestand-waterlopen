@@ -5,8 +5,10 @@ if (!exists("packages_geladen")) {
 # --- 1. Data Inladen ---
 mi_meetpunten <- st_read(here("data", "ruw", "macroinvertebraten", "mi_meetpunten_datum.gpkg"), quiet = TRUE) %>%
   filter(monsternamedatum > "2009-12-31")
+mafy_meetpunten <- st_read(here("data", "ruw", "macrofyten", "mafy_meetpunten_datum.gpkg")) %>%
+  filter(monsternamedatum > '2009-12-31')
 
-afstroomgebieden <- st_read(here("data", "verwerkt", "hydrologisch", "mi_meetpunten_watersheds_buffered_5000m.gpkg"), quiet = TRUE)
+afstroomgebieden <- st_read(here("data", "verwerkt", "hydrologisch", "ow_meetpunten_watersheds_buffered_5000m.gpkg"), quiet = TRUE)
 crs_referentie <- st_crs(afstroomgebieden)
 
 lbg_intensiteit_scores <- read_xlsx(here("data", "ruw", "landgebruik", "landbouwgebruikspercelen", "landbouwgebruikspercelen_intensiteitsscores.xlsx")) %>%
@@ -16,7 +18,10 @@ lbg_intensiteit_scores <- read_xlsx(here("data", "ruw", "landgebruik", "landbouw
 data_basis <- mi_meetpunten %>%
   st_drop_geometry() %>%
   select(meetplaats, monsternamedatum) %>%
-  mutate(jaar = year(monsternamedatum)) %>%
+  bind_rows(mafy_meetpunten %>%
+              st_drop_geometry() %>%
+             select(meetplaats, monsternamedatum)) %>%
+  mutate(jaar = lubridate::year(monsternamedatum)) %>%
   left_join(afstroomgebieden %>% select(meetplaats, oppervlakte), by = "meetplaats") %>%
   st_as_sf()
 

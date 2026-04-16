@@ -28,6 +28,8 @@ mi_data <- st_read(here("data", "ruw", "macroinvertebraten", "mi_meetpunten_datu
               select(vhas, nummer),
             by = c("meetplaats" = "nummer"))
 
+load(here("data", "verwerkt", "mafy_data.rdata"))
+
 
 if (!file.exists(here("data", "verwerkt", "koppeling", "nutrient_meetpunten_datum.gpkg"))) {
   load(here("data", "verwerkt", "fc_selectie.rdata"))
@@ -35,10 +37,10 @@ if (!file.exists(here("data", "verwerkt", "koppeling", "nutrient_meetpunten_datu
     filter(monsternamedatum > '2007-12-31')
   nutrient_meetpunten_datum <- fc_selectie %>%
     filter(!is.na(n_t)) %>%
-    select(meetplaats, monsternamedatum) %>%
+    select(meetplaats, monsternamedatum, n_t, p_t, czv, zs, nh4, no2, no3) %>%
     left_join(fc_meetpunten_datum,
               by = c("meetplaats", "monsternamedatum"))
-  st_write(nutrient_meetpunten_datum, dsn = here("data", "verwerkt", "koppeling", "nutrient_meetpunten_datum.gpkg"))
+  st_write(nutrient_meetpunten_datum, dsn = here("data", "verwerkt", "koppeling", "nutrient_meetpunten_datum.gpkg"), delete_dsn = T)
 }
 nutrient_data <- st_read(dsn = here("data", "verwerkt", "koppeling", "nutrient_meetpunten_datum.gpkg"), quiet = T) %>%
   left_join(meetnetten %>%
@@ -637,7 +639,7 @@ koppeling_mi_pesticides_strict <- match_upstream_strahler(
   vhas_col_quality = "vhas"
 )
 print(paste("Aantal matches:", sum(!is.na(koppeling_mi_pesticides_strict$qual_meetplaats))))
-save(koppeling_mi_pesticides, file = "data/verwerkt/koppeling/koppeling_mi_pesticides.rdata")
+save(koppeling_mi_pesticides_strict, file = "data/verwerkt/koppeling/koppeling_mi_pesticides_strict.rdata")
 
 
 koppeling_mi_chlora <- match_upstream_strahler(
@@ -663,6 +665,135 @@ print(paste("Aantal matches:", sum(!is.na(koppeling_mi_chlora$qual_meetplaats)))
 
 save(koppeling_mi_chlora, file = "data/verwerkt/koppeling/koppeling_mi_chlora.rdata")
 
+koppeling_mafy_nutrient_aggregate <- match_upstream_strahler(
+  biota_sf = mafy_data,
+  quality_sf = nutrient_data,
+  network_list = river_network_fine,
+  strahler_sf = strahler,
+  use_strahler = FALSE,             # AANGEPAST: Strikter op stroomgrootte
+  strahler_col = "orde",
+  max_downstream_m = 200,
+  max_dist_m = 5000,               # Blijft 5km stroomopwaarts
+  days_before = 365,               # AANGEPAST: Een heel jaar terugkijken
+  days_after = 30,
+  col_date_biota = "monsternamedatum",
+  col_date_quality = "monsternamedatum",
+  selection_mode = "aggregate",    # AANGEPAST: Gemiddelde nemen in plaats van 1 punt
+  aggr_method = "mean",            # AANGEPAST: Gemiddelde over het jaar/gebied
+  aggr_cols = c("n_t", "p_t", "czv", "zs", "no2", "no3", "nh4"),     # Vul hier de daadwerkelijke kolomnamen van je nutriënten in
+  grouping_col = "VHAG",
+  vhas_col_network = "VHAS",
+  vhas_col_biota = "vhas",
+  vhas_col_quality = "vhas"
+)
+print(paste("Aantal matches:", sum(!is.na(koppeling_mafy_nutrient_aggregate$qual_meetplaats))))
+
+save(koppeling_mafy_nutrient_aggregate, file = "data/verwerkt/koppeling/koppeling_mafy_nutrient_aggregate.rdata")
+
+
+koppeling_mafy_nutrient_aggregate_wide <- match_upstream_strahler(
+  biota_sf = mafy_data,
+  quality_sf = nutrient_data,
+  network_list = river_network_fine,
+  strahler_sf = strahler,
+  use_strahler = FALSE,             # AANGEPAST: Strikter op stroomgrootte
+  strahler_col = "orde",
+  max_downstream_m = 200,
+  max_dist_m = 5000,               # Blijft 5km stroomopwaarts
+  days_before = 730,               # AANGEPAST: Een heel jaar terugkijken
+  days_after = 365,
+  col_date_biota = "monsternamedatum",
+  col_date_quality = "monsternamedatum",
+  selection_mode = "aggregate",    # AANGEPAST: Gemiddelde nemen in plaats van 1 punt
+  aggr_method = "mean",            # AANGEPAST: Gemiddelde over het jaar/gebied
+  aggr_cols = c("n_t", "p_t", "czv", "zs", "no2", "no3", "nh4"),     # Vul hier de daadwerkelijke kolomnamen van je nutriënten in
+  grouping_col = "VHAG",
+  vhas_col_network = "VHAS",
+  vhas_col_biota = "vhas",
+  vhas_col_quality = "vhas"
+)
+print(paste("Aantal matches:", sum(!is.na(koppeling_mafy_nutrient_aggregate_wide$qual_meetplaats))))
+
+save(koppeling_mafy_nutrient_aggregate_wide, file = "data/verwerkt/koppeling/koppeling_mafy_nutrient_aggregate_wide.rdata")
+
+koppeling_mafy_nutrient <- match_upstream_strahler(
+  biota_sf = mafy_data,
+  quality_sf = nutrient_data,
+  network_list = river_network,
+  strahler_sf = strahler,
+  use_strahler = FALSE,             # AANGEPAST: Strikter op stroomgrootte
+  strahler_col = "orde",
+  max_downstream_m = 200,
+  max_dist_m = 5000,               # Blijft 5km stroomopwaarts
+  days_before = 365,               # AANGEPAST: Een heel jaar terugkijken
+  days_after = 30,
+  col_date_biota = "monsternamedatum",
+  col_date_quality = "monsternamedatum",
+  selection_mode = "closest_distance",    # AANGEPAST: Gemiddelde nemen in plaats van 1 punt
+  # aggr_method = "mean",            # AANGEPAST: Gemiddelde over het jaar/gebied
+  # aggr_cols = c("n_t", "p_t"),     # Vul hier de daadwerkelijke kolomnamen van je nutriënten in
+  grouping_col = "VHAG",
+  vhas_col_network = "VHAS",
+  vhas_col_biota = "vhas",
+  vhas_col_quality = "vhas"
+)
+print(paste("Aantal matches:", sum(!is.na(koppeling_mafy_nutrient$qual_meetplaats))))
+
+#vergelijking aggregated vs closest distance methode voor koppeling mafy en nutrienten en co
+# Haal de geometrie weg zodat we gewone dataframes overhouden
+df_agg <- sf::st_drop_geometry(koppeling_mafy_nutrient_aggregate)
+df_dist <- sf::st_drop_geometry(koppeling_mafy_nutrient)
+
+# Voeg ze samen op basis van de macofyt-meetplaats en monsternamedatum
+# Let op: de join-kolommen heten 'qual_n_t' en 'qual_p_t' door je eerdere hernoeming in de functie
+vergelijking <- df_agg %>%
+  select(meetplaats, monsternamedatum,
+         n_t_agg = qual_n_t,
+         p_t_agg = qual_p_t,
+         n_matches = qual_n_matches) %>%
+  left_join(
+    df_dist %>% select(meetplaats, monsternamedatum,
+                       n_t_dist = qual_n_t,
+                       p_t_dist = qual_p_t),
+    by = c("meetplaats", "monsternamedatum")
+  ) %>%
+  # Filter alle rijen eruit waar we voor minstens één van de methodes geen match hadden
+  filter(!is.na(n_t_agg) & !is.na(n_t_dist)) %>%
+  # Bereken het verschil tussen de twee methoden
+  mutate(
+    verschil_nt = n_t_agg - n_t_dist,
+    verschil_pt = p_t_agg - p_t_dist
+  )
+
+print(paste("Aantal succesvol vergeleken punten:", nrow(vergelijking)))
+
+# Plot voor Stikstof (N)
+plot_nt <- ggplot(vergelijking, aes(x = n_t_dist, y = n_t_agg)) +
+  geom_point(alpha = 0.5, color = "blue") +
+  geom_abline(intercept = 0, slope = 1, color = "red", linetype = "dashed", linewidth = 1) +
+  theme_minimal() +
+  labs(
+    title = "Totaal Stikstof (N): Closest vs Aggregate",
+    x = "Closest Distance (ug/L)",
+    y = "Jaargemiddelde (Aggregate) (ug/L)"
+  ) +
+  coord_fixed(ratio = 1) # Zorgt dat de assen in verhouding kloppen
+
+# Plot voor Fosfor (P)
+plot_pt <- ggplot(vergelijking, aes(x = p_t_dist, y = p_t_agg)) +
+  geom_point(alpha = 0.5, color = "darkgreen") +
+  geom_abline(intercept = 0, slope = 1, color = "red", linetype = "dashed", linewidth = 1) +
+  theme_minimal() +
+  labs(
+    title = "Totaal Fosfor (P): Closest vs Aggregate",
+    x = "Closest Distance (ug/L)",
+    y = "Jaargemiddelde (Aggregate) (ug/L)"
+  ) +
+  coord_fixed(ratio = 1)
+
+# Toon de plots
+print(plot_nt)
+print(plot_pt)
 
 # ==============================================================================
 # OPTIMALE TIJD EN AFSTANDSVENSTER analyses

@@ -62,6 +62,23 @@ classificatie_info <- pesticiden_subtype %>%
   select(stof_symbool, subtype) %>% # Zorg dat kolomnamen matchen met tu_dataset_ruw
   distinct()
 
+# We kijken in tu_dataset_ruw (dus stoffen die EN pesticide zijn EN een EC50 hebben)
+#core stoffen selecteren
+jaren_per_stof <- tu_dataset_ruw %>%
+  mutate(jaar = lubridate::year(monsternamedatum)) %>%
+  group_by(parameter_symbool) %>%
+  summarise(
+    aantal_jaren_gemeten = n_distinct(jaar),
+    eerste_jaar = min(jaar),
+    laatste_jaar = max(jaar),
+    # Extra check: hoe vaak kwam deze stof boven de detectielimiet/droeg hij bij aan TU?
+    aantal_keren_bijdraag = n()
+  ) %>%
+  # Filter: Stoffen die in minstens 10 van de 15 jaren (2010-2024) data hebben
+  filter(aantal_jaren_gemeten >= 10)
+
+core_stoffen <- jaren_per_stof$parameter_symbool
+
 tu_specific_groups <- tu_dataset_ruw %>%
   # Koppel de classificatie (als die er nog niet in zat)
   left_join(classificatie_info, by = c("parameter_symbool" = "stof_symbool")) %>%
@@ -73,6 +90,8 @@ tu_specific_groups <- tu_dataset_ruw %>%
     # 1. De Totaalscore (zoals je al had)
     TU_sum = sum(TU_individual, na.rm = TRUE),
     TU_max = max(TU_individual, na.rm = TRUE),
+    TU_core_sum = sum(TU_individual[parameter_symbool %in% core_stoffen], na.rm = TRUE),
+
     concentratie_pesticiden_sum = sum(resultaat_ug_L),
     # 2. Specifieke scores (Mode of Action)
     # Let op: check in je data of 'insecticide' met hoofdletter is of niet
@@ -85,6 +104,12 @@ tu_specific_groups <- tu_dataset_ruw %>%
     TU_herbicide   = sum(TU_individual[subtype == "herbicide"], na.rm = TRUE),
     TU_fungicide   = sum(TU_individual[subtype == "fungicide"], na.rm = TRUE),
     concentratie_insecticide = sum(resultaat_ug_L[subtype == "insecticide"], na.rm = TRUE),
+    TU_core_insecticide_max = if (any(subtype == "insecticide" & parameter_symbool %in% core_stoffen, na.rm = TRUE)) {
+      max(TU_individual[subtype == "insecticide" & parameter_symbool %in% core_stoffen], na.rm = TRUE)
+    } else {
+      0
+    },
+
     # 3. Neonicotinoïden specifiek (Optioneel, vaak interessant!)
     # Imidacloprid, Thiacloprid, Acetamiprid, etc.
     TU_neonicotinoids = sum(TU_individual[stof_naam %in% c("Imidacloprid", "Thiacloprid", "Acetamiprid", "Clothianidin", "Thiamethoxam")], na.rm = TRUE),
@@ -110,7 +135,7 @@ print(tu_per_sample %>% arrange(desc(TU_sum)) %>% head(10))
 # Opslaan
 tu_pesticiden_per_sample <- tu_per_sample
 tu_pesticiden_ruw <- tu_dataset_ruw
-save(tu_pesticiden_per_sample, tu_pesticiden_ruw, file = here("data", "verwerkt", "polluenten", "tu_ec50_pesticiden.rdata"))
+save(tu_pesticiden_per_sample, tu_pesticiden_ruw, tu_specific_groups, file = here("data", "verwerkt", "polluenten", "tu_ec50_pesticiden.rdata"))
 
 #### Aggregatie TU pesticiden per jaar ####
 # -------------------------------------------------------------------------

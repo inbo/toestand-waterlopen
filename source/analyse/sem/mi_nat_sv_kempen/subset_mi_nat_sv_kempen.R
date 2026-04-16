@@ -80,7 +80,7 @@ clean_all <- filter_collinear_vars(data_subset, raw_all)
 
 data_subset2 <- data_subset %>%
   select(
-    meetplaats, monsternamedatum, jaar_s,
+    meetplaats, monsternamedatum, jaar_s, bekken,
     mmif, ept_prop, ta_xw, sw_dw, mt_sw_prop, nst_prop, stress_prop,
     n_t_log, p_t_log, czv_log,
     ekc2_waterlichaam_s,
@@ -98,8 +98,7 @@ dredge_data <- data_subset2
 ################################################################################
 
 y_var <- "mmif"
-predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s")
-
+predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s", "overstorten_blootstelling_index_log")
 source(here("source", "analyse", "sem", "dredge_formula.R"))
 
 options(na.action = "na.fail") # Verplicht voor dredge
@@ -123,8 +122,7 @@ plot_model_vif(mmif_best_model_kempen, "VIF Check") # "intensiteit_combo_oeverzo
 # model fitten EPT
 ################################################################################
 y_var <- "ept_prop"
-predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s")
-
+predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s", "overstorten_blootstelling_index_log")
 source(here("source", "analyse", "sem", "dredge_formula.R"))
 
 options(na.action = "na.fail") # Verplicht voor dredge
@@ -149,8 +147,7 @@ plot_model_vif(ept_best_model_kempen, "VIF Check") # "intensiteit_combo_oeverzon
 # model fitten tax
 ################################################################################
 y_var <- "ta_xw"
-predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s")
-
+predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s", "overstorten_blootstelling_index_log")
 source(here("source", "analyse", "sem", "dredge_formula.R"))
 
 options(na.action = "na.fail") # Verplicht voor dredge
@@ -175,8 +172,7 @@ plot_model_vif(tax_best_model_kempen, "VIF Check") # "intensiteit_combo_oeverzon
 ################################################################################
 
 y_var <- "nst_prop"
-predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s")
-
+predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s", "overstorten_blootstelling_index_log")
 source(here("source", "analyse", "sem", "dredge_formula.R"))
 
 options(na.action = "na.fail") # Verplicht voor dredge
@@ -201,8 +197,7 @@ plot_model_vif(nst_best_model_kempen, "VIF Check") # "intensiteit_combo_oeverzon
 # model fitten stress
 ################################################################################
 y_var <- "stress_prop"
-predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s")
-
+predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s", "overstorten_blootstelling_index_log")
 source(here("source", "analyse", "sem", "dredge_formula.R"))
 
 options(na.action = "na.fail") # Verplicht voor dredge
@@ -227,8 +222,7 @@ plot_model_vif(stress_best_model_kempen, "VIF Check") # "intensiteit_combo_oever
 # model fitten mts
 ################################################################################
 y_var <- "mt_sw_prop"
-predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s")
-
+predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s", "overstorten_blootstelling_index_log")
 source(here("source", "analyse", "sem", "dredge_formula.R"))
 
 options(na.action = "na.fail") # Verplicht voor dredge
@@ -261,8 +255,7 @@ plot_model_vif(mts_best_model_kempen, "VIF Check") # "intensiteit_combo_oeverzon
 # model fitten swd
 ################################################################################
 y_var <- "sw_dw"
-predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s")
-
+predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s", "overstorten_blootstelling_index_log")
 source(here("source", "analyse", "sem", "dredge_formula.R"))
 
 options(na.action = "na.fail") # Verplicht voor dredge
@@ -411,6 +404,32 @@ summary(ec20_best_model_kempen)
 plot_model_vif(ec20_best_model_kempen, "VIF Check")
 
 ################################################################################
+# model fitten ph
+################################################################################
+
+y_var <- "p_h_s"
+predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen, "n_t_log", "p_t_log", "czv_log", "t_s", "ec_20_s")
+
+source(here("source", "analyse", "sem", "dredge_formula.R"))
+
+options(na.action = "na.fail") # Verplicht voor dredge
+model <- glmmTMB(data = dredge_data, formula = formula_obj,
+                 REML = FALSE,
+                 family = gaussian)
+
+source(here("source" , "analyse", "sem", "dredge.R"))
+
+ph_dredge <- dredge_model
+
+best_model_ML <- get.models(ph_dredge, subset = 1)[[1]]
+
+ph_best_model_kempen <- update(best_model_ML, REML = TRUE)
+
+summary(ph_best_model_kempen)
+
+plot_model_vif(ph_best_model_kempen, "VIF Check")
+
+################################################################################
 # sem models fitten
 ################################################################################
 
@@ -422,33 +441,43 @@ sem_mmif_kempen <- psem(
   ptot_best_model_kempen,
   czv_best_model_kempen,
   o2_best_model_kempen,
-  ec20_best_model_kempen
+  ec20_best_model_kempen,
+  ph_best_model_kempen
 )
 
 summary(sem_mmif_kempen)
 
 # model updaten op basis van dSepS
-mmif_best_model_updated <- update(mmif_best_model_kempen, . ~ . + p_t_log + intensiteit_combo_afstr_s + n_t_log + o2_s + t_s + verharding_afstr_s)
-ntot_best_model_updated <- update(ntot_best_model_kempen, . ~ . + t_s + verharding_afstr_s + lozingen_industrie_ie_log)
-ptot_best_model_updated <- update(ptot_best_model_kempen, . ~ . + spei6_s + intensiteit_combo_afstr_s + t_s + natuur_oever_s)
-czv_best_model_updated <- update(czv_best_model_kempen, . ~ . + lozingen_riool_ie_log)
-ec20_best_model_updated <- update(ec20_best_model_kempen, . ~ . + t_s + spei6_s + intensiteit_combo_afstr_s + p_sum_7d_s + verharding_afstr_s)
-o2_best_model_updated <- update(o2_best_model_kempen, . ~ . + n_extreme_3m_s + czv_log + ec_20_s)
+mmif_best_model_updated <- update(mmif_best_model_kempen, . ~ . + n_t_log + p_t_log + o2_s + spei6_s)
+ntot_best_model_updated <- update(ntot_best_model_kempen, . ~ . + t_s + spei6_s) # loop dood dus uit model
+ptot_best_model_updated <- update(ptot_best_model_kempen, . ~ . + t_s)
+czv_best_model_updated <- update(czv_best_model_kempen, . ~ . ) # loop dood dus laten we uit het model!
+ec20_best_model_updated <- update(ec20_best_model_kempen, . ~ . + t_s)
+o2_best_model_updated <- update(o2_best_model_kempen, . ~ . + ec_20_s + overstorten_blootstelling_index_log)
+ph_best_model_updated <- update(ph_best_model_kempen, . ~ . )
 
 mmif_sem_nat_sv_kempen <- psem(mmif_best_model_updated,
-                             ntot_best_model_updated,
+                             # ntot_best_model_updated,
                              ptot_best_model_updated,
-                             czv_best_model_updated,
+                             # czv_best_model_updated,
                              o2_best_model_updated,
                              ec20_best_model_updated,
-                             n_t_log %~~% p_t_log,
-                             o2_s %~~% p_h_s,
-                             ec_20_s %~~% p_h_s
+                             ph_best_model_updated,
+                             # n_t_log %~~% p_t_log,
+                             o2_s %~~% p_h_s
+                             # ec_20_s %~~% p_h_s,
                              # czv_log %~~% p_h_s
                              )
 summary(mmif_sem_nat_sv_kempen)
 
 save(mmif_sem_nat_sv_kempen, file = here("source", "analyse", "sem", "mi_nat_sv_kempen", "mmif_sem_nat_sv_kempen.rdata"))
+#
+# model_test_mmif <- glmmTMB(data = dredge_data, formula = mmif ~ ec_20_s + p_h_s + spei6_s + p_t_log + intensiteit_combo_afstr_s + n_t_log + o2_s + t_s + verharding_afstr_s +  n_extreme_3m_s + lozingen_riool_ie_log + jaar_s + (1|meetplaats),
+#                  REML = TRUE,
+#                  family = ordbeta, na.action = "na.omit")
+#
+# summary(model_test_mmif)
+# plot_model_vif(model_test_mmif)
 
 sem_resultaat <- mmif_sem_nat_sv_kempen
 coefs_missing <- coefs(sem_resultaat)[,-9]
@@ -470,12 +499,12 @@ sem_ept_kempen <- psem(
 summary(sem_ept_kempen)
 # updaten
 
-ept_best_model_updated <- update(ept_best_model_kempen, . ~ . + verharding_afstr_s)
-ntot_best_model_updated <- update(ntot_best_model_kempen, . ~ . + t_s)
-ptot_best_model_updated <- update(ptot_best_model_kempen, . ~ . + zs_s + intensiteit_combo_afstr_s)
-czv_best_model_updated <- update(czv_best_model_kempen, . ~ . + zs_s)
-ec20_best_model_updated <- update(ec20_best_model_kempen, . ~ . + t_s)
-o2_best_model_updated <- update(o2_best_model_kempen, . ~ . + n_extreme_3m_s + natuur_oever_s + zs_s + ec_20_s + spei6_s)
+ept_best_model_updated <- update(ept_best_model_kempen, . ~ . )
+ntot_best_model_updated <- update(ntot_best_model_kempen, . ~ . )
+ptot_best_model_updated <- update(ptot_best_model_kempen, . ~ . )
+czv_best_model_updated <- update(czv_best_model_kempen, . ~ . )
+ec20_best_model_updated <- update(ec20_best_model_kempen, . ~ . )
+o2_best_model_updated <- update(o2_best_model_kempen, . ~ . )
 
 ept_sem_nat_sv_kempen <- psem(ept_best_model_updated,
                             ntot_best_model_updated,
@@ -509,12 +538,12 @@ summary(sem_swd_kempen)
 
 # updaten
 
-swd_best_model_updated <- update(swd_best_model_kempen, . ~ . + p_t_log)
-ntot_best_model_updated <- update(ntot_best_model_kempen, . ~ . + t_s)
-ptot_best_model_updated <- update(ptot_best_model_kempen, . ~ . + zs_s + intensiteit_combo_afstr_s)
-czv_best_model_updated <- update(czv_best_model_kempen, . ~ . + zs_s + natuur_oever_s + spei6_s)
-ec20_best_model_updated <- update(ec20_best_model_kempen, . ~ . + zs_s + t_s)
-o2_best_model_updated <- update(o2_best_model_kempen, . ~ . + zs_s + n_extreme_3m_s + natuur_oever_s + ec_20_s + spei6_s)
+swd_best_model_updated <- update(swd_best_model_kempen, . ~ .)
+ntot_best_model_updated <- update(ntot_best_model_kempen, . ~ . + )
+ptot_best_model_updated <- update(ptot_best_model_kempen, . ~ . + )
+czv_best_model_updated <- update(czv_best_model_kempen, . ~ . + )
+ec20_best_model_updated <- update(ec20_best_model_kempen, . ~ . +)
+o2_best_model_updated <- update(o2_best_model_kempen, . ~ . + )
 
 swd_sem_nat_sv_kempen <- psem(swd_best_model_updated,
                             ntot_best_model_updated,

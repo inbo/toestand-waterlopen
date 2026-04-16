@@ -61,12 +61,19 @@ mi_meetpunten <- st_read(here("data", "ruw", "macroinvertebraten", "mi_meetpunte
   filter(monsternamedatum > "2006-12-31") %>%
   mutate(monsternamedatum = as.Date(monsternamedatum))
 
+mafy_meetpunten <- st_read(here("data", "ruw", "macrofyten", "mafy_meetpunten_datum.gpkg"), quiet = T) %>%
+  filter(monsternamedatum > "2006-12-31") %>%
+  mutate(monsternamedatum = as.Date(monsternamedatum)) %>%
+  select(-vhas)
+
+meetpunten <- bind_rows(mi_meetpunten, mafy_meetpunten)
+
 afstroomgebieden <- st_read(here("data", "verwerkt", "hydrologisch", "ow_meetpunten_watersheds_nested_all.gpkg"), quiet = TRUE) %>%
   select(meetplaats, geom) %>%
   mutate(meetplaats = as.character(meetplaats))
 
 # Join samples aan afstroomgebieden
-samples_geo <- mi_meetpunten %>%
+samples_geo <- meetpunten %>%
   st_drop_geometry() %>%
   distinct(meetplaats, monsternamedatum, .keep_all = TRUE) %>%
   mutate(meetplaats = as.character(meetplaats)) %>%
@@ -483,7 +490,7 @@ print(head(results_final))
 # ==============================================================================
 # DEEL D: OPSLAAN (Hetzelfde als voorheen)
 # ==============================================================================
-file_prev <- here("data", "verwerkt", "neerslag_variabelen_watersheds.gpkg")
+file_prev <-  here("data", "verwerkt", "hydrologisch", "neerslag_variabelen_watersheds.gpkg")
 prev_sf <- st_read(file_prev, quiet = TRUE) %>%
   mutate(meetplaats = as.character(meetplaats),
          monsternamedatum = as.Date(monsternamedatum))
@@ -494,7 +501,7 @@ results_final[, meetplaats := as.character(meetplaats)]
 final_dataset <- prev_sf %>%
   left_join(results_final, by = c("meetplaats", "monsternamedatum"))
 
-outfile <- here("data", "verwerkt", "mi_metingen_met_klimaat_compleet.gpkg")
+outfile <- here("data", "verwerkt", "metingen_met_klimaat_compleet.gpkg")
 st_write(final_dataset, outfile, delete_dsn = TRUE)
 message("✅ Opgeslagen: ", outfile)
 

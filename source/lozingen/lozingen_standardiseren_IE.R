@@ -9,11 +9,13 @@ nodes <- st_read(here("data", "ruw", "waterlopen", "vha_network_junctions.shp"),
 
 meetnetten <- read.delim("data/ruw/vmm/meetnetten.txt")
 
-mi_sf <- st_read(here("data", "ruw", "macroinvertebraten", "mi_meetpunten_datum.gpkg"), quiet = T) %>%
+meetpunten_sf <- st_read(here("data", "ruw", "macroinvertebraten", "mi_meetpunten_datum.gpkg"), quiet = T) %>%
   filter(monsternamedatum > '2009-12-31') %>%
   left_join(meetnetten %>%
               select(vhas, nummer),
             by = c("meetplaats" = "nummer")) %>%
+  bind_rows(.,
+            st_read(here("data", "ruw", "macrofyten", "mafy_meetpunten_datum.gpkg"), quiet = T)) %>%
   mutate(jaar = lubridate::year(monsternamedatum),
          vhas = as.character(vhas))
 
@@ -432,8 +434,8 @@ riool_proxy_2018 <- riool_ie_resultaat %>%
     .groups = "drop"
   )
 
-# Stap 2: Expand naar de volledige tijdreeks van de mi_sf (zoals bij overstorten)
-jaren_range <- unique(mi_sf$jaar)
+# Stap 2: Expand naar de volledige tijdreeks van de meetpunten_sf (zoals bij overstorten)
+jaren_range <- unique(meetpunten_sf$jaar)
 
 riool_timeseries_sf <- riool_proxy_2018 %>%
   tidyr::crossing(jaar = jaren_range) %>%
@@ -656,15 +658,15 @@ calculate_upstream_pressure <- function(biota_sf,
 
 # 1. Bereken druk van Industrie
 
-mi_met_industrie_druk <- calculate_upstream_pressure(
-  biota_sf = mi_sf,
+meetpunten_met_industrie_druk <- calculate_upstream_pressure(
+  biota_sf = meetpunten_sf,
   discharge_sf = industrie_sf, # dataframe met max_ie en coords
   network_list = river_network_fine,
   decay_distance_km = 1, # bij 1 km halfwaarde
   max_dist_m = 5000,          # Kijk tot 5km stroomopwaarts
   col_ie_value = "max_ie_meetpunt",
   col_year_discharge = "jaar",
-  col_biota_snap = "vhas",      # Kolom in mi_sf
+  col_biota_snap = "vhas",      # Kolom in meetpunten_sf
   col_net_biota = "VHAS",       # Kolom in netwerk voor biota
   col_discharge_snap = "vhag",  # Kolom in discharge_sf
   col_net_discharge = "VHAG"   # Kolom in netwerk voor lozingen# Zorg dat je industrie data een kolom 'jaar' heeft
@@ -673,15 +675,15 @@ mi_met_industrie_druk <- calculate_upstream_pressure(
          count_ind = count_sources)
 
 # 2.1 Bereken druk van RWZI
-mi_met_rwzi_druk <- calculate_upstream_pressure(
-  biota_sf = mi_sf,
+meetpunten_met_rwzi_druk <- calculate_upstream_pressure(
+  biota_sf = meetpunten_sf,
   discharge_sf = rwzi_sf,
   network_list = river_network_fine,
   max_dist_m = 5000,
   decay_distance_km = 2, # hier grotere decay afstand want continuere lozing
   col_ie_value = "max_ie_meetpunt",
   col_year_discharge = "jaar",
-  col_biota_snap = "vhas",      # Kolom in mi_sf
+  col_biota_snap = "vhas",      # Kolom in meetpunten_sf
   col_net_biota = "VHAS",       # Kolom in netwerk voor biota
   col_discharge_snap = "vhag",  # Kolom in discharge_sf
   col_net_discharge = "VHAG"
@@ -689,15 +691,15 @@ mi_met_rwzi_druk <- calculate_upstream_pressure(
   select(meetplaats, monsternamedatum, lozingen_rwzi_ie = sum_ie_weighted)
 
 # 2.2 Bereken concentratie van fosfor uit rwzi
-mi_met_rwzi_druk_p_t <- calculate_upstream_pressure(
-  biota_sf = mi_sf,
+meetpunten_met_rwzi_druk_p_t <- calculate_upstream_pressure(
+  biota_sf = meetpunten_sf,
   discharge_sf = rwzi_sf,
   network_list = river_network_fine,
   max_dist_m = 5000,
   decay_distance_km = 2,
   col_ie_value = "concentratie_P_t",
   col_year_discharge = "jaar",
-  col_biota_snap = "vhas",      # Kolom in mi_sf
+  col_biota_snap = "vhas",      # Kolom in meetpunten_sf
   col_net_biota = "VHAS",       # Kolom in netwerk voor biota
   col_discharge_snap = "vhag",  # Kolom in discharge_sf
   col_net_discharge = "VHAG"
@@ -705,15 +707,15 @@ mi_met_rwzi_druk_p_t <- calculate_upstream_pressure(
   select(meetplaats, monsternamedatum, lozingen_rwzi_p_t = sum_ie_weighted)
 
 # 3. Bereken druk van RIOOL op basis van zuiveringsbenadering
-mi_met_riool_druk <- calculate_upstream_pressure(
-  biota_sf = mi_sf,
+meetpunten_met_riool_druk <- calculate_upstream_pressure(
+  biota_sf = meetpunten_sf,
   discharge_sf = riool_dynamisch_sf,
   network_list = river_network_fine,
   max_dist_m = 5000,
   decay_distance_km = 2,
   col_ie_value = "ie_waarde",
   col_year_discharge = "jaar",
-  col_biota_snap = "vhas",      # Kolom in mi_sf
+  col_biota_snap = "vhas",      # Kolom in meetpunten_sf
   col_net_biota = "VHAS",       # Kolom in netwerk voor biota
   col_discharge_snap = "vhas",  # Kolom in discharge_sf
   col_net_discharge = "VHAS"   # Kolom in netwerk voor lozingen
@@ -721,8 +723,8 @@ mi_met_riool_druk <- calculate_upstream_pressure(
   select(meetplaats, monsternamedatum, lozingen_riool_ie = sum_ie_weighted)
 
 # 4. Bereken druk van RIOOL (op basis van statisch jaar 2018)
-mi_met_riool_druk_2018 <- calculate_upstream_pressure(
-  biota_sf = mi_sf,
+meetpunten_met_riool_druk_2018 <- calculate_upstream_pressure(
+  biota_sf = meetpunten_sf,
   discharge_sf = riool_timeseries_sf, # Gebruik de nieuwe statische tijdreeks
   network_list = river_network_fine,
   max_dist_m = 5000,
@@ -750,7 +752,7 @@ overstort_sf <- overstorten_uitlaat_vha_prio_score %>%
 
 # STAP 2: Maak de data "temporeel" (expand to full time range)
 # We maken een grid van alle jaren die in je MI-data zitten
-jaren_range <- unique(mi_sf$jaar) # assumptie over de tijd
+jaren_range <- unique(meetpunten_sf$jaar) # assumptie over de tijd
 
 overstort_timeseries <- overstort_sf %>%
   # Dit dupliceert elke overstort voor elk jaar in de lijst
@@ -759,15 +761,15 @@ overstort_timeseries <- overstort_sf %>%
 
 # STAP 3: Draai de functie met een KORTERE decay distance
 
-mi_met_overstort_druk <- calculate_upstream_pressure(
-  biota_sf = mi_sf,
+meetpunten_met_overstort_druk <- calculate_upstream_pressure(
+  biota_sf = meetpunten_sf,
   discharge_sf = overstort_timeseries,
   network_list = river_network_fine,
   max_dist_m = 5000,
   decay_distance_km = 0.2, # veel kleinere decay afstand 200m
   col_ie_value = "overstort_risk_score",
   col_year_discharge = "jaar",
-  col_biota_snap = "vhas",      # Kolom in mi_sf
+  col_biota_snap = "vhas",      # Kolom in meetpunten_sf
   col_net_biota = "VHAS",       # Kolom in netwerk voor biota
   col_discharge_snap = "vhas",  # Kolom in discharge_sf
   col_net_discharge = "VHAS"   # Kolom in netwerk voor lozingen
@@ -775,15 +777,15 @@ mi_met_overstort_druk <- calculate_upstream_pressure(
   rename(overstorten_index = sum_ie_weighted,
          count_cso = count_sources)
 
-mi_met_overstort_druk_blootstelling <- calculate_upstream_pressure(
-  biota_sf = mi_sf,
+meetpunten_met_overstort_druk_blootstelling <- calculate_upstream_pressure(
+  biota_sf = meetpunten_sf,
   discharge_sf = overstort_timeseries,
   network_list = river_network_fine,
   max_dist_m = 5000,
   decay_distance_km = 0.2,
   col_ie_value = "Blootstellingsfactor",
   col_year_discharge = "jaar",
-  col_biota_snap = "vhas",      # Kolom in mi_sf
+  col_biota_snap = "vhas",      # Kolom in meetpunten_sf
   col_net_biota = "VHAS",       # Kolom in netwerk voor biota
   col_discharge_snap = "vhas",  # Kolom in discharge_sf
   col_net_discharge = "VHAS"   # Kolom in netwerk voor lozingen
@@ -795,19 +797,19 @@ mi_met_overstort_druk_blootstelling <- calculate_upstream_pressure(
 # Data joinen voor SEM
 #############################################
 
-lozingen_data <- mi_met_industrie_druk %>%
+lozingen_data <- meetpunten_met_industrie_druk %>%
   st_drop_geometry() %>%
-  left_join(mi_met_rwzi_druk,
+  left_join(meetpunten_met_rwzi_druk,
             by = c("meetplaats", "monsternamedatum")) %>%
-  left_join(mi_met_rwzi_druk_p_t,
+  left_join(meetpunten_met_rwzi_druk_p_t,
             by = c("meetplaats", "monsternamedatum")) %>%
-  left_join(mi_met_overstort_druk %>% st_drop_geometry(),
+  left_join(meetpunten_met_overstort_druk %>% st_drop_geometry(),
             by = c("meetplaats", "monsternamedatum")) %>%
-  left_join(mi_met_riool_druk %>% st_drop_geometry(),
+  left_join(meetpunten_met_riool_druk %>% st_drop_geometry(),
             by = c("meetplaats", "monsternamedatum")) %>%
-  left_join( mi_met_riool_druk_2018 %>% st_drop_geometry(),
+  left_join( meetpunten_met_riool_druk_2018 %>% st_drop_geometry(),
             by = c("meetplaats", "monsternamedatum")) %>%
-  left_join(mi_met_overstort_druk_blootstelling,
+  left_join(meetpunten_met_overstort_druk_blootstelling,
             by = c("meetplaats", "monsternamedatum")) %>%
   select(meetplaats, monsternamedatum, lozingen_industrie_ie, lozingen_rwzi_ie, lozingen_rwzi_p_t,
          overstorten_index, overstorten_blootstelling_index, lozingen_riool_ie, lozingen_riool_ie_conservative, aantal_overstorten_weighted)

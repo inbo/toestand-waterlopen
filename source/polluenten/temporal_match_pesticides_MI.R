@@ -5,7 +5,7 @@ library(here)
 library(sf)
 conflicted::conflicts_prefer(lubridate::year)
 conflicted::conflicts_prefer(dplyr::filter)
-load(here("data", "verwerkt", "tu_resultaten.rdata"))
+load(file = here("data", "verwerkt", "polluenten", "tu_ec50_pesticiden.rdata"))
 load(here("data", "verwerkt", "mi_nat_sv.rdata"))
 #### Hoeveel pesticiden gemeten per staal??? ####
 
@@ -72,7 +72,7 @@ tu_per_sample %>%
 # -------------------------------------------------------------------------
 
 # We kijken in tu_dataset (dus stoffen die EN pesticide zijn EN een EC50 hebben)
-jaren_per_stof <- tu_dataset %>%
+jaren_per_stof <- tu_dataset_ruw %>%
   mutate(jaar = lubridate::year(monsternamedatum)) %>%
   group_by(parameter_symbool) %>%
   summarise(

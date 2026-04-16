@@ -59,7 +59,7 @@ mafy_data1 <- janitor::clean_names(mafy_data0)
 meetnetten <- read.delim("data/ruw/vmm/meetnetten.txt") %>%
   mutate(meetplaats_mafy = stringr::str_remove(nummer, "OW"))
 
-mafy_data <- mafy_data0 %>%
+mafy_data <- mafy_data1 %>%
   left_join(meetnetten %>%
               select(meetplaats_mafy, vhas, vha_naam),
             by = c("meetplaats" = "meetplaats_mafy"))
@@ -67,7 +67,7 @@ mafy_data <- mafy_data0 %>%
 save(mafy_data, file = here("data", "verwerkt", "mafy_data.rdata"))
 
 mafy_meetpunten_datum <- mafy_data %>%
-  select(meetplaats, monsternamedatum, geometry) %>%
+  select(meetplaats, monsternamedatum, vhas, geometry) %>%
   unique
 st_write(mafy_meetpunten_datum, dsn = here("data", "ruw", "macrofyten", "mafy_meetpunten_datum.gpkg"), delete_dsn = T)
 

@@ -6,9 +6,9 @@ x_string <- paste(x_vars_schoon, collapse = " + ")
 # 3. Bouw de formule: Y ~ X'en + vaste jaar_s + random meetplaats
 # (Als x_string leeg is, fit hij netjes alleen jaar_s en het random effect)
 if (nchar(x_string) > 0) {
-  formule_string <- paste(y_var, "~", x_string, "+ jaar_s + (1 | meetplaats)")
+  formule_string <- paste(y_var, "~", x_string, "+ jaar_s + (1 | meetplaats) + (1 | bekken)")
 } else {
-  formule_string <- paste(y_var, "~ jaar_s + (1 | meetplaats)")
+  formule_string <- paste(y_var, "~ jaar_s + (1 | meetplaats) + (1 | bekken)")
 }
 
 # Zet de tekst om naar een échte R-formule

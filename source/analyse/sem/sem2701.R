@@ -4,7 +4,6 @@ if (!exists("packages_geladen")) {
   source(here::here("source", "inladen_packages.R"))
 }
 
-source("source/inladen_packages.R")
 load(here("data", "verwerkt", "mi_nat_sv.rdata"))
 # Selecteer alleen de noodzakelijke variabelen en verwijder NA's
 data_sem_clean0 <- mi_nat_sv %>%
@@ -105,11 +104,11 @@ m2 <- glmmTMB(
 #   family =  binomial(link = "logit"))
 # # #
 #
-m2 <- glmmTMB(
-  stress_prop ~ n_t_log + intensiteit_combo_s + spei6_s + n_extreme_3m_s + verharding_afstr_s  + ekc2_waterlichaam_s + o2_verz_fc_s + jaar_s + p_t_log + overstorten_blootstelling_index_log + lozingen_industrie_ie_log + lozingen_rwzi_ie_log + czv_log + lozingen_riool_ie_log + (1 | meetplaats),
-  weights = data_sem_clean$ta_xw,
-  data = data_sem_clean,
-  family =  binomial(link = "logit"))
+# m2 <- glmmTMB(
+#   stress_prop ~ n_t_log + intensiteit_combo_s + spei6_s + n_extreme_3m_s + verharding_afstr_s  + ekc2_waterlichaam_s + o2_verz_fc_s + jaar_s + p_t_log + overstorten_blootstelling_index_log + lozingen_industrie_ie_log + lozingen_rwzi_ie_log + czv_log + lozingen_riool_ie_log + (1 | meetplaats),
+#   weights = data_sem_clean$ta_xw,
+#   data = data_sem_clean,
+#   family =  binomial(link = "logit"))
 
 # simulationOutput <- simulateResiduals(m1, plot = TRUE)
 # testDispersion(simulationOutput) # geen overdispersie

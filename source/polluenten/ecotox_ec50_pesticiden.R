@@ -14,7 +14,7 @@ if (!check_ecotox_availability()) {
 # Hulpfunctie voor Geometrisch Gemiddelde
 geomean <- function(x) {
   x_clean <- x[!is.na(x) & x > 0]
-  if(length(x_clean) == 0) return(NA)
+  if (length(x_clean) == 0) return(NA)
   exp(mean(log(x_clean)))
 }
 
