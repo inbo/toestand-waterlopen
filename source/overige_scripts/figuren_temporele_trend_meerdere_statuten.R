@@ -90,7 +90,8 @@ mi_data_nat_sv <- mi_data_analyse %>%
   filter(statuut %in% c("Natuurlijk", "Sterk Veranderd")) %>%
   filter(groep != "overgangswater") %>%
   filter(jaar > 2006)
-plot_waterlopen_statuut2(mi_data_nat_sv, "natuurlijk+sterkveranderd", 3)
+
+plot_waterlopen_statuut2(mi_nat_sv_beek, "natuurlijk+sterkveranderd", 3)
 
 plot_waterlopen_statuut3 <- function(input_data, titel_input, aantal_knots) {
 
@@ -416,4 +417,4 @@ mi_data_nat_sv <- mi_data_analyse %>%
   filter(statuut %in% c("Natuurlijk", "Sterk Veranderd")) %>%
   filter(!groep %in% c( "overgangswater", "zeer_grote_rivier")) %>%
   filter(jaar > 2006)
-plot_waterlopen_statuut_sg(mi_data_nat_sv, "Natuurlijk en sterk veranderde waterlopen", 3)
+plot_waterlopen_statuut_sg(mi_nat_sv_beek, "Natuurlijk en sterk veranderde waterlopen", 3)

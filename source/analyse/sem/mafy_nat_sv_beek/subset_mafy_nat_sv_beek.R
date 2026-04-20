@@ -27,6 +27,7 @@ data_subset <- mafy_nat_sv_beek %>%
          verharding_afstr, natuur_afstr, intensiteit_combo_afstr,
          # verharding_oever, natuur_oever, intensiteit_combo_oeverzone,
          spei6, n_extreme_3m, p_sum_7d,
+         perc_schaduw,
          lozingen_industrie_ie, lozingen_rwzi_ie, lozingen_rwzi_p_t, lozingen_riool_ie, overstorten_index, overstorten_blootstelling_index, aantal_overstorten_weighted
   ) %>%
   mutate(across(.cols = c(jaar, t:aantal_overstorten_weighted), # Selects n_t and all columns to the end
@@ -50,10 +51,11 @@ data_subset <- mafy_nat_sv_beek %>%
 # -----------------------------------------------------------
 raw_responses <- c("index_zonder_gep", "vo_zonder_gep", "ts_zonder_gep", "v_zonder_gep", "gv_zonder_gep")
 
-raw_fysico        <- c("t_s", "p_h_s", "o2_s", "ec_20_s", "zs_s", "secchi_s") # o2_verz_s weg en keuze o2
+raw_fysico        <- c("t_s", "p_h_s", "ec_20_s", "zs_s", "secchi_s") # o2 weglaten want niet relevant voor mafy
 raw_nutrients     <- c("czv_log", "n_t_log", "no2_log", "no3_log", "nh4_log", "p_t_log")
 raw_hydmo         <- c("breedte_diepte_ratio_s", "sinuositeit_s", "bodemsub_s", "doodhout_s", "profiel_s", "ekc2_waterlichaam_s", "ekc2_traject_s", "stroomsnelheid_s")
-raw_landuse <- c("verharding_afstr_s", "natuur_afstr_s", "intensiteit_combo_afstr_s", "verharding_oever_s", "natuur_oever_s", "intensiteit_combo_oeverzone_s")
+raw_landuse <- c("verharding_afstr_s", "natuur_afstr_s", "intensiteit_combo_afstr_s", "perc_schaduw_s")
+                 # "verharding_oever_s", "natuur_oever_s", "intensiteit_combo_oeverzone_s")
 raw_lozingen      <- c("lozingen_rwzi_ie_log", "lozingen_riool_ie_log", "lozingen_industrie_ie_log", "overstorten_blootstelling_index_log", "overstorten_index_log", "lozingen_rwzi_p_t_log")
 raw_klimaat       <- c("spei6_s", "n_extreme_3m_s", "p_sum_7d_s")
 
@@ -76,7 +78,9 @@ plot_groep_correlogram(data_subset, raw_klimaat, "Klimaat (Beken)")
 # -----------------------------------------------------------
 clean_fysico <- filter_collinear_vars(data_subset, raw_fysico)
 clean_nutrients <- filter_collinear_vars(data_subset, raw_nutrients)
-clean_landuse <- filter_collinear_vars(data_subset, raw_landuse)
+clean_landuse0 <- filter_collinear_vars(data_subset, raw_landuse)
+clean_landuse <- c("intensiteit_combo_afstr_s", "verharding_afstr_s") # geen schaduw perc -> niet in dredge drivers
+
 clean_hydmo <- filter_collinear_vars(data_subset, raw_hydmo)
 # Lozingen en Klimaat zijn vaak orthogonaal genoeg, maar je kan ze ook filteren:
 clean_lozingen      <- filter_collinear_vars(data_subset, raw_lozingen)
@@ -113,24 +117,26 @@ clean_all <- filter_collinear_vars(data_subset, raw_all)
 data_subset2 <- data_subset %>%
   select(
     meetplaats, monsternamedatum, jaar_s, bekken,
-    mmif, ept_prop, ta_xw, sw_dw, mt_sw_prop, nst_prop, stress_prop,
-    n_t_log, p_t_log, czv_log,
+    index_zonder_gep, vo_zonder_gep, ts_zonder_gep, v_zonder_gep, gv_zonder_gep,
+    n_t_log, p_t_log,
+    czv_log,
     ekc2_waterlichaam_s,
     all_of(clean_klimaat),
     all_of(clean_lozingen),
     all_of(clean_landuse),
     all_of(clean_fysico),
+    perc_schaduw_s
   ) %>%
   na.omit
 
 dredge_data <- data_subset2
 
 ################################################################################
-# model fitten MMIF
+# model fitten mafy index
 ################################################################################
 
-y_var <- "mmif"
-predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s")
+y_var <- "index_zonder_gep"
+predictors <- c(clean_klimaat, clean_fysico, "ekc2_waterlichaam_s", "overstorten_blootstelling_index_log", "perc_schaduw_s")
 
 source(here("source", "analyse", "sem", "dredge_formula.R"))
 
@@ -139,129 +145,25 @@ model <- glmmTMB(data = dredge_data, formula = formula_obj,
                  REML = FALSE,
                  family = ordbeta)
 
-source(here("source" , "analyse", "sem", "dredge.R"))
+source(here("source" , "analyse", "sem", "dredge_mafy.R"))
 
-mmif_dredge <- dredge_model
+mafy_index_dredge <- dredge_model
 
-best_model_ML <- get.models(mmif_dredge, subset = 1)[[1]]
+best_model_ML <- get.models(mafy_index_dredge, subset = 1)[[1]]
 
-mmif_best_model_beek <- update(best_model_ML, REML = TRUE)
+mafy_index_best_model_beek <- update(best_model_ML, REML = TRUE)
 
-summary(mmif_best_model_beek)
+summary(mafy_index_best_model_beek)
 
-plot_model_vif(mmif_best_model_beek, "VIF Check") # "intensiteit_combo_oeverzone_s" weggelaten
+plot_model_vif(mafy_index_best_model_beek, "VIF Check") # "intensiteit_combo_oeverzone_s" weggelaten
 
-importance_mmif <- sw(mmif_dredge)
-
-################################################################################
-# model fitten EPT
-################################################################################
-y_var <- "ept_prop"
-predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s")
-
-source(here("source", "analyse", "sem", "dredge_formula.R"))
-
-options(na.action = "na.fail") # Verplicht voor dredge
-model <- glmmTMB(data = dredge_data, formula = formula_obj,
-                 REML = FALSE,
-                 family = binomial(link = "logit"),
-                 weights = dredge_data$ta_xw)
-
-source(here("source" , "analyse", "sem", "dredge.R"))
-
-ept_dredge <- dredge_model
-
-best_model_ML <- get.models(ept_dredge, subset = 1)[[1]]
-
-ept_best_model_beek <- update(best_model_ML, REML = TRUE)
-
-summary(ept_best_model_beek)
-
-plot_model_vif(ept_best_model_beek, "VIF Check") # "intensiteit_combo_oeverzone_s" weggelaten
+importance_mafy_index <- sw(mafy_index_dredge)
 
 ################################################################################
-# model fitten tax
+# model fitten verstoring
 ################################################################################
-y_var <- "ta_xw"
-predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s")
-
-source(here("source", "analyse", "sem", "dredge_formula.R"))
-
-options(na.action = "na.fail") # Verplicht voor dredge
-model <- glmmTMB(data = dredge_data, formula = formula_obj,
-                 REML = FALSE,
-                 family = poisson)
-
-source(here("source" , "analyse", "sem", "dredge.R"))
-
-tax_dredge <- dredge_model
-
-best_model_ML <- get.models(tax_dredge, subset = 1)[[1]]
-
-tax_best_model_beek <- update(best_model_ML, REML = TRUE)
-
-summary(tax_best_model_beek)
-
-plot_model_vif(tax_best_model_beek, "VIF Check") # "intensiteit_combo_oeverzone_s" weggelaten
-
-################################################################################
-# model fitten nst
-################################################################################
-
-y_var <- "nst_prop"
-predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s")
-
-source(here("source", "analyse", "sem", "dredge_formula.R"))
-
-options(na.action = "na.fail") # Verplicht voor dredge
-model <- glmmTMB(data = dredge_data, formula = formula_obj,
-                 REML = FALSE,
-                 family = binomial(link = "logit"),
-                 weights = dredge_data$ta_xw)
-
-source(here("source" , "analyse", "sem", "dredge.R"))
-
-nst_dredge <- dredge_model
-
-best_model_ML <- get.models(nst_dredge, subset = 1)[[1]]
-
-nst_best_model_beek <- update(best_model_ML, REML = TRUE)
-
-summary(nst_best_model_beek)
-
-plot_model_vif(nst_best_model_beek, "VIF Check") # "intensiteit_combo_oeverzone_s" weggelaten
-
-################################################################################
-# model fitten stress
-################################################################################
-y_var <- "stress_prop"
-predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s")
-
-source(here("source", "analyse", "sem", "dredge_formula.R"))
-
-options(na.action = "na.fail") # Verplicht voor dredge
-model <- glmmTMB(data = dredge_data, formula = formula_obj,
-                 REML = FALSE,
-                 family = binomial(link = "logit"),
-                 weights = dredge_data$ta_xw)
-
-source(here("source" , "analyse", "sem", "dredge.R"))
-
-stress_dredge <- dredge_model
-
-best_model_ML <- get.models(stress_dredge, subset = 1)[[1]]
-
-stress_best_model_beek <- update(best_model_ML, REML = TRUE)
-
-summary(stress_best_model_beek)
-
-plot_model_vif(stress_best_model_beek, "VIF Check") # "intensiteit_combo_oeverzone_s" weggelaten
-
-################################################################################
-# model fitten mts
-################################################################################
-y_var <- "mt_sw_prop"
-predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s")
+y_var <- "v_zonder_gep"
+predictors <- c(clean_klimaat, clean_fysico, "ekc2_waterlichaam_s", "overstorten_blootstelling_index_log", "perc_schaduw_s")
 
 source(here("source", "analyse", "sem", "dredge_formula.R"))
 
@@ -270,42 +172,92 @@ model <- glmmTMB(data = dredge_data, formula = formula_obj,
                  REML = FALSE,
                  family = ordbeta)
 
-source(here("source" , "analyse", "sem", "dredge.R"))
+source(here("source" , "analyse", "sem", "dredge_mafy.R"))
 
-mts_dredge <- dredge_model
+verstoring_dredge <- dredge_model
 
-best_model_ML <- get.models(mts_dredge, subset = 1)[[1]]
+best_model_ML <- get.models(verstoring_dredge, subset = 1)[[1]]
 
-mts_best_model_beek <- update(best_model_ML, REML = TRUE)
+verstoring_best_model_beek <- update(best_model_ML, REML = TRUE)
 
-summary(mts_best_model_beek)
+summary(verstoring_best_model_beek)
 
-plot_model_vif(mts_best_model_beek, "VIF Check") # "intensiteit_combo_oeverzone_s" weggelaten
+plot_model_vif(verstoring_best_model_beek, "VIF Check") # "intensiteit_combo_oeverzone_s" weggelaten
 
 ################################################################################
-# model fitten swd
+# model fitten groeivorm
 ################################################################################
-y_var <- "sw_dw"
-predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s")
+y_var <- "gv_zonder_gep"
+predictors <- c(clean_klimaat, clean_fysico, "ekc2_waterlichaam_s", "overstorten_blootstelling_index_log", "perc_schaduw_s")
 
 source(here("source", "analyse", "sem", "dredge_formula.R"))
 
 options(na.action = "na.fail") # Verplicht voor dredge
 model <- glmmTMB(data = dredge_data, formula = formula_obj,
                  REML = FALSE,
-                 family = gaussian)
+                 family = ordbeta)
 
-source(here("source" , "analyse", "sem", "dredge.R"))
+source(here("source" , "analyse", "sem", "dredge_mafy.R"))
 
-swd_dredge <- dredge_model
+gv_dredge <- dredge_model
 
-best_model_ML <- get.models(swd_dredge, subset = 1)[[1]]
+best_model_ML <- get.models(gv_dredge, subset = 1)[[1]]
 
-swd_best_model_beek <- update(best_model_ML, REML = TRUE)
+gv_best_model_beek <- update(best_model_ML, REML = TRUE)
 
-summary(swd_best_model_beek)
+summary(gv_best_model_beek)
 
-plot_model_vif(swd_best_model_beek, "VIF Check")
+plot_model_vif(gv_best_model_beek, "VIF Check") # "intensiteit_combo_oeverzone_s" weggelaten
+
+################################################################################
+# model fitten typespecificiteit
+################################################################################
+y_var <- "ts_zonder_gep"
+predictors <- c(clean_klimaat, clean_fysico, "ekc2_waterlichaam_s", "overstorten_blootstelling_index_log", "perc_schaduw_s")
+
+source(here("source", "analyse", "sem", "dredge_formula.R"))
+
+options(na.action = "na.fail") # Verplicht voor dredge
+model <- glmmTMB(data = dredge_data, formula = formula_obj,
+                 REML = FALSE,
+                 family = ordbeta)
+
+source(here("source" , "analyse", "sem", "dredge_mafy.R"))
+
+typspec_dredge <- dredge_model
+
+best_model_ML <- get.models(typspec_dredge, subset = 1)[[1]]
+
+typspec_best_model_beek <- update(best_model_ML, REML = TRUE)
+
+summary(typspec_best_model_beek)
+
+plot_model_vif(typspec_best_model_beek, "VIF Check") # "intensiteit_combo_oeverzone_s" weggelaten
+
+################################################################################
+# model fitten vegetatie-ontwikkeling
+################################################################################
+y_var <- "vo_zonder_gep"
+predictors <- c(clean_klimaat, clean_fysico, "ekc2_waterlichaam_s", "overstorten_blootstelling_index_log", "perc_schaduw_s")
+
+source(here("source", "analyse", "sem", "dredge_formula.R"))
+
+options(na.action = "na.fail") # Verplicht voor dredge
+model <- glmmTMB(data = dredge_data, formula = formula_obj,
+                 REML = FALSE,
+                 family = ordbeta)
+
+source(here("source" , "analyse", "sem", "dredge_mafy.R"))
+
+vo_dredge <- dredge_model
+
+best_model_ML <- get.models(vo_dredge, subset = 1)[[1]]
+
+vo_best_model_beek <- update(best_model_ML, REML = TRUE)
+
+summary(vo_best_model_beek)
+
+plot_model_vif(vo_best_model_beek, "VIF Check") # "intensiteit_combo_oeverzone_s" weggelaten
 
 ################################################################################
 # model fitten stikstof
@@ -359,9 +311,9 @@ summary(ptot_best_model_beek)
 plot_model_vif(ptot_best_model_beek, "VIF Check")
 
 ################################################################################
-# model fitten o2
+# model fitten zs
 ################################################################################
-y_var <- "o2_s"
+y_var <- "zs_s"
 predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen, "n_t_log", "p_t_log", "czv_log", "t_s", "ec_20_s")
 
 source(here("source", "analyse", "sem", "dredge_formula.R"))
@@ -373,15 +325,15 @@ model <- glmmTMB(data = dredge_data, formula = formula_obj,
 
 source(here("source" , "analyse", "sem", "dredge.R"))
 
-o2_dredge <- dredge_model
+zs_dredge <- dredge_model
 
-best_model_ML <- get.models(o2_dredge, subset = 1)[[1]]
+best_model_ML <- get.models(zs_dredge, subset = 1)[[1]]
 
-o2_best_model_beek <- update(best_model_ML, REML = TRUE)
+zs_best_model_beek <- update(best_model_ML, REML = TRUE)
 
-summary(o2_best_model_beek)
+summary(zs_best_model_beek)
 
-plot_model_vif(o2_best_model_beek, "VIF Check")
+plot_model_vif(zs_best_model_beek, "VIF Check")
 
 ################################################################################
 # model fitten czv
@@ -436,180 +388,163 @@ summary(ec20_best_model_beek)
 plot_model_vif(ec20_best_model_beek, "VIF Check")
 
 ################################################################################
+# model fitten secchi
+################################################################################
+
+y_var <- "secchi_s"
+predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen, "n_t_log", "p_t_log")
+
+source(here("source", "analyse", "sem", "dredge_formula.R"))
+
+options(na.action = "na.fail") # Verplicht voor dredge
+model <- glmmTMB(data = dredge_data, formula = formula_obj,
+                 REML = FALSE,
+                 family = gaussian)
+
+source(here("source" , "analyse", "sem", "dredge.R"))
+
+secchi_dredge <- dredge_model
+
+best_model_ML <- get.models(secchi_dredge, subset = 1)[[1]]
+
+secchi_best_model_beek <- update(best_model_ML, REML = TRUE)
+
+summary(secchi_best_model_beek)
+
+plot_model_vif(secchi_best_model_beek, "VIF Check")
+
+################################################################################
 # sem models fitten
 ################################################################################
 
-# MMIF
+# mafy index
 
-sem_mmif_beek <- psem(
-  mmif_best_model_beek,
+sem_mafy_index_beek <- psem(
+  mafy_index_best_model_beek,
   ntot_best_model_beek,
   ptot_best_model_beek,
   czv_best_model_beek,
-  o2_best_model_beek,
-  ec20_best_model_beek
+  zs_best_model_beek,
+  ec20_best_model_beek,
+  secchi_best_model_beek
 )
 
-summary(sem_mmif_beek)
+summary(sem_mafy_index_beek)
 
 # model updaten op basis van dSepS
-mmif_best_model_updated <- update(mmif_best_model_beek, . ~ . + intensiteit_combo_afstr_s + t_s + n_t_log + p_t_log + o2_s + verharding_afstr_s)
-ntot_best_model_updated <- update(ntot_best_model_beek, . ~ . + t_s + lozingen_industrie_ie_log)
-ptot_best_model_updated <- update(ptot_best_model_beek, . ~ . + t_s + lozingen_riool_ie_log)
-czv_best_model_updated <- update(czv_best_model_beek, . ~ . - p_t_log)
-ec20_best_model_updated <- update(ec20_best_model_beek, . ~ . + t_s + intensiteit_combo_afstr_s + natuur_oever_s + verharding_afstr_s)
-o2_best_model_updated <- update(o2_best_model_beek, . ~ . + p_sum_7d_s)
+mafy_index_best_model_updated <- update(mafy_index_best_model_beek, . ~ . + p_sum_7d_s + p_t_log + intensiteit_combo_afstr_s)
+ntot_best_model_updated <- update(ntot_best_model_beek, . ~ .)
+ptot_best_model_updated <- update(ptot_best_model_beek, . ~ . + perc_schaduw_s + lozingen_industrie_ie_log)
+czv_best_model_updated <- update(czv_best_model_beek, . ~ . + perc_schaduw_s)
+ec20_best_model_updated <- update(ec20_best_model_beek, . ~ . + intensiteit_combo_afstr_s + verharding_afstr_s + lozingen_rwzi_ie_log)
+zs_best_model_updated <- update(zs_best_model_beek, . ~ .)
+secchi_best_model_updated <- update(secchi_best_model_beek, . ~ . + perc_schaduw_s + lozingen_industrie_ie_log)
 
-mmif_sem_nat_sv_beek <- psem(mmif_best_model_updated,
+mafy_index_sem_nat_sv_beek <- psem(mafy_index_best_model_updated,
                              ntot_best_model_updated,
                              ptot_best_model_updated,
                              czv_best_model_updated,
-                             o2_best_model_updated,
+                             zs_best_model_updated,
                              ec20_best_model_updated,
-                             n_t_log %~~% p_t_log,
-                             p_t_log %~~% czv_log,
-                             n_t_log %~~% czv_log)
-summary(mmif_sem_nat_sv_beek)
+                             secchi_best_model_updated,
+                             n_t_log %~~% p_t_log)
+summary(mafy_index_sem_nat_sv_beek)
 
-save(mmif_sem_nat_sv_beek, file = here("source", "analyse", "sem", "mi_nat_sv_beek", "mmif_sem_nat_sv_beek.rdata"))
+# ec20, czv en zs lopen dood!!
 
-sem_resultaat <- mmif_sem_nat_sv_beek
+save(mafy_index_sem_nat_sv_beek, file = here("source", "analyse", "sem", "mafy_nat_sv_beek", "mafy_index_sem_nat_sv_beek.rdata"))
+
+sem_resultaat <- mafy_index_sem_nat_sv_beek
 coefs_missing <- coefs(sem_resultaat)[,-9]
 source("source/analyse/sem/sem_standardised_coef_flexible.R")
 coefs_filled <- coefs_missing
 source(here("source", "analyse", "sem", "figuur_sem.R"))
 
-# EPT
+## verstoring
 
-sem_ept_beek <- psem(
-  ept_best_model_beek,
+sem_verstoring_beek <- psem(
+  verstoring_best_model_beek,
   ntot_best_model_beek,
   ptot_best_model_beek,
   czv_best_model_beek,
-  o2_best_model_beek,
-  ec20_best_model_beek
+  zs_best_model_beek,
+  ec20_best_model_beek,
+  secchi_best_model_beek
 )
 
-summary(sem_ept_beek)
+summary(sem_verstoring_beek)
 # updaten
 
-ept_best_model_updated <- update(ept_best_model_beek, . ~ . + czv_log + intensiteit_combo_afstr_s + verharding_afstr_s)
-ntot_best_model_updated <- update(ntot_best_model_beek, . ~ . + t_s + lozingen_industrie_ie_log)
-ptot_best_model_updated <- update(ptot_best_model_beek, . ~ . + t_s + lozingen_riool_ie_log)
-czv_best_model_updated <- czv_best_model_beek
-ec20_best_model_updated <- update(ec_20_best_model_beek, . ~ . + t_s + intensiteit_combo_afstr_s + verharding_afstr_s)
-o2_best_model_updated <- update(o2_best_model_beek, . ~ . + p_sum_7d_s)
+verstoring_best_model_updated <- update(verstoring_best_model_beek, . ~ . + czv_log + n_t_log + p_t_log)
+ntot_best_model_updated <- update(ntot_best_model_beek, . ~ .  + t_s + lozingen_rwzi_ie_log)
+ptot_best_model_updated <- update(ptot_best_model_beek, . ~ . + perc_schaduw_s + lozingen_industrie_ie_log)
+czv_best_model_updated <- update(czv_best_model_beek, . ~ . + perc_schaduw_s)
+ec20_best_model_updated <- update(ec20_best_model_beek, . ~ . + intensiteit_combo_afstr_s + verharding_afstr_s + lozingen_rwzi_ie_log)
+zs_best_model_updated <- update(zs_best_model_beek, . ~ . + lozingen_rwzi_ie_log + t_s)
+secchi_best_model_updated <- update(secchi_best_model_beek, . ~ . + perc_schaduw_s + lozingen_industrie_ie_log + czv_log)
 
-ept_sem_nat_sv_beek <- psem(ept_best_model_updated,
+verstoring_sem_nat_sv_beek <- psem(verstoring_best_model_updated,
                             ntot_best_model_updated,
                             ptot_best_model_updated,
                             czv_best_model_updated,
-                            o2_best_model_updated,
+                            zs_best_model_updated,
+                            secchi_best_model_updated,
                             ec20_best_model_updated,
                             n_t_log %~~% p_t_log)
-summary(ept_sem_nat_sv_beek)
-r.squaredGLMM(ept_best_model_updated)
-save(ept_sem_nat_sv_beek, file = here("source", "analyse", "sem", "mi_nat_sv_beek", "ept_sem_nat_sv_beek.rdata"))
+summary(verstoring_sem_nat_sv_beek)
+r.squaredGLMM(verstoring_best_model_updated)
+save(verstoring_sem_nat_sv_beek, file = here("source", "analyse", "sem", "mi_nat_sv_beek", "verstoring_sem_nat_sv_beek.rdata"))
 
-sem_resultaat <- ept_sem_nat_sv_beek
+### ZS en EC20 lopen dood!
+
+sem_resultaat <- verstoring_sem_nat_sv_beek
 coefs_missing <- coefs(sem_resultaat)[,-9]
 source("source/analyse/sem/sem_standardised_coef_flexible.R")
 coefs_filled <- coefs_missing
 source(here("source", "analyse", "sem", "figuur_sem.R"))
 
-## swd
+## typspec
 
-sem_swd_beek <- psem(
-  swd_best_model_beek,
+sem_typspec_beek <- psem(
+  typspec_best_model_beek,
   ntot_best_model_beek,
   ptot_best_model_beek,
   czv_best_model_beek,
-  o2_best_model_beek,
-  ec20_best_model_beek
+  zs_best_model_beek,
+  ec20_best_model_beek,
+  secchi_best_model_beek
 )
 
-summary(sem_swd_beek)
-
+summary(sem_typspec_beek)
 # updaten
 
-swd_best_model_updated <- update(swd_best_model_beek, . ~ . + intensiteit_combo_afstr_s + n_t_log + p_t_log + verharding_afstr_s)
-ntot_best_model_updated <- update(ntot_best_model_beek, . ~ . + t_s + lozingen_industrie_ie_log)
-ptot_best_model_updated <- update(ptot_best_model_beek, . ~ . + t_s + lozingen_riool_ie_log)
-czv_best_model_updated <- czv_best_model_beek
-ec20_best_model_updated <- update(ec20_best_model_beek, . ~ . + intensiteit_combo_afstr_s + verharding_afstr_s + t_s)
-o2_best_model_updated <- update(o2_best_model_beek, . ~ . + p_sum_7d_s)
+typspec_best_model_updated <- update(typspec_best_model_beek, . ~ . )
+ntot_best_model_updated <- update(ntot_best_model_beek, . ~ .  )
+ptot_best_model_updated <- update(ptot_best_model_beek, . ~ . )
+czv_best_model_updated <- update(czv_best_model_beek, . ~ . )
+ec20_best_model_updated <- update(ec20_best_model_beek, . ~ . )
+zs_best_model_updated <- update(zs_best_model_beek, . ~ . )
+secchi_best_model_updated <- update(secchi_best_model_beek, . ~ . )
 
-swd_sem_nat_sv_beek <- psem(swd_best_model_updated,
-                            ntot_best_model_updated,
-                            ptot_best_model_updated,
-                            czv_best_model_updated,
-                            o2_best_model_updated,
-                            ec20_best_model_updated,
-                            n_t_log %~~% p_t_log)
-#czv_log %~~% n_t_log)
-summary(swd_sem_nat_sv_beek)
+typspec_sem_nat_sv_beek <- psem(typspec_best_model_updated,
+                                   ntot_best_model_updated,
+                                   ptot_best_model_updated,
+                                   czv_best_model_updated,
+                                   zs_best_model_updated,
+                                   secchi_best_model_updated,
+                                   ec20_best_model_updated,
+                                   n_t_log %~~% p_t_log)
+summary(typspec_sem_nat_sv_beek)
+r.squaredGLMM(typspec_best_model_updated)
+save(typspec_sem_nat_sv_beek, file = here("source", "analyse", "sem", "mi_nat_sv_beek", "typspec_sem_nat_sv_beek.rdata"))
 
-save(swd_sem_nat_sv_beek, file = here("source", "analyse", "sem", "mi_nat_sv_beek", "swd_sem_nat_sv_beek.rdata"))
+### ZS en EC20 lopen dood!
 
-sem_resultaat <- swd_sem_nat_sv_beek
+sem_resultaat <- typspec_sem_nat_sv_beek
 coefs_missing <- coefs(sem_resultaat)[,-9]
 source("source/analyse/sem/sem_standardised_coef_flexible.R")
 coefs_filled <- coefs_missing
 source(here("source", "analyse", "sem", "figuur_sem.R"))
-
-## tax
-
-sem_tax <- psem(
-  tax_best_model_beek,
-  ntot_best_model_beek,
-  ptot_best_model_beek,
-  czv_best_model_beek,
-  o2_best_model_beek,
-  ec20_best_model_beek
-)
-
-summary(sem_tax)
-
-## nst
-
-sem_nst <- psem(
-  nst_best_model_beek,
-  ntot_best_model_beek,
-  ptot_best_model_beek,
-  czv_best_model_beek,
-  o2_best_model_beek,
-  ec20_best_model_beek
-)
-
-summary(sem_nst)
-
-## mts
-
-sem_mts <- psem(
-  mts_best_model_beek,
-  ntot_best_model_beek,
-  ptot_best_model_beek,
-  czv_best_model_beek,
-  o2_best_model_beek,
-  ec20_best_model_beek
-)
-
-summary(sem_mts)
-
-
-## stress
-
-sem_stress <- psem(
-  stress_best_model_beek,
-  ntot_best_model_beek,
-  ptot_best_model_beek,
-  czv_best_model_beek,
-  o2_best_model_beek,
-  ec20_best_model_beek
-)
-
-summary(sem_stress)
-
 
 ################################################################################
 # model full dredge MMIF

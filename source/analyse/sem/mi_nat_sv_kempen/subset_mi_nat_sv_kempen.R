@@ -448,11 +448,11 @@ sem_mmif_kempen <- psem(
 summary(sem_mmif_kempen)
 
 # model updaten op basis van dSepS
-mmif_best_model_updated <- update(mmif_best_model_kempen, . ~ . + n_t_log + p_t_log + o2_s + spei6_s)
+mmif_best_model_updated <- update(mmif_best_model_kempen, . ~ . + p_t_log + o2_s + spei6_s)
 ntot_best_model_updated <- update(ntot_best_model_kempen, . ~ . + t_s + spei6_s) # loop dood dus uit model
 ptot_best_model_updated <- update(ptot_best_model_kempen, . ~ . + t_s)
 czv_best_model_updated <- update(czv_best_model_kempen, . ~ . ) # loop dood dus laten we uit het model!
-ec20_best_model_updated <- update(ec20_best_model_kempen, . ~ . + t_s)
+ec20_best_model_updated <- update(ec20_best_model_kempen, . ~ . + t_s - n_t_log)
 o2_best_model_updated <- update(o2_best_model_kempen, . ~ . + ec_20_s + overstorten_blootstelling_index_log)
 ph_best_model_updated <- update(ph_best_model_kempen, . ~ . )
 
@@ -500,23 +500,24 @@ summary(sem_ept_kempen)
 # updaten
 
 ept_best_model_updated <- update(ept_best_model_kempen, . ~ . )
-ntot_best_model_updated <- update(ntot_best_model_kempen, . ~ . )
+ntot_best_model_updated <- update(ntot_best_model_kempen, . ~ . + t_s)
 ptot_best_model_updated <- update(ptot_best_model_kempen, . ~ . )
 czv_best_model_updated <- update(czv_best_model_kempen, . ~ . )
-ec20_best_model_updated <- update(ec20_best_model_kempen, . ~ . )
-o2_best_model_updated <- update(o2_best_model_kempen, . ~ . )
+ec20_best_model_updated <- update(ec20_best_model_kempen, . ~ . + t_s )
+o2_best_model_updated <- update(o2_best_model_kempen, . ~ . + overstorten_blootstelling_index_log + verharding_oever_s + ec_20_s)
 
 ept_sem_nat_sv_kempen <- psem(ept_best_model_updated,
-                            ntot_best_model_updated,
+                            # ntot_best_model_updated,
                             ptot_best_model_updated,
                             czv_best_model_updated,
                             o2_best_model_updated,
-                            ec20_best_model_updated,
-                            n_t_log %~~% p_t_log)
+                            ec20_best_model_updated)
+                            # n_t_log %~~% p_t_log)
 summary(ept_sem_nat_sv_kempen)
 
 save(ept_sem_nat_sv_kempen, file = here("source", "analyse", "sem", "mi_nat_sv_kempen", "ept_sem_nat_sv_kempen.rdata"))
 
+r.squaredGLMM(ept_best_model_updated)
 sem_resultaat <- ept_sem_nat_sv_kempen
 coefs_missing <- coefs(sem_resultaat)[,-9]
 source("source/analyse/sem/sem_standardised_coef_flexible.R")
@@ -538,20 +539,20 @@ summary(sem_swd_kempen)
 
 # updaten
 
-swd_best_model_updated <- update(swd_best_model_kempen, . ~ .)
-ntot_best_model_updated <- update(ntot_best_model_kempen, . ~ . + )
-ptot_best_model_updated <- update(ptot_best_model_kempen, . ~ . + )
-czv_best_model_updated <- update(czv_best_model_kempen, . ~ . + )
-ec20_best_model_updated <- update(ec20_best_model_kempen, . ~ . +)
-o2_best_model_updated <- update(o2_best_model_kempen, . ~ . + )
+swd_best_model_updated <- update(swd_best_model_kempen, . ~ . + p_t_log)
+ntot_best_model_updated <- update(ntot_best_model_kempen, . ~ . + t_s)
+ptot_best_model_updated <- update(ptot_best_model_kempen, . ~ . + t_s)
+czv_best_model_updated <- update(czv_best_model_kempen, . ~ . )
+ec20_best_model_updated <- update(ec20_best_model_kempen, . ~ . + t_s - n_t_log)
+o2_best_model_updated <- update(o2_best_model_kempen, . ~ . + overstorten_blootstelling_index_log + verharding_oever_s + ec_20_s)
 
 swd_sem_nat_sv_kempen <- psem(swd_best_model_updated,
-                            ntot_best_model_updated,
+                            # ntot_best_model_updated,
                             ptot_best_model_updated,
-                            czv_best_model_updated,
+                            # czv_best_model_updated,
                             o2_best_model_updated,
-                            ec20_best_model_updated,
-                            n_t_log %~~% p_t_log)
+                            ec20_best_model_updated)
+                            # n_t_log %~~% p_t_log)
 summary(swd_sem_nat_sv_kempen)
 
 save(swd_sem_nat_sv_kempen, file = here("source", "analyse", "sem", "mi_nat_sv_kempen", "swd_sem_nat_sv_kempen.rdata"))

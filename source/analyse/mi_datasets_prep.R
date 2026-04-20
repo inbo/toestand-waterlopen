@@ -27,6 +27,8 @@ load(file = "data/verwerkt/koppeling/koppeling_mi_nutrient.rdata") # koppeling f
 load(file = here("data", "verwerkt", "spear_data.rdata")) # spear pesticides
 load(file = here("data", "verwerkt", "tu_resultaten.rdata")) # tu score pesticiden
 
+load(file = here("data", "verwerkt", "mi_fd_multiset.rdata"))
+
 # weglaten vijvers, meren, geisoleerd water en punten buiten Vlaanderen
 mi_data_analyse <- mi_data %>%
   filter(categorie != "Vijver") %>%
@@ -147,36 +149,116 @@ data3 <- data2 %>%
   left_join(lozingen_data,
             by = c("meetplaats", "monsternamedatum"))
 
+fd_mi_filtered <- fd_mi %>%
+  filter(trait_coverage_percentage >= 80)
+
+data4 <- data3 %>%
+  left_join(., fd_mi_filtered,
+                         by = c("meetplaats", "monsternamedatum"))
+#
+# mi_subsets_plot <- data4 %>%
+#   mutate(across(c("ept", "swd", "nst", "tax", "mts"), ~ .x / 4)) %>%
+#   mutate(
+#     subset = case_when(
+#       # 1. Natuurlijk en Sterk Veranderd per groep
+#       statuut %in% c("Natuurlijk", "Sterk Veranderd") &
+#         groep == "beek"   ~ "nat_sv_beek",
+#       statuut %in% c("Natuurlijk", "Sterk Veranderd") &
+#         groep == "kempen" ~ "nat_sv_kempen",
+#       statuut %in% c("Natuurlijk", "Sterk Veranderd") &
+#         groep == "polder" ~ "nat_sv_polder",
+#       statuut %in% c("Natuurlijk", "Sterk Veranderd") &
+#         groep == "rivier" ~ "nat_sv_rivier",
+#
+#       # 2. Kunstmatig (onafhankelijk van groep)
+#       statuut == "Kunstmatig"                                            ~ "kunstmatig",
+#
+#       # 3. Specifieke types zoals RtNt
+#       type == "RtNt"                                                     ~ "rtnt",
+#
+#       # Restgroep (optioneel, voor alles wat niet in bovenstaande valt)
+#       TRUE                                                               ~ "overig"
+#     )
+#   )
+#
+#
+# # 1. Voorbereiden: Data in long format en nesten
+# mi_nested <- mi_subsets_plot %>%
+#   filter(subset != "overig") %>%
+#   pivot_longer(cols = c(mmif, tax, swd, nst, mts, ept),
+#                names_to = "index",
+#                values_to = "waarde") %>%
+#   mutate(jaar_num = as.numeric(format(monsternamedatum, "%Y")),
+#          subset = as.factor(subset),
+#          index = factor(index, levels = c("mmif", "tax", "swd", "nst", "mts", "ept"))) %>%
+#   # Nest de data: elke rij is nu een unieke combinatie van subset en index
+#   group_nest(subset, index)
+#
+# # 2. Modellen fitten en trends extraheren met purrr::map
+# mi_models <- mi_nested %>%
+#   mutate(
+#     # Fit het model voor elke subset/index combinatie
+#    # Probeer k te verhogen naar bijvoorbeeld 4 of 5
+#     # Probeer k te verhogen naar bijvoorbeeld 4 of 5
+#     model = map(data, ~ glmmTMB(waarde ~ s(jaar_num, k = 4) + (1|meetplaats) + (1|bekken),
+#                                 data = .x)),
+#     # Extraheer de trends (predictions)
+#     predictions = map(model, ~ as.data.frame(ggpredict(.x, terms = "jaar_num [all]")))
+#   )
+#
+# # 3. Resultaten uitpakken voor visualisatie
+# mi_trends <- mi_models %>%
+#   select(subset, index, predictions) %>%
+#   unnest(predictions)
+#
+# # 4. De Facet Plot
+# ggplot(mi_trends, aes(x = x, y = predicted)) +
+#   geom_ribbon(aes(ymin = conf.low, ymax = conf.high, fill = subset), alpha = 0.2) +
+#   geom_line(aes(color = subset), size = 1) +
+#   # Gebruik facet_grid voor de matrix: subset (rijen) vs index (kolommen)
+#   facet_grid(index ~ subset, scales = "free_y") +
+#   theme_minimal() +
+#   labs(title = "GAM-trends per Subset en Index",
+#        x = "Jaar", y = "Voorspelde waarde",
+#        color = "Subset", fill = "Subset") +
+#   theme(legend.position = "none",
+#         strip.text = element_text(face = "bold"),
+#         axis.text.x = element_text(angle = 45, hjust = 1))
+#
+# mi_subsets_plot %>%
+#   ggplot(aes(jaar, mmif)) +
+#   geom_smooth(method = "gam")
+
 ################################################################################
 # Data subsets maken ####
 ################################################################################
 # 1. natuurlijk en sterk veranderd
 # 1.1 beek
-mi_nat_sv_beek <- data3 %>%
+mi_nat_sv_beek <- data4 %>%
   filter(statuut %in% c("Natuurlijk", "Sterk Veranderd")) %>%
   filter(groep == "beek")
 
 # 1.2 kempen
-mi_nat_sv_kempen <- data3 %>%
+mi_nat_sv_kempen <- data4 %>%
   filter(statuut %in% c("Natuurlijk", "Sterk Veranderd")) %>%
   filter(groep == "kempen")
 
 # 1.3 polder
-mi_nat_sv_polder <- data3 %>%
+mi_nat_sv_polder <- data4 %>%
   filter(statuut %in% c("Natuurlijk", "Sterk Veranderd")) %>%
   filter(groep == "polder")
 
 # 1.4 rivier
-mi_nat_sv_rivier <- data3 %>%
+mi_nat_sv_rivier <- data4 %>%
   filter(statuut %in% c("Natuurlijk", "Sterk Veranderd")) %>%
   filter(groep == "rivier")
 
 # 2. kunstmatig
-mi_kunstmatig <- data3 %>%
+mi_kunstmatig <- data4 %>%
   filter(statuut %in% c("Kunstmatig"))
 
 # 3. RtNt - bovenlopen -> NVT????
-rtnt <- data3 %>%
+rtnt <- data4 %>%
   filter(type == "RtNt")
 load(file = here("data", "verwerkt", "mi_data_analyse_rtnt_update.rdata"))
 
@@ -194,7 +276,7 @@ koppeling_sleutel_pesticides <-
     qual_monsternamedatum = as.Date(qual_monsternamedatum)
   )
 
-gekoppelde_data_mi_pesticides <- data3 %>%
+gekoppelde_data_mi_pesticides <- data4 %>%
   select(-qual_meetplaats, -qual_monsternamedatum) %>%
   # 1. Koppel de match-informatie aan je MI data
   # (Zodat we weten WELK pesticiden staal bij welk MI staal hoort)
@@ -260,7 +342,7 @@ test_beek <- gekoppelde_data_mi_pesticides %>%
 
 test2_beek <- test_beek %>%
   select(
-    meetplaats, monsternamedatum, jaar_s,
+    meetplaats, monsternamedatum, jaar_s, bekken,
     mmif, ept_prop, ta_xw, sw_dw, mt_sw_prop, nst_prop, stress_prop,
     n_t_log, p_t_log, czv_log,
     ekc2_waterlichaam_s,
@@ -315,7 +397,7 @@ test_kempen <- gekoppelde_data_mi_pesticides %>%
 
 test2_kempen <- test_kempen %>%
   select(
-    meetplaats, monsternamedatum, jaar_s,
+    meetplaats, monsternamedatum, jaar_s, bekken,
     mmif, ept_prop, ta_xw, sw_dw, mt_sw_prop, nst_prop, stress_prop,
     n_t_log, p_t_log, czv_log,
     ekc2_waterlichaam_s,
@@ -333,14 +415,14 @@ plot_groep_correlogram(test2, c("TU_sum_s", "TU_max_s", "TU_insecticide_s", "TU_
 
 plot_groep_correlogram(test2, c("spear_pesticides_s", "mmif", "sw_dw", "ep_tw"))
 
-model_mmif_beek <- glmmTMB(data = test2_beek, formula = mmif ~ TU_insecticide_max_s + ec_20_s + spei6_s + o2_s + t_s + p_t_log + n_t_log + verharding_afstr_s + jaar_s + intensiteit_combo_afstr_s + (1 | meetplaats),
+model_mmif_beek <- glmmTMB(data = test2_beek, formula = mmif ~ TU_insecticide_max_s + ec_20_s + spei6_s + o2_s + t_s + p_t_log + n_t_log + verharding_afstr_s + jaar_s + intensiteit_combo_afstr_s + (1 | meetplaats) + (1 | bekken),
                  REML = TRUE,
                  family = ordbeta)
 summary(model_mmif_beek)
 plot_model(model_mmif_beek, type = "pred", show.data = T)
 plot_model_vif(model_mmif_beek)
 
-model_mmif_kempen <- glmmTMB(data = test2_kempen, formula = mmif ~ TU_insecticide_max_s + ec_20_s + p_h_s + spei6_s + p_t_log + intensiteit_combo_afstr_s + n_t_log + o2_s + t_s + verharding_afstr_s +  n_extreme_3m_s + lozingen_riool_ie_log + jaar_s + (1|meetplaats),
+model_mmif_kempen <- glmmTMB(data = test2_kempen, formula = mmif ~ TU_insecticide_max_s + ec_20_s + p_h_s + spei6_s + p_t_log + intensiteit_combo_afstr_s + n_t_log + o2_s + t_s + verharding_afstr_s +  n_extreme_3m_s + lozingen_riool_ie_log + jaar_s + (1|meetplaats) + (1 | bekken),
                       REML = TRUE,
                       family = ordbeta)
 summary(model_mmif_kempen)

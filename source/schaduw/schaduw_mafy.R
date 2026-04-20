@@ -5,6 +5,9 @@ library(lubridate)
 load(here("data", "verwerkt", "mafy_data.rdata"))
 schaduw_data <- read_excel("data/ruw/macrofyten/mafy_schaduw.xlsx")
 
+setDT(mafy_data)
+setDT(schaduw_data)
+
 # 2. Zorg dat het jaar in beide datasets een integer is voor de match
 mafy_data[, jaar_meting := year(monsternamedatum)]
 # schaduw_data heeft al 'jaar_schaduw'
@@ -21,3 +24,8 @@ resultaat <- schaduw_data[mafy_data, roll = "nearest", on = .(meetplaats, jaar_s
 
 # Resultaat opschonen: hernoem kolommen indien gewenst
 setnames(resultaat, "jaar_schaduw", "jaar_meting")
+
+mafy_schaduw_data <- resultaat %>%
+  select(meetplaats, monsternamedatum, perc_schaduw)
+
+save(mafy_schaduw_data, file = here("data", "verwerkt", "mafy_schaduw_data.rdata"))

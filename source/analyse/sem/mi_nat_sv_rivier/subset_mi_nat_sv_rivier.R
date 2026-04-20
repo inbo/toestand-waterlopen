@@ -80,7 +80,7 @@ clean_all <- filter_collinear_vars(data_subset, raw_all)
 
 data_subset %>%
   select(
-    meetplaats, monsternamedatum, jaar_s,
+    meetplaats, monsternamedatum, jaar_s, bekken,
     mmif, ept_prop, ta_xw, sw_dw, mt_sw_prop, nst_prop, stress_prop,
     n_t_log, p_t_log, czv_log,
     ekc2_waterlichaam_s,
@@ -93,7 +93,7 @@ data_subset %>%
 
 data_subset2 <- data_subset %>%
   select(
-    meetplaats, monsternamedatum, jaar_s,
+    meetplaats, monsternamedatum, jaar_s, bekken,
     mmif, ept_prop, ta_xw, sw_dw, mt_sw_prop, nst_prop, stress_prop,
     n_t_log, p_t_log, czv_log,
     ekc2_waterlichaam_s,
@@ -111,7 +111,7 @@ dredge_data <- data_subset2
 ################################################################################
 
 y_var <- "mmif"
-predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s")
+predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s", "overstorten_blootstelling_index_log")
 
 source(here("source", "analyse", "sem", "dredge_formula.R"))
 
@@ -120,7 +120,7 @@ model <- glmmTMB(data = dredge_data, formula = formula_obj,
                  REML = FALSE,
                  family = ordbeta)
 
-source(here("source" , "analyse", "sem", "dredge_rivier.R"))
+source(here("source" , "analyse", "sem", "dredge.R"))
 
 mmif_dredge <- dredge_model
 
@@ -136,7 +136,7 @@ plot_model_vif(mmif_best_model_rivier, "VIF Check") # "intensiteit_combo_oeverzo
 # model fitten EPT
 ################################################################################
 y_var <- "ept_prop"
-predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s")
+predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s", "overstorten_blootstelling_index_log")
 
 source(here("source", "analyse", "sem", "dredge_formula.R"))
 
@@ -146,7 +146,7 @@ model <- glmmTMB(data = dredge_data, formula = formula_obj,
                  family = binomial(link = "logit"),
                  weights = dredge_data$ta_xw)
 
-source(here("source" , "analyse", "sem", "dredge_rivier.R"))
+source(here("source" , "analyse", "sem", "dredge.R"))
 
 ept_dredge <- dredge_model
 
@@ -162,7 +162,7 @@ plot_model_vif(ept_best_model_rivier, "VIF Check") # "intensiteit_combo_oeverzon
 # model fitten tax
 ################################################################################
 y_var <- "ta_xw"
-predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s")
+predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s", "overstorten_blootstelling_index_log")
 
 source(here("source", "analyse", "sem", "dredge_formula.R"))
 
@@ -171,7 +171,7 @@ model <- glmmTMB(data = dredge_data, formula = formula_obj,
                  REML = FALSE,
                  family = poisson)
 
-source(here("source" , "analyse", "sem", "dredge_rivier.R"))
+source(here("source" , "analyse", "sem", "dredge.R"))
 
 tax_dredge <- dredge_model
 
@@ -188,7 +188,7 @@ plot_model_vif(tax_best_model_rivier, "VIF Check") # "intensiteit_combo_oeverzon
 ################################################################################
 
 y_var <- "nst_prop"
-predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s")
+predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s", "overstorten_blootstelling_index_log")
 
 source(here("source", "analyse", "sem", "dredge_formula.R"))
 
@@ -198,7 +198,7 @@ model <- glmmTMB(data = dredge_data, formula = formula_obj,
                  family = binomial(link = "logit"),
                  weights = dredge_data$ta_xw)
 
-source(here("source" , "analyse", "sem", "dredge_rivier.R"))
+source(here("source" , "analyse", "sem", "dredge.R"))
 
 nst_dredge <- dredge_model
 
@@ -214,7 +214,7 @@ plot_model_vif(nst_best_model_rivier, "VIF Check") # "intensiteit_combo_oeverzon
 # model fitten stress
 ################################################################################
 y_var <- "stress_prop"
-predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s")
+predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s", "overstorten_blootstelling_index_log")
 
 source(here("source", "analyse", "sem", "dredge_formula.R"))
 
@@ -224,7 +224,7 @@ model <- glmmTMB(data = dredge_data, formula = formula_obj,
                  family = binomial(link = "logit"),
                  weights = dredge_data$ta_xw)
 
-source(here("source" , "analyse", "sem", "dredge_rivier.R"))
+source(here("source" , "analyse", "sem", "dredge.R"))
 
 stress_dredge <- dredge_model
 
@@ -240,7 +240,7 @@ plot_model_vif(stress_best_model_rivier, "VIF Check") # "intensiteit_combo_oever
 # model fitten mts
 ################################################################################
 y_var <- "mt_sw_prop"
-predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s")
+predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s", "overstorten_blootstelling_index_log")
 
 source(here("source", "analyse", "sem", "dredge_formula.R"))
 
@@ -249,7 +249,7 @@ model <- glmmTMB(data = dredge_data, formula = formula_obj,
                  REML = FALSE,
                  family = ordbeta)
 
-source(here("source" , "analyse", "sem", "dredge_rivier.R"))
+source(here("source" , "analyse", "sem", "dredge.R"))
 
 mts_dredge <- dredge_model
 
@@ -274,7 +274,7 @@ plot_model_vif(mts_best_model_rivier, "VIF Check") # "intensiteit_combo_oeverzon
 # model fitten swd
 ################################################################################
 y_var <- "sw_dw"
-predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s")
+predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s", "overstorten_blootstelling_index_log")
 
 source(here("source", "analyse", "sem", "dredge_formula.R"))
 
@@ -283,7 +283,7 @@ model <- glmmTMB(data = dredge_data, formula = formula_obj,
                  REML = FALSE,
                  family = gaussian)
 
-source(here("source" , "analyse", "sem", "dredge_rivier.R"))
+source(here("source" , "analyse", "sem", "dredge.R"))
 
 swd_dredge <- dredge_model
 
@@ -309,7 +309,7 @@ model <- glmmTMB(data = dredge_data, formula = formula_obj,
                  REML = FALSE,
                  family = gaussian)
 
-source(here("source" , "analyse", "sem", "dredge_rivier.R"))
+source(here("source" , "analyse", "sem", "dredge.R"))
 
 ntot_dredge <- dredge_model
 
@@ -334,7 +334,7 @@ model <- glmmTMB(data = dredge_data, formula = formula_obj,
                  REML = FALSE,
                  family = gaussian)
 
-source(here("source" , "analyse", "sem", "dredge_rivier.R"))
+source(here("source" , "analyse", "sem", "dredge.R"))
 
 ptot_dredge <- dredge_model
 
@@ -359,7 +359,7 @@ model <- glmmTMB(data = dredge_data, formula = formula_obj,
                  REML = FALSE,
                  family = gaussian)
 
-source(here("source" , "analyse", "sem", "dredge_rivier.R"))
+source(here("source" , "analyse", "sem", "dredge.R"))
 
 o2_dredge <- dredge_model
 
@@ -385,7 +385,7 @@ model <- glmmTMB(data = dredge_data, formula = formula_obj,
                  REML = FALSE,
                  family = gaussian)
 
-source(here("source" , "analyse", "sem", "dredge_rivier.R"))
+source(here("source" , "analyse", "sem", "dredge.R"))
 
 czv_dredge <- dredge_model
 
@@ -411,7 +411,7 @@ model <- glmmTMB(data = dredge_data, formula = formula_obj,
                  REML = FALSE,
                  family = gaussian)
 
-source(here("source" , "analyse", "sem", "dredge_rivier.R"))
+source(here("source" , "analyse", "sem", "dredge.R"))
 
 ec20_dredge <- dredge_model
 
@@ -422,6 +422,32 @@ ec20_best_model_rivier <- update(best_model_ML, REML = TRUE)
 summary(ec20_best_model_rivier)
 
 plot_model_vif(ec20_best_model_rivier, "VIF Check")
+
+################################################################################
+# model fitten czv
+################################################################################
+
+y_var <- "p_h_s"
+predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen, "n_t_log", "p_t_log", "czv_log", "t_s", "ec_20_s")
+
+source(here("source", "analyse", "sem", "dredge_formula.R"))
+
+options(na.action = "na.fail") # Verplicht voor dredge
+model <- glmmTMB(data = dredge_data, formula = formula_obj,
+                 REML = FALSE,
+                 family = gaussian)
+
+source(here("source" , "analyse", "sem", "dredge.R"))
+
+ph_dredge <- dredge_model
+
+best_model_ML <- get.models(ph_dredge, subset = 1)[[1]]
+
+ph_best_model_rivier <- update(best_model_ML, REML = TRUE)
+
+summary(ph_best_model_rivier)
+
+plot_model_vif(ph_best_model_rivier, "VIF Check")
 
 ################################################################################
 # sem models fitten

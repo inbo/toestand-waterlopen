@@ -13,7 +13,7 @@ source(here::here("source", "functies.R"))
 data_subset <- mi_nat_sv_beek %>%
   drop_na(meetplaats, jaar) %>%
   select(meetplaats, monsternamedatum, jaar, bekken,
-         mmif, ta_xw, ep_tw, sw_dw, ns_tw, mt_sw,
+         mmif, ta_xw, ep_tw, sw_dw, ns_tw, mt_sw, fdisp_full, fdisp_habitat, fdisp_waterkwaliteit,
          t, p_h, o2, o2_verz, ec_20,
          czv, n_t, no2, no3, nh4, p_t, zs,
          breedte_diepte_ratio, sinuositeit, bodemsub, doodhout, profiel, ekc2_waterlichaam, ekc2_traject, stroomsnelheid, # verstuwing weglaten want te veel NA
@@ -28,6 +28,9 @@ data_subset <- mi_nat_sv_beek %>%
                 ta_xw = as.integer(ta_xw),
                 ns_tw = as.integer(ns_tw),
                 mt_sw_prop = mt_sw / 10,
+                fdisp_2 = fdisp_full^2,
+                fdisp_s = fdisp_full / max(fdisp_full, na.rm = TRUE),
+                fdisp_waterkwaliteit_s = fdisp_waterkwaliteit / (max(fdisp_waterkwaliteit, na.rm = TRUE)+ 0.01),
                 bekken = as.factor(bekken),
                 nst_prop = ns_tw / ta_xw,
                 stress_prop = (ep_tw + ns_tw)/ta_xw,
@@ -107,7 +110,7 @@ clean_all <- filter_collinear_vars(data_subset, raw_all)
 #
 # hydmo_test <- glmmTMB(mmif ~ breedte_diepte_ratio_s + sinuositeit_s + bodemsub_s + doodhout_s + profiel_s + ekc2_waterlichaam_s + ekc2_traject_s + stroomsnelheid_s, data = data_subset2)
 
-data_subset2 <- data_subset %>%
+dredge_data <- data_subset %>%
   select(
     meetplaats, monsternamedatum, jaar_s, bekken,
     mmif, ept_prop, ta_xw, sw_dw, mt_sw_prop, nst_prop, stress_prop,
@@ -120,7 +123,18 @@ data_subset2 <- data_subset %>%
   ) %>%
   na.omit
 
-dredge_data <- data_subset2
+dredge_data_fd <- data_subset %>%
+  select(
+    meetplaats, monsternamedatum, jaar_s, bekken,
+    fdisp_waterkwaliteit, fdisp_habitat, fdisp_full, fdisp_2, fdisp_s, fdisp_waterkwaliteit_s,
+    n_t_log, p_t_log, czv_log,
+    ekc2_waterlichaam_s,
+    all_of(clean_klimaat),
+    all_of(clean_lozingen),
+    all_of(clean_landuse),
+    all_of(clean_fysico),
+  ) %>%
+  na.omit
 
 ################################################################################
 # model fitten MMIF
@@ -681,3 +695,163 @@ summary(mmif_best_model_beek)
 plot_model_vif(mmif_best_model_beek, "VIF Check") # "intensiteit_combo_oeverzone_s" weggelaten
 
 importance_mmif <- sw(mmif_dredge)
+
+################################################################################
+# model fitten functionele dispersie
+################################################################################
+y_var <- "fdisp_waterkwaliteit"
+predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s", "overstorten_blootstelling_index_log")
+
+source(here("source", "analyse", "sem", "dredge_formula.R"))
+
+options(na.action = "na.fail") # Verplicht voor dredge
+model <- glmmTMB(data = dredge_data_fd, formula = formula_obj,
+                 REML = FALSE,
+                 family = tweedie)
+
+source(here("source" , "analyse", "sem", "dredge_fd.R"))
+
+fdisp_dredge <- dredge_model
+
+best_model_ML <- get.models(fdisp_dredge, subset = 1)[[1]]
+
+fdisp_best_model_beek <- update(best_model_ML, REML = TRUE)
+
+summary(fdisp_best_model_beek)
+
+plot_model_vif(fdisp_best_model_beek, "VIF Check")
+
+simulationOutput <- simulateResiduals(fdisp_best_model_beek, plot = TRUE)
+testOutliers(simulationOutput)
+testDispersion(simulationOutput)
+# testDispersion(simulationOutput) # geen overdispersie
+# testZeroInflation(simulationOutput) # geen zero_inflation
+# testUniformity(simulationOutput)
+
+################################################################################
+# model fitten stikstof
+################################################################################
+
+y_var <- "n_t_log"
+predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen)
+
+source(here("source", "analyse", "sem", "dredge_formula.R"))
+
+options(na.action = "na.fail") # Verplicht voor dredge
+model <- glmmTMB(data = dredge_data, formula = formula_obj,
+                 REML = FALSE,
+                 family = gaussian)
+
+source(here("source" , "analyse", "sem", "dredge.R"))
+
+ntot_dredge <- dredge_model
+
+best_model_ML <- get.models(ntot_dredge, subset = 1)[[1]]
+
+ntot_best_model_beek <- update(best_model_ML, REML = TRUE)
+
+summary(ntot_best_model_beek)
+
+plot_model_vif(ntot_best_model_beek, "VIF Check")
+
+################################################################################
+# model fitten fosfor
+################################################################################
+y_var <- "p_t_log"
+predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen)
+
+source(here("source", "analyse", "sem", "dredge_formula.R"))
+
+options(na.action = "na.fail") # Verplicht voor dredge
+model <- glmmTMB(data = dredge_data, formula = formula_obj,
+                 REML = FALSE,
+                 family = gaussian)
+
+source(here("source" , "analyse", "sem", "dredge.R"))
+
+ptot_dredge <- dredge_model
+
+best_model_ML <- get.models(ptot_dredge, subset = 1)[[1]]
+
+ptot_best_model_beek <- update(best_model_ML, REML = TRUE)
+
+summary(ptot_best_model_beek)
+
+plot_model_vif(ptot_best_model_beek, "VIF Check")
+
+################################################################################
+# model fitten o2
+################################################################################
+y_var <- "o2_s"
+predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen, "n_t_log", "p_t_log", "czv_log", "t_s", "ec_20_s")
+
+source(here("source", "analyse", "sem", "dredge_formula.R"))
+
+options(na.action = "na.fail") # Verplicht voor dredge
+model <- glmmTMB(data = dredge_data, formula = formula_obj,
+                 REML = FALSE,
+                 family = gaussian)
+
+source(here("source" , "analyse", "sem", "dredge.R"))
+
+o2_dredge <- dredge_model
+
+best_model_ML <- get.models(o2_dredge, subset = 1)[[1]]
+
+o2_best_model_beek <- update(best_model_ML, REML = TRUE)
+
+summary(o2_best_model_beek)
+
+plot_model_vif(o2_best_model_beek, "VIF Check")
+
+################################################################################
+# model fitten czv
+################################################################################
+
+y_var <- "czv_log"
+predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen, "n_t_log", "p_t_log")
+
+source(here("source", "analyse", "sem", "dredge_formula.R"))
+
+options(na.action = "na.fail") # Verplicht voor dredge
+model <- glmmTMB(data = dredge_data, formula = formula_obj,
+                 REML = FALSE,
+                 family = gaussian)
+
+source(here("source" , "analyse", "sem", "dredge.R"))
+
+czv_dredge <- dredge_model
+
+best_model_ML <- get.models(czv_dredge, subset = 1)[[1]]
+
+czv_best_model_beek <- update(best_model_ML, REML = TRUE)
+
+summary(czv_best_model_beek)
+
+plot_model_vif(czv_best_model_beek, "VIF Check")
+
+################################################################################
+# model fitten ec20
+################################################################################
+
+y_var <- "ec_20_s"
+predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen, "n_t_log", "p_t_log")
+
+source(here("source", "analyse", "sem", "dredge_formula.R"))
+
+options(na.action = "na.fail") # Verplicht voor dredge
+model <- glmmTMB(data = dredge_data, formula = formula_obj,
+                 REML = FALSE,
+                 family = gaussian)
+
+source(here("source" , "analyse", "sem", "dredge.R"))
+
+ec20_dredge <- dredge_model
+
+best_model_ML <- get.models(ec20_dredge, subset = 1)[[1]]
+
+ec20_best_model_beek <- update(best_model_ML, REML = TRUE)
+
+summary(ec20_best_model_beek)
+
+plot_model_vif(ec20_best_model_beek, "VIF Check")

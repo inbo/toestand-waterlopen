@@ -1,5 +1,9 @@
-source(here::here("source", "inladen_packages.R"))
-
+# Installeer en laad benodigde packages als ze nog niet geïnstalleerd zijn
+if (!exists("packages_geladen")) {
+  source(here::here("source", "inladen_packages.R"))
+}
+conflicted::conflicts_prefer(dplyr::first)
+conflicted::conflicts_prefer(lubridate::year)
 #---------------------------------------------------------------------------------------------------
 # --- 1. Gegevens inlezen ---
 #---------------------------------------------------------------------------------------------------
@@ -9,323 +13,410 @@ load(file = here("data", "verwerkt", "mi_soorten.rdata"))
 comm_data_raw <- mi_soorten %>%
   select(meetplaats, monsternamedatum, deelmonster_id, macroinvertebraat, aantal) %>%
   pivot_wider(., names_from = macroinvertebraat, values_from = aantal, values_fill = list(aantal = 0))
-# write.csv(comm_data, file = here("data", "ruw", "macroinvertebraten", "traits", "comm_data.csv"))
 
 trait_data_raw <- read_excel(here("data", "ruw", "macroinvertebraten", "traits", "tachet_traits_mi.xlsx")) %>%
   janitor::clean_names()
-# write.csv(trait_data_raw, file = here("data", "ruw", "macroinvertebraten", "traits", "trait_data.csv"))
 
-
-# Lees de eerder gegenereerde taxonlijst met taxonomisch niveau in (komt uit excel VMM)
 taxon_levels_df <- read_csv(here("data", "ruw", "macroinvertebraten", "traits", "taxonlist_with_taxonomic_level.csv"))
 
 #---------------------------------------------------------------------------------------------------
-# --- 2. Trait Data voorbereiden en consolideren voor koppeling ---
+# --- 2. Trait Data voorbereiden (Alle beschikbare traits) ---
 #---------------------------------------------------------------------------------------------------
 
-trait_data0 <- trait_data_raw
-
-# Stap A: Maak een 'Taxon_Consolidated_Key' die 'sp.', '[Fam:X]', ' Ad.', ' Lv.', ' gen.' verwijdert
-# Deze key zal gebruikt worden om rijen te groeperen die tot hetzelfde taxon behoren.
-trait_data1 <- trait_data0 %>%
+# Stap A: Namen opschonen
+trait_data_all <- trait_data_raw %>%
   mutate(
-    # Aangepast om ' gen.' te verwijderen in Taxon_Consolidated_Key
     Taxon_Consolidated_Key = tolower(str_replace_all(taxon, " sp\\.| Ad\\.| Lv\\.| Gen\\.", "")),
-    # Aangepast om '[Ord:.*?] ' te verwijderen in Family_Clean
     Family_Clean = tolower(str_replace_all(family, "\\[Ord:|\\]", "")),
     Taxagroup_Clean = tolower(taxagroup)
   )
 
-selected_trait_groups <- c("saprobity_", "dispersal_", "reproduction_", "locomotion_",
-                           "substrate_", "current_velocity_", "trophic_status_", "temperature_")
+# Identificeer ALLE numerieke trait kolommen (alles wat begint met een bekende categorie)
+# We selecteren hier alles behalve de taxonomische ID-kolommen
+trait_cols <- names(trait_data_all)[which(sapply(trait_data_all, is.numeric))]
 
-
-trait_data <- trait_data1 %>%
-  select(taxon, family, taxagroup, Taxon_Consolidated_Key, Family_Clean, Taxagroup_Clean, starts_with(selected_trait_groups))
-
-# Identificeer de kolommen die de daadwerkelijke traits bevatten
-# Dit zijn alle kolommen na de eerste 4 (Taxagroup, Family, Subfamily, Taxon)
-# En exclusief de nieuw aangemaakte 'Clean' en 'Consolidated_Key' kolommen
-trait_cols <- names(trait_data)[7:(ncol(trait_data))] # Past zich aan als er meer 'clean' kolommen komen
-
-# Stap B: Consolidateer trait data door te groeperen op Taxon_Consolidated_Key
-# Als er meerdere rijen zijn per geconsolideerde taxon (b.v. Ad. en Lv.), dan gemiddelde traits.
-# We consolideren ook Family_Clean en Taxagroup_Clean, en kiezen de eerste voor andere info.
-consolidated_trait_data <- trait_data %>%
+# Stap B: Consolidateer trait data (gemiddelde over Ad./Lv. etc)
+consolidated_trait_data <- trait_data_all %>%
   group_by(Taxon_Consolidated_Key) %>%
   summarise(
-    # Neem de eerste unieke Family_Clean en Taxagroup_Clean voor de geconsolideerde entry
     Family_Clean = first(Family_Clean),
     Taxagroup_Clean = first(Taxagroup_Clean),
-    # Bereken het gemiddelde voor alle numerieke trait kolommen
     across(all_of(trait_cols), ~ mean(.x, na.rm = TRUE)),
-    .groups = 'drop' # Verwijder de groepering na summarize
+    .groups = 'drop'
   )
 
-# Vervang eventuele NaN waarden die kunnen ontstaan zijn door mean(NA) met NA
-# Komt niet voor met tachet. telkens alle traits voor alle taxa
+# NaN handling
 consolidated_trait_data[is.nan(as.matrix(consolidated_trait_data))] <- NA
 
-# Maak de geconsolideerde trait data frame klaar voor matching door Taxon_Consolidated_Key
-# als rijnamen in te stellen.
+# Maak basis matrix voor matching
 matched_traits_df_for_fd <- consolidated_trait_data %>%
   column_to_rownames(var = "Taxon_Consolidated_Key") %>%
-  select(all_of(trait_cols)) # Selecteer alleen de trait kolommen
+  select(all_of(trait_cols))
 
 #---------------------------------------------------------------------------------------------------
-# --- 3. Taxa uit Community Data extraheren en filteren ---
+# --- 3. Taxa Filteren en Matching ---
 #---------------------------------------------------------------------------------------------------
 
-# De taxa namen zijn de kolomnamen van de community data, exclusief de eerste drie (index, meetplaats, monsternamedatum)
 comm_taxa_list_raw <- names(comm_data_raw)[4:ncol(comm_data_raw)]
-
-# Filter de taxa op basis van de Taxonomic_Level kolom in taxon_levels_df
-# We behouden alleen taxa die NIET 'Vis' of 'Other' zijn
 comm_taxa_list_filtered <- taxon_levels_df %>%
   filter(!Taxonomic_Level %in% c("Vis", "Other")) %>%
   pull(macroinvertebraat) %>%
-  base::intersect(comm_taxa_list_raw) # Zorg ervoor dat ze ook daadwerkelijk in de community data voorkomen
+  base::intersect(comm_taxa_list_raw)
 
-#---------------------------------------------------------------------------------------------------
-# --- 4. Trait Matching (Hiërarchisch en Specifieke Regels) ---
-#---------------------------------------------------------------------------------------------------
-
-# Maak een leeg dataframe om de gematchte traits op te slaan
 matched_traits_output_df <- as.data.frame(matrix(NA,
                                                  nrow = length(comm_taxa_list_filtered),
                                                  ncol = length(trait_cols)))
 colnames(matched_traits_output_df) <- trait_cols
 rownames(matched_traits_output_df) <- comm_taxa_list_filtered
 
-# Houd een lijst bij van niet-gematchte taxa na filtering
-unmatched_taxa <- character()
-
 for (comm_taxon in comm_taxa_list_filtered) {
-  comm_taxon_lower <- tolower(trimws(comm_taxon)) # Opschonen van spaties
+  comm_taxon_lower <- tolower(trimws(comm_taxon))
 
-  # Poging 1: Match op de geconsolideerde Taxon_Consolidated_Key
-  match_consolidated_taxon <- matched_traits_df_for_fd %>%
-    rownames_to_column(var = "Taxon_Consolidated_Key") %>% # Tijdelijk weer kolom maken voor filter
-    filter(Taxon_Consolidated_Key == comm_taxon_lower)
-
-  if (nrow(match_consolidated_taxon) > 0) {
-    matched_traits_output_df[comm_taxon, ] <- match_consolidated_taxon[1, trait_cols]
+  # 1. Directe match
+  if (comm_taxon_lower %in% rownames(matched_traits_df_for_fd)) {
+    matched_traits_output_df[comm_taxon, ] <- matched_traits_df_for_fd[comm_taxon_lower, trait_cols]
     next
   }
 
-  # Specifieke regel voor Chironomidae groepen
-  if (grepl("chironomidae", comm_taxon_lower) && grepl("thummi", comm_taxon_lower)) {
-    match_chironomidae <- consolidated_trait_data %>%
-      filter(Family_Clean == "chironomidae")
-    if (nrow(match_chironomidae) > 0) {
-      matched_traits_output_df[comm_taxon, ] <- colMeans(match_chironomidae[, trait_cols], na.rm = TRUE)
-      next
-    }
+  # 2. Specifieke regels (Chironomidae/Syrphidae)
+  if (grepl("chironomidae", comm_taxon_lower)) {
+    match_fam <- consolidated_trait_data %>% filter(Family_Clean == "chironomidae")
+    if (nrow(match_fam) > 0) { matched_traits_output_df[comm_taxon, ] <- colMeans(match_fam[, trait_cols], na.rm = TRUE); next }
   }
 
-  # Specifieke regel voor Syrphidae-Eristalinae
-  if (comm_taxon_lower == "syrphidae-eristalinae") {
-    match_syrphidae <- consolidated_trait_data %>%
-      filter(Family_Clean == "syrphidae")
-    if (nrow(match_syrphidae) > 0) {
-      matched_traits_output_df[comm_taxon, ] <- colMeans(match_syrphidae[, trait_cols], na.rm = TRUE)
-      next
-    }
+  if (grepl("syrphidae", comm_taxon_lower)) {
+    match_fam <- consolidated_trait_data %>% filter(Family_Clean == "syrphidae")
+    if (nrow(match_fam) > 0) { matched_traits_output_df[comm_taxon, ] <- colMeans(match_fam[, trait_cols], na.rm = TRUE); next }
   }
 
-  # Poging 2: Match op schoongemaakte Family (nu van de geconsolideerde data)
-  match_family <- consolidated_trait_data %>%
-    filter(Family_Clean == comm_taxon_lower)
+  # 3. Familie/Groep match
+  match_fam <- consolidated_trait_data %>% filter(Family_Clean == comm_taxon_lower)
+  if (nrow(match_fam) > 0) { matched_traits_output_df[comm_taxon, ] <- colMeans(match_fam[, trait_cols], na.rm = TRUE); next }
 
-  if (nrow(match_family) > 0) {
-    matched_traits_output_df[comm_taxon, ] <- colMeans(match_family[, trait_cols], na.rm = TRUE)
-    next
-  }
-
-  # Poging 3: Match op schoongemaakte Taxagroup (nu van de geconsolideerde data)
-  match_taxagroup <- consolidated_trait_data %>%
-    filter(Taxagroup_Clean == comm_taxon_lower)
-
-  if (nrow(match_taxagroup) > 0) {
-    matched_traits_output_df[comm_taxon, ] <- colMeans(match_taxagroup[, trait_cols], na.rm = TRUE)
-    next
-  }
-
-  # Als er op geen enkel niveau een match is gevonden na filtering
-  unmatched_taxa <- c(unmatched_taxa, comm_taxon)
+  match_group <- consolidated_trait_data %>% filter(Taxagroup_Clean == comm_taxon_lower)
+  if (nrow(match_group) > 0) { matched_traits_output_df[comm_taxon, ] <- colMeans(match_group[, trait_cols], na.rm = TRUE); next }
 }
 
 #---------------------------------------------------------------------------------------------------
-# --- 5. Data voorbereiden voor functionele diversiteitsberekening (vervolg) ---
+# --- 4. Volledige Normalisatie ---
 #---------------------------------------------------------------------------------------------------
 
-# Filter de gematchte_traits_output_df om rijen met alleen NA's te verwijderen
-# Dit zijn taxa waarvoor geen enkele trait is gevonden na de matching, zelfs na de specifieke regels
 matched_traits_df_final <- matched_traits_output_df[rowSums(is.na(matched_traits_output_df)) == 0, ]
-
-# Identificeer de taxa die we daadwerkelijk gaan gebruiken (die met complete, gematchte trait data)
 taxa_for_fd <- rownames(matched_traits_df_final)
-
-# --- Normaliseer de fuzzy scores per traitcategorie ---
-
-# Definieer de trait categorieën (prefixes van de kolommen)
 
 trait_categories <- c(
   "longitudinal_distribution", "transversal_distribution", "altitude",
-  "substrate", "current_velocity", "temperature", "pH", "salinity",
-  "saprobity", "trophic_status", "food", "feeding_habits", "locomotion", # <-- HIER AANGEPAST
+  "substrate", "current_velocity", "temperature", "ph", "salinity",
+  "saprobity", "trophic_status", "food", "feeding_habits", "locomotion",
   "respiration", "resistance_forms", "maximal_potential_size",
   "dispersal", "life_cycle_duration", "potential_number_of_cycles_per_year",
   "reproduction", "aquatic_stages"
 )
 
-# Maak een kopie om te normaliseren
-normalized_traits_df <- matched_traits_df_final
+normalized_traits_all <- matched_traits_df_final
 
 for (category in trait_categories) {
-  # Vind alle kolommen die tot deze categorie behoren
-  # De speciale spatiebehandeling is hier niet meer nodig
-  category_pattern <- paste0(category, "_")
-
-  category_cols <- grep(paste0("^", category_pattern),
-                        colnames(normalized_traits_df), value = TRUE)
+  category_pattern <- paste0("^", category, "_")
+  category_cols <- grep(category_pattern, colnames(normalized_traits_all), value = TRUE)
 
   if (length(category_cols) > 0) {
-    # Bereken de rij-som voor deze categorie voor elk taxon
-    row_sums <- rowSums(normalized_traits_df[, category_cols], na.rm = TRUE)
-
-    # Normaliseer alleen rijen waar de som > 0 is
+    row_sums <- rowSums(normalized_traits_all[, category_cols], na.rm = TRUE)
     for (i in seq_along(row_sums)) {
       if (row_sums[i] > 0) {
-        normalized_traits_df[i, category_cols] <- normalized_traits_df[i, category_cols] / row_sums[i]
+        normalized_traits_all[i, category_cols] <- normalized_traits_all[i, category_cols] / row_sums[i]
       }
-      # Als row_sums[i] 0 is, blijven de waarden 0 (geen deling door nul)
-      # Als er NA's waren die de sum 0 maakten, blijven ze NA (na.rm = TRUE)
     }
   }
 }
 
-# Controleer op eventuele resterende NaN's na normalisatie (door division by zero als na.rm=FALSE was geweest,
-# maar met na.rm=TRUE zouden ze NA moeten blijven als de originele som NA was)
-normalized_traits_df[is.nan(as.matrix(normalized_traits_df))] <- NA
+#---------------------------------------------------------------------------------------------------
+# --- 5. Community Matrix Voorbereiden ---
+#---------------------------------------------------------------------------------------------------
 
-
-# Bereid de community matrix voor per meetplaats en monsternamedatum -> niet uniek! soms meerdere staalnames -> uniek is deelmonster_id!
-comm_matrix <- comm_data_raw %>%
-  mutate(
-    unique_id = as.character(deelmonster_id)) %>%
-  select(unique_id, all_of(taxa_for_fd)) %>% # Selecteer alleen taxa die uiteindelijk gematcht zijn
+comm_matrix_full <- comm_data_raw %>%
+  mutate(unique_id = as.character(deelmonster_id)) %>%
+  select(unique_id, all_of(taxa_for_fd)) %>%
   column_to_rownames(var = "unique_id") %>%
   as.matrix()
 
-# Vervang eventuele NA's in de community matrix door 0 (als NA's afwezigheid betekenen)
-comm_matrix[is.na(comm_matrix)] <- 0
-
-# --- Verwijder communities (rijen) met nul-som abundanties ---
-# Bereken de som van abundanties voor elke rij
-row_sums_comm_matrix <- rowSums(comm_matrix, na.rm = TRUE)
-
-# Identificeer rijen waar de som nul is
-empty_communities <- names(row_sums_comm_matrix[row_sums_comm_matrix == 0]) #deze werden weggelaten uit de data
-
-if (length(empty_communities) > 0) {
-  message(paste("Waarschuwing: De volgende meetplaatsen/data combinaties hebben nul-som abundanties en worden verwijderd (aantal tussen haakjes):",
-                paste(empty_communities, collapse = ", "), "(", paste(length(empty_communities), ")")))
-  comm_matrix <- comm_matrix[row_sums_comm_matrix > 0, ]
-}
-
-# Zorg ervoor dat de kolomnamen van de community matrix en de rijnamen van de trait matrix
-# in dezelfde volgorde staan en dezelfde taxa bevatten.
-comm_matrix <- comm_matrix[, order(colnames(comm_matrix))]
-normalized_traits_df <- normalized_traits_df[order(rownames(normalized_traits_df)), ] # Gebruik de genormaliseerde df
-
-# Controleer nogmaals of de taxa in beide matrices overeenkomen
-if (!all(colnames(comm_matrix) == rownames(normalized_traits_df))) {
-  stop("Taxa in community matrix en genormaliseerde trait matrix komen niet overeen of staan niet in dezelfde volgorde voor FD berekening!")
-}
+comm_matrix_full[is.na(comm_matrix_full)] <- 0
+comm_matrix_full <- comm_matrix_full[rowSums(comm_matrix_full) > 0, ]
+comm_matrix_full <- comm_matrix_full[, order(colnames(comm_matrix_full))]
+normalized_traits_all <- normalized_traits_all[order(rownames(normalized_traits_all)), ]
 
 #---------------------------------------------------------------------------------------------------
-# --- 6. Functionele Diversiteit berekenen ---
+# --- 6. FD BEREKENEN (Loop over Subsets) ---
 #---------------------------------------------------------------------------------------------------
 
-fd_results <- dbFD(
-  x = normalized_traits_df, # Gebruik de genormaliseerde traits matrix
-  a = comm_matrix,          # Community matrix (rijen zijn meetplaats_monsternamedatum)
-  calc.FRic = TRUE,         # Deze blijft wel behouden
-  calc.FDiv = TRUE,         # Deze blijft wel behouden
-  w.abun = TRUE,            # Gebruik abundanties
-  stand.FRic = TRUE,        # Standardiseer functionele rijkdom
-  corr = "cailliez",        # Correctie voor negatieve eigenvalues
-  m = "min"                 # Minimale aantal PCoA dimensies
+# Definieer de subsets
+subsets <- list(
+  waterkwaliteit = c("saprobity_", "trophic_status_", "respiration_", "ph_"),
+  habitat        = c("substrate_", "current_velocity_", "locomotion_"),
+  full           = c("saprobity_", "dispersal_", "reproduction_", "locomotion_",
+                     "substrate_", "current_velocity_", "trophic_status_", "temperature_",
+                     "respiration_")
 )
 
-#---------------------------------------------------------------------------------------------------
-# --- 7. Bereken de Trait Coverage per sampling event ---
-#---------------------------------------------------------------------------------------------------
+# Maak een lijst om de resultaten per subset op te slaan
+subset_results_list <- list()
 
-# Bereid een dataframe voor met de totale abundanties van de oorspronkelijke data
-total_raw_abundances_df <- comm_data_raw %>%
-     mutate(
-    unique_id = as.character(deelmonster_id)) %>%
-  # Selecteer alle taxa-kolommen en de unieke ID
-  select(-meetplaats, -monsternamedatum, -deelmonster_id) %>%
-  # Bereken de rij-som voor elke unieke ID
-  mutate(total_raw_abundance = rowSums(select(., c(-unique_id)))) %>%
-  select(unique_id, total_raw_abundance)
+for (subset_name in names(subsets)) {
+  message(paste("Berekenen van FD voor subset:", subset_name))
 
-# hier komen unique_id's uit met NA als total raw abundance. Deze checken in comm_data_raw. en aanpassen.
-na_total_raw_abundance <- total_raw_abundances_df %>% filter(is.na(total_raw_abundance)) %>% pull(unique_id)
-# hier ontbreken abundances -> weglaten van die deelmonsters door trait_coverage -> 0 te geven
+  # Selecteer de relevante traits
+  traits_subset <- normalized_traits_all %>%
+    select(starts_with(subsets[[subset_name]]))
 
+  # Bereken FD
+  res <- dbFD(
+    x = traits_subset,
+    a = comm_matrix_full,
+    calc.FRic = TRUE, calc.FDiv = TRUE,
+    w.abun = TRUE, stand.FRic = TRUE,
+    corr = "cailliez", m = "min"
+  )
 
-# Haal de unieke sampling IDs uit de comm_matrix
-sampling_ids <- rownames(comm_matrix)
-
-# Maak een dataframe met de totale abundanties van de gematchte taxa
-total_matched_abundances_df <- tibble(
-  unique_id = sampling_ids,
-  total_matched_abundance = rowSums(comm_matrix, na.rm = TRUE)
-)
-
-# Bereken de trait coverage door de twee dataframes samen te voegen
-trait_coverage_df <- total_matched_abundances_df %>%
-  left_join(total_raw_abundances_df, by = "unique_id") %>%
-  mutate(
-    trait_coverage_percentage = (total_matched_abundance / total_raw_abundance) * 100
+  # Zet om naar dataframe en voeg suffix toe aan kolomnamen
+  subset_df <- tibble(
+    unique_id = rownames(comm_matrix_full),
+    fdisp = res$FDis,
+    fric  = res$FRic,
+    feve  = res$FEve,
+    fdiv  = res$FDiv
   ) %>%
-  # Vervang NaN's (deling door nul) en oneindige waarden met 0
-  mutate(trait_coverage_percentage = replace_na(trait_coverage_percentage, 0)) %>%
-  mutate(trait_coverage_percentage = ifelse(is.infinite(trait_coverage_percentage), 0, trait_coverage_percentage)) %>%
-  select(unique_id, trait_coverage_percentage)
+    rename_with(~ paste0(., "_", subset_name), -unique_id)
 
-# filter samples met trait coverage lager dan x%
-trait_coverage_df %>%
-  filter(trait_coverage_percentage > 80) %>%
-  nrow
+  subset_results_list[[subset_name]] <- subset_df
+}
 
-fdisp_mi <- fd_results$FDis %>%
-  as.data.frame %>%
-  rownames_to_column(var = "unique_id") %>%
-  rename(fdisp = ".") %>%
-  left_join(.,
-            trait_coverage_df,
-            by = "unique_id") %>%
-  left_join(.,
-            comm_data_raw %>%
-              mutate(
-                unique_id = as.character(deelmonster_id)) %>%
-              select(monsternamedatum, meetplaats, unique_id),
-            by = "unique_id") %>%
-  select(-unique_id) %>%
+# Combineer alle subsets in één breed dataframe
+fd_combined_df <- subset_results_list %>%
+  reduce(left_join, by = "unique_id")
+
+#---------------------------------------------------------------------------------------------------
+# --- 7. Trait Coverage & Finale Export ---
+#---------------------------------------------------------------------------------------------------
+
+# Bereken de totale ruwe abundantie per staal (voor alle taxa, ook de niet-gematchte)
+total_raw_abundances <- rowSums(comm_data_raw[, 4:ncol(comm_data_raw)], na.rm = TRUE)
+names(total_raw_abundances) <- as.character(comm_data_raw$deelmonster_id)
+
+# Bereid de coverage data voor
+trait_coverage_df <- tibble(
+  unique_id = rownames(comm_matrix_full),
+  total_matched_abundance = rowSums(comm_matrix_full),
+  total_raw_abundance = total_raw_abundances[rownames(comm_matrix_full)],
+  trait_coverage_percentage = (total_matched_abundance / total_raw_abundance) * 100
+)
+
+# Combineer alles en aggregeer per meetplaats/datum (indien er meerdere deelmonsters zijn)
+fd_mi <- fd_combined_df %>%
+  left_join(trait_coverage_df, by = "unique_id") %>%
+  left_join(
+    comm_data_raw %>%
+      mutate(unique_id = as.character(deelmonster_id)) %>%
+      select(unique_id, meetplaats, monsternamedatum),
+    by = "unique_id"
+  ) %>%
+  select(-unique_id, -total_matched_abundance, -total_raw_abundance) %>%
   group_by(meetplaats, monsternamedatum) %>%
-  summarise_all(.funs = mean)
-save(fdisp_mi, file = here("data", "verwerkt", "mi_fd.rdata"))
+  summarise(across(everything(), ~ mean(.x, na.rm = TRUE)), .groups = "drop")
 
-ggplot(fdisp_mi
-       %>%
-         filter(monsternamedatum > '2007/12/31'), aes(monsternamedatum, fdisp)) +
-  # geom_point() +
-  geom_smooth()
+# Opslaan
+save(fd_mi, file = here("data", "verwerkt", "mi_fd_multiset.rdata"))
+
+#---------------------------------------------------------------------------------------------------
+# --- 8. Bonus: Snelle Check/Visualisatie ---
+#---------------------------------------------------------------------------------------------------
+
+# Vergelijk bijvoorbeeld FDis Waterkwaliteit met Habitat
+ggplot(fd_mi, aes(x = fdisp_waterkwaliteit, y = fdisp_habitat)) +
+  geom_point(alpha = 0.5) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+  theme_minimal() +
+  labs(title = "Vergelijking FDis: Waterkwaliteit vs Habitat")
+
+################################################################################
+# CWM exploratie
+################################################################################
+
+# Haal de CWM resultaten specifiek van jouw 'full' definitie
+# (Zorg dat 'res_full' de output is van de dbFD met jouw 8 geselecteerde trait-groepen)
+cwm_full_data <- as.data.frame(res$CWM) %>% #laatste res uit loop -> die van _full hier!!!!
+  rownames_to_column("unique_id") %>%
+  left_join(
+    comm_data_raw %>%
+      mutate(unique_id = as.character(deelmonster_id)) %>%
+      select(unique_id, meetplaats, monsternamedatum),
+    by = "unique_id"
+  )
+
+save(cwm_full_data, file = here("data", "verwerkt", "mi_cwm.rdata"))
+
+load(file = here("data", "verwerkt", "mi_data.rdata"))
+
+cwm_mi_plot_data <- cwm_full_data %>%
+  left_join(
+    mi_data %>%
+      select(meetplaats, monsternamedatum, groep, statuut, type),
+    by = c("meetplaats", "monsternamedatum")
+  ) %>%
+  mutate(
+    subset = case_when(
+      # 1. Natuurlijk en Sterk Veranderd per groep
+      statuut %in% c("Natuurlijk", "Sterk Veranderd") &
+        groep == "beek"   ~ "nat_sv_beek",
+      statuut %in% c("Natuurlijk", "Sterk Veranderd") &
+        groep == "kempen" ~ "nat_sv_kempen",
+      statuut %in% c("Natuurlijk", "Sterk Veranderd") &
+        groep == "polder" ~ "nat_sv_polder",
+      statuut %in% c("Natuurlijk", "Sterk Veranderd") &
+        groep == "rivier" ~ "nat_sv_rivier",
+
+      # 2. Kunstmatig (onafhankelijk van groep)
+      statuut == "Kunstmatig"                                            ~ "kunstmatig",
+
+      # 3. Specifieke types zoals RtNt
+      type == "RtNt"                                                     ~ "rtnt",
+
+      # Restgroep (optioneel, voor alles wat niet in bovenstaande valt)
+      TRUE                                                               ~ "overig"
+    )
+  )
+
+
+cwm_mi_nat_sv_kempen <- cwm_full_data %>%
+  left_join(mi_data %>%
+              select(meetplaats, monsternamedatum, groep, statuut),
+            by = c("meetplaats", "monsternamedatum")) %>%
+  filter(groep == "kempen" & statuut %in% c("Natuurlijk", "Sterk Veranderd"))
+
+library(scales) # Voor nette percentage formatting
+
+plot_cwm_per_jaar_labels <- function(data, category_prefix) {
+  # 1. Voorbereiden en aggregeren
+  plot_df <- data %>%
+    mutate(jaar = year(monsternamedatum)) %>%
+    select(jaar, starts_with(category_prefix)) %>%
+    group_by(jaar) %>%
+    summarise(across(everything(), \(x) mean(x, na.rm = TRUE)), .groups = "drop") %>%
+    pivot_longer(cols = starts_with(category_prefix),
+                 names_to = "Modaliteit",
+                 values_to = "Waarde") %>%
+    mutate(Modaliteit = str_replace(Modaliteit, category_prefix, "")) %>%
+    # Maak een label-kolom (alleen als de waarde groot genoeg is, bijv. > 4%)
+    mutate(label = ifelse(Waarde > 0.04, percent(Waarde, accuracy = 1), ""))
+
+  # 2. De plot met tekst-labels
+  ggplot(plot_df, aes(x = factor(jaar), y = Waarde, fill = Modaliteit)) +
+    geom_bar(stat = "identity", position = "stack", width = 0.75) +
+    # Voeg de percentages toe in het midden van de segmenten
+    geom_text(aes(label = label),
+              position = position_stack(vjust = 0.5),
+              size = 3,
+              color = "white", # Of "black" afhankelijk van je kleurenschema
+              fontface = "bold") +
+    scale_fill_viridis_d(option = "viridis") +
+    theme_minimal() +
+    labs(title = paste("Jaarlijkse trend:", str_remove(category_prefix, "_")),
+         subtitle = "Getallen in balken geven het gemiddelde percentage weer",
+         x = "Jaar",
+         y = "Gemiddelde proportie (0-1)",
+         fill = "Kenmerk") +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+          legend.position = "right",
+          panel.grid.major.x = element_blank())
+}
+
+# beek
+plot_cwm_per_jaar_labels(cwm_mi_nat_sv_beek, "saprobity_")
+plot_cwm_per_jaar_labels(cwm_mi_nat_sv_beek, "locomotion_")
+plot_cwm_per_jaar_labels(cwm_mi_nat_sv_beek, "temperature_")
+plot_cwm_per_jaar_labels(cwm_mi_nat_sv_beek, "current_velocity_")
+plot_cwm_per_jaar_labels(cwm_mi_nat_sv_beek, "dispersal_")
+plot_cwm_per_jaar_labels(cwm_mi_nat_sv_beek, "reproduction_")
+plot_cwm_per_jaar_labels(cwm_mi_nat_sv_beek, "substrate_")
+plot_cwm_per_jaar_labels(cwm_mi_nat_sv_beek, "trophic_status_")
+
+# kempen
+plot_cwm_per_jaar_labels(cwm_mi_nat_sv_kempen, "saprobity_")
+plot_cwm_per_jaar_labels(cwm_mi_nat_sv_kempen, "locomotion_")
+plot_cwm_per_jaar_labels(cwm_mi_nat_sv_kempen, "temperature_")
+plot_cwm_per_jaar_labels(cwm_mi_nat_sv_kempen, "current_velocity_")
+plot_cwm_per_jaar_labels(cwm_mi_nat_sv_kempen, "dispersal_")
+plot_cwm_per_jaar_labels(cwm_mi_nat_sv_kempen, "reproduction_")
+plot_cwm_per_jaar_labels(cwm_mi_nat_sv_kempen, "substrate_")
+plot_cwm_per_jaar_labels(cwm_mi_nat_sv_kempen, "trophic_status_")
 
 
 
+library(ggplot2)
+library(dplyr)
+
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+library(scales)
+
+plot_cwm_subsets_jaar <- function(data, category_prefix, selected_subsets) {
+
+  # 1. Filter data en bereid jaarlijkse gemiddelden voor PER SUBSET
+  plot_df <- data %>%
+    filter(subset %in% selected_subsets) %>%
+    mutate(jaar = lubridate::year(monsternamedatum)) %>%
+    # Groepeer op jaar EN subset
+    group_by(jaar, subset) %>%
+    summarise(across(starts_with(category_prefix), \(x) mean(x, na.rm = TRUE)), .groups = "drop") %>%
+    # Omzetten naar lang formaat voor de stacks
+    pivot_longer(cols = starts_with(category_prefix),
+                 names_to = "Modaliteit",
+                 values_to = "Waarde") %>%
+    mutate(Modaliteit = str_replace(Modaliteit, category_prefix, ""),
+           subset = factor(subset, levels = selected_subsets)) %>%
+    # Procentueel label (alleen voor segmenten > 5% voor leesbaarheid)
+    mutate(label = ifelse(Waarde > 0.05, percent(Waarde, accuracy = 1), ""))
+
+  # 2. De Plot met Faceting
+  ggplot(plot_df, aes(x = factor(jaar), y = Waarde, fill = Modaliteit)) +
+    geom_bar(stat = "identity", position = "stack", width = 0.8) +
+    geom_text(aes(label = label),
+              position = position_stack(vjust = 0.5),
+              size = 2.5, color = "white", fontface = "bold") +
+    # HIER GEBEURT HET: splits de plot in kolommen op basis van subset
+    facet_wrap(~ subset, scales = "free_x") +
+    scale_fill_viridis_d(option = "viridis") +
+    theme_minimal() +
+    labs(title = paste("Trendvergelijking:", str_remove(category_prefix, "_")),
+         subtitle = "Jaarlijkse CWM profielen per geselecteerde subset",
+         x = "Jaar", y = "Proportie", fill = "Kenmerk") +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, size = 7),
+          legend.position = "bottom",
+          strip.background = element_rect(fill = "gray90"), # subset koppen accentueren
+          strip.text = element_text(face = "bold"))
+}
+
+# Voorbeeld: Vergelijk ademhaling tussen beken en kunstmatig
+plot_cwm_subsets_jaar(
+  data = cwm_mi_plot_data,
+  category_prefix = "temperature_",
+  selected_subsets = c("nat_sv_beek", "kunstmatig")
+)
+
+# Voorbeeld: Vergelijk saprobiteit tussen alle 'natuurlijke' regio's
+plot_cwm_subsets_jaar(
+  data = cwm_mi_plot_data,
+  category_prefix = "saprobity_",
+  selected_subsets = c("nat_sv_beek", "nat_sv_kempen", "nat_sv_rivier", "nat_sv_polder")
+)
+
+plot_cwm_subsets_jaar(
+  data = cwm_mi_plot_data,
+  category_prefix = "current_velocity_",
+  selected_subsets = c("nat_sv_beek", "nat_sv_kempen", "nat_sv_rivier", "nat_sv_polder")
+)
+
+plot_cwm_subsets_jaar(
+  data = cwm_mi_plot_data,
+  category_prefix = "respiration_",
+  selected_subsets = c("nat_sv_beek", "nat_sv_kempen", "nat_sv_rivier", "nat_sv_polder")
+)
