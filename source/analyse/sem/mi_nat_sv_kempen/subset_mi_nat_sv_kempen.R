@@ -470,6 +470,8 @@ mmif_sem_nat_sv_kempen <- psem(mmif_best_model_updated,
                              )
 summary(mmif_sem_nat_sv_kempen)
 
+#Ntotaal en CZV uit het model want doodlopend
+
 save(mmif_sem_nat_sv_kempen, file = here("source", "analyse", "sem", "mi_nat_sv_kempen", "mmif_sem_nat_sv_kempen.rdata"))
 #
 # model_test_mmif <- glmmTMB(data = dredge_data, formula = mmif ~ ec_20_s + p_h_s + spei6_s + p_t_log + intensiteit_combo_afstr_s + n_t_log + o2_s + t_s + verharding_afstr_s +  n_extreme_3m_s + lozingen_riool_ie_log + jaar_s + (1|meetplaats),
@@ -501,19 +503,22 @@ summary(sem_ept_kempen)
 
 ept_best_model_updated <- update(ept_best_model_kempen, . ~ . )
 ntot_best_model_updated <- update(ntot_best_model_kempen, . ~ . + t_s)
-ptot_best_model_updated <- update(ptot_best_model_kempen, . ~ . )
+ptot_best_model_updated <- update(ptot_best_model_kempen, . ~ . + t_s )
 czv_best_model_updated <- update(czv_best_model_kempen, . ~ . )
-ec20_best_model_updated <- update(ec20_best_model_kempen, . ~ . + t_s )
+ec20_best_model_updated <- update(ec20_best_model_kempen, . ~ . + t_s - n_t_log)
 o2_best_model_updated <- update(o2_best_model_kempen, . ~ . + overstorten_blootstelling_index_log + verharding_oever_s + ec_20_s)
 
 ept_sem_nat_sv_kempen <- psem(ept_best_model_updated,
                             # ntot_best_model_updated,
                             ptot_best_model_updated,
-                            czv_best_model_updated,
+                            # czv_best_model_updated,
                             o2_best_model_updated,
                             ec20_best_model_updated)
                             # n_t_log %~~% p_t_log)
 summary(ept_sem_nat_sv_kempen)
+
+#Ntotaal en CZV uit het model want doodlopend
+
 
 save(ept_sem_nat_sv_kempen, file = here("source", "analyse", "sem", "mi_nat_sv_kempen", "ept_sem_nat_sv_kempen.rdata"))
 
@@ -554,6 +559,8 @@ swd_sem_nat_sv_kempen <- psem(swd_best_model_updated,
                             ec20_best_model_updated)
                             # n_t_log %~~% p_t_log)
 summary(swd_sem_nat_sv_kempen)
+
+#Ntotaal en CZV uit het model want doodlopend
 
 save(swd_sem_nat_sv_kempen, file = here("source", "analyse", "sem", "mi_nat_sv_kempen", "swd_sem_nat_sv_kempen.rdata"))
 

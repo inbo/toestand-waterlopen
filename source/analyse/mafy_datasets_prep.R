@@ -23,6 +23,8 @@ load(file = here("data", "verwerkt", "hydro_data.rdata")) # hydrologie (neerslag
 
 load(file = here("data", "verwerkt", "lozingen_data.rdata")) # lozingen
 
+load(file = here("data", "verwerkt", "mafy_schaduw_data.rdata"))
+
 
 mafy_data0 <- koppeling_mafy_nutrient_aggregate_wide %>%
   filter(!groep %in% c("meer")) %>%
@@ -63,14 +65,12 @@ landgebruik_data <- landgebruik_afstroomgebied_jaren %>%
 
 mafy_data2 <- mafy_data1 %>%
   left_join(landgebruik_data,
-            by = c("meetplaats", "monsternamedatum"))
-
-mafy_data3 <- mafy_data2 %>%
+            by = c("meetplaats", "monsternamedatum")) %>%
   left_join(hydro_data,
-            by = c("meetplaats", "monsternamedatum"))
-
-mafy_data4 <- mafy_data3 %>%
+            by = c("meetplaats", "monsternamedatum")) %>%
   left_join(lozingen_data,
+            by = c("meetplaats", "monsternamedatum")) %>%
+  left_join(mafy_schaduw_data,
             by = c("meetplaats", "monsternamedatum"))
 
 ################################################################################
@@ -78,30 +78,30 @@ mafy_data4 <- mafy_data3 %>%
 ################################################################################
 # 1. natuurlijk en sterk veranderd
 # 1.1 beek
-mafy_nat_sv_beek <- mafy_data4 %>%
+mafy_nat_sv_beek <- mafy_data2 %>%
   filter(status == "NAT") %>%
   filter(groep == "beek")
 
 # 1.2 kempen
-mafy_nat_sv_kempen <- mafy_data4 %>%
+mafy_nat_sv_kempen <- mafy_data2 %>%
   filter(status == "NAT") %>%
   filter(groep == "kempen")
 
 # 1.3 polder
-mafy_nat_sv_polder <- mafy_data4 %>%
+mafy_nat_sv_polder <- mafy_data2 %>%
   filter(status == "NAT") %>%
   filter(groep == "polder")
 
 # 1.4 rivier
-mafy_nat_sv_rivier <- mafy_data4 %>%
+mafy_nat_sv_rivier <- mafy_data2 %>%
   filter(status == "NAT") %>%
   filter(groep == "rivier")
 
 # 2. kunstmatig
-mafy_kunstmatig <- mafy_data4 %>%
+mafy_kunstmatig <- mafy_data2 %>%
   filter(status == "NAT")
 
 # 3. RtNt - bovenlopen -> NVT????
-rtnt <- mafy_data4 %>%
+rtnt <- mafy_data2 %>%
   filter(waterlichaamcategorietype == "RtNt")
 
