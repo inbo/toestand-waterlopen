@@ -136,6 +136,8 @@ dredge_data_fd <- data_subset %>%
   ) %>%
   na.omit
 
+vis_miss(data_subset)
+
 ################################################################################
 # model fitten MMIF
 ################################################################################
@@ -484,6 +486,7 @@ summary(mmif_sem_nat_sv_beek)
 
 save(mmif_sem_nat_sv_beek, file = here("source", "analyse", "sem", "mi_nat_sv_beek", "mmif_sem_nat_sv_beek.rdata"))
 
+load(file = here("source", "analyse", "sem", "mi_nat_sv_beek", "mmif_sem_nat_sv_beek.rdata"))
 sem_resultaat <- mmif_sem_nat_sv_beek
 coefs_missing <- coefs(sem_resultaat)[,-9]
 source("source/analyse/sem/sem_standardised_coef_flexible.R")
@@ -523,6 +526,7 @@ summary(ept_sem_nat_sv_beek)
 r.squaredGLMM(ept_best_model_updated)
 save(ept_sem_nat_sv_beek, file = here("source", "analyse", "sem", "mi_nat_sv_beek", "ept_sem_nat_sv_beek.rdata"))
 
+load(file = here("source", "analyse", "sem", "mi_nat_sv_beek", "ept_sem_nat_sv_beek.rdata"))
 sem_resultaat <- ept_sem_nat_sv_beek
 coefs_missing <- coefs(sem_resultaat)[,-9]
 source("source/analyse/sem/sem_standardised_coef_flexible.R")

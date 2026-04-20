@@ -1,0 +1,128 @@
+---
+title: "Biodiversiteit in de waterlopen"
+format: html
+editor: visual
+number-sections: true
+number-depth: 3
+---
+
+```{r}
+source(here::here("source", "inladen_packages.R"))
+```
+
+## Biologische elementen
+
+### Macro-invertebraten
+
+```{r}
+load(here("data", "verwerkt", "mi_data.rdata"))
+```
+
+#### Beschikbare data
+
+We beschikken over de data van de macroinvertebraten (MI) van VMM.
+
+```{r}
+mi_data %>%
+  drop_na(bbi)
+mi_data %>%
+  drop_na(mmif) %>% summary
+
+mi_data_analyse <- mi_data %>%
+  filter(categorie != "Vijver") %>%
+  filter(waterlooptype != "Geïsoleerd water") %>%
+  filter(waterlichaamcategorie != "meer") %>%
+  filter(!meetplaats %in% c("OW113500", "OW12000", "OW179000", "OW536050", "OW669032", "OW690015", "OW917000", "OW981010", "OW981200")) #weglaten punten buiten Vlaanderen
+
+```
+
+Belgische Biotische Index (BBI) en Multimetrische Macroinvertebratenindex (MMIF) data van 1989 tot 2023. Vanaf 2012 enkel de MMIF voor KRW gerrapporteerd per waterlichaam. Sinds 2007 gebeurt het monitoringprogramma voor MI in functie van de Europese kaderrichtlijn Water (KRW).
+
+Zie document "Meetstrategie en methodiek macro-invertebraten" \_\> als referentie toevoegen.
+
+#### Huidige toestand
+
+Alle meetpunten uniek van de laatste 5 jaren? geen herhalingen?
+
+#### Trend
+
+```{r}
+# 
+# mapviewdata <- mi_data_analyse %>%
+#   filter(statuut == "Natuurlijk" | statuut == "Sterk Veranderd") %>%
+#   group_by(bekken, meetplaats) %>%
+#   summarize(jaren = paste(jaar, collapse = ", "),
+#             lengte_reeks = max(jaar) - min(jaar) + 1,
+#             aantal_bemonsteringen = n(),
+#             recentste_jaar = max(jaar),
+#             .groups = "drop")
+# 
+# bekkens_sf <- read_sf(
+#   here("data", "ruw", "bekkens", "Wsbekken.shp")
+# )
+# 
+# vha_bekkens <- bekkens_sf %>%
+#   st_cast("GEOMETRYCOLLECTION") %>%
+#   st_collection_extract()
+# 
+# mapviewdata %>%
+#   mapview(zcol = "lengte_reeks") +
+#   mapview(vha_bekkens, alpha.regions = 0)
+# 
+# mapviewdata %>%
+#   mapview(zcol = "aantal_bemonsteringen") +
+#   mapview(vha_bekkens, alpha.regions = 0)
+# 
+# mapviewdata %>%
+#   mapview(zcol = "recentste_jaar")  +
+#   mapview(vha_bekkens, alpha.regions = 0)
+
+
+```
+
+#### Eigenschappen van macroinvertebraten ('traits')
+
+Op basis van zeven kenmerken van macroinvertebraten kunnen we kijken naar de functionele diversiteit van gemeenschappen van ongewervelden in de waterlopen. Functionele diversiteit is een maat van hoe divers de eigenschappen zijn van een gemeenschap. Zo kunnen er veel verschillende soorten aanwezig zijn, maar deze kunnen allemaal dezelfde eigenschappen of strategiën hebben. Een hoge functionele diversiteit wijst op een gezond ecosysteem dat beter bestand is tegen drukken en verstoringen.
+
+De eigenschappen zijn: dispersie, voorbeweging, reproductie, saprobiteit, stroomsnelheid, trofisch status en substraat.
+
+### Macrofyten
+
+### Vissen
+
+### Fytobenthos
+
+## Drukken
+
+### Waterkwaliteit
+
+#### Fysico-chemisch
+
+#### Verontreinigende stoffen
+
+##### In het water
+
+##### In biota
+
+##### In de waterbodem
+
+### Landgebruik
+
+### Overstorten
+
+### Hydromorfologie
+
+### Invasieve druk
+
+```{r}
+1 + 1
+```
+
+You can add options to executable code like this
+
+```{r}
+#| echo: false
+2 * 2
+```
+
+The `echo: false` option disables the printing of code (only output is displayed).
