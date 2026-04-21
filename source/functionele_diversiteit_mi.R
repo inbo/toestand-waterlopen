@@ -224,6 +224,7 @@ fd_mi <- fd_combined_df %>%
 
 # Opslaan
 save(fd_mi, file = here("data", "verwerkt", "mi_fd_multiset.rdata"))
+load(file = here("data", "verwerkt", "mi_fd_multiset.rdata"))
 
 #---------------------------------------------------------------------------------------------------
 # --- 8. Bonus: Snelle Check/Visualisatie ---
@@ -236,6 +237,124 @@ ggplot(fd_mi, aes(x = fdisp_waterkwaliteit, y = fdisp_habitat)) +
   theme_minimal() +
   labs(title = "Vergelijking FDis: Waterkwaliteit vs Habitat")
 
+fd_mi_long <- fd_mi %>%
+  mutate(jaar = lubridate::year(monsternamedatum)) %>%
+  pivot_longer(fdisp_waterkwaliteit:fdiv_full, names_to = "fd_variabele", values_to = "fd_waarde") %>%
+  separate_wider_delim(
+    cols = fd_variabele,
+    delim = "_",
+    names = c("fd_maat", "type_fd")
+  )
+
+fd_mi_long %>%
+  ggplot(aes(jaar, fd_waarde, color = type_fd)) +
+  geom_smooth(method = "gam") +
+  facet_grid(~fd_maat)
+
+# link met mi data
+fd_mi_plot_data <- fd_mi_long %>%
+left_join(
+  mi_data %>%
+    select(meetplaats, monsternamedatum, groep, statuut, type, bekken),
+  by = c("meetplaats", "monsternamedatum")
+) %>%
+  mutate(
+    subset = case_when(
+      # 1. Natuurlijk en Sterk Veranderd per groep
+      statuut %in% c("Natuurlijk", "Sterk Veranderd") &
+        groep == "beek"   ~ "nat_sv_beek",
+      statuut %in% c("Natuurlijk", "Sterk Veranderd") &
+        groep == "kempen" ~ "nat_sv_kempen",
+      statuut %in% c("Natuurlijk", "Sterk Veranderd") &
+        groep == "polder" ~ "nat_sv_polder",
+      statuut %in% c("Natuurlijk", "Sterk Veranderd") &
+        groep == "rivier" ~ "nat_sv_rivier",
+
+      # 2. Kunstmatig (onafhankelijk van groep)
+      statuut == "Kunstmatig"                                            ~ "kunstmatig",
+
+      # 3. Specifieke types zoals RtNt
+      type == "RtNt"                                                     ~ "rtnt",
+
+      # Restgroep (optioneel, voor alles wat niet in bovenstaande valt)
+      TRUE                                                               ~ "overig"
+    )
+  )
+
+fd_mi_plot_data %>%
+  filter(fd_maat == "fdisp") %>%
+  filter(jaar > 2009) %>%
+  ggplot(aes(jaar, fd_waarde, color = type_fd)) +
+  geom_smooth(method = "gam") +
+  facet_grid(~subset)
+
+### Figuur op bais van GAMs
+
+library(tidyverse)
+library(mgcv)
+library(ggeffects)
+
+fd_nested <- fd_mi_plot_data %>%
+  filter(fd_maat == "fdisp") %>%
+  filter(jaar > 2009) %>%
+  filter(subset != "overig") %>%
+  mutate(
+    subset = as.factor(subset),
+    type_fd = as.factor(type_fd),
+    meetplaats = as.factor(meetplaats),
+    bekken = as.factor(bekken),
+    jaar_num = as.numeric(jaar)
+  ) %>%
+  drop_na(fd_waarde, jaar_num, meetplaats, bekken) %>%
+  group_nest(subset, type_fd)
+
+fd_models <- fd_nested %>%
+  mutate(
+    model = map(data, ~ gam(fd_waarde ~ s(jaar_num, k = 4) +
+                              s(meetplaats, bs = "re") +
+                              s(bekken, bs = "re"),
+                            data = .x,
+                            method = "REML")),
+
+    predictions = map(model, ~ {
+      if (is.null(.x)) return(NULL)
+      # ggaverage berekent het gemiddelde effect, corrigerend voor de random effects
+      res <- ggaverage(.x, terms = "jaar_num [all]")
+      as.data.frame(res)
+    })
+  )
+
+fd_trends <- fd_models %>%
+  select(subset, type_fd, predictions) %>%
+  unnest(predictions)
+
+plot_fd_gam <- ggplot(fd_trends, aes(x = x, y = predicted, group = type_fd)) +
+  # Betrouwbaarheidsintervallen
+  geom_ribbon(aes(ymin = conf.low, ymax = conf.high, fill = type_fd), alpha = 0.2) +
+  # De trendlijn
+  geom_line(aes(color = type_fd), size = 1) +
+  # Faceting op basis van je subset (natuurlijk, kunstmatig, etc.)
+  facet_wrap(~ subset, scales = "free_y") +
+  theme_minimal() +
+  labs(
+    title = "Functionele Diversiteit (FDisp) Trends",
+    subtitle = "Gefit met Mixed Effect GAM (Random Effects: Meetplaats & Bekken)",
+    x = "Jaar",
+    y = "Voorspelde FDisp waarde",
+    color = "Type FD",
+    fill = "Type FD"
+  )
+
+print(plot_fd_gam)
+ggsave(
+  filename =  here("output", "figuren", "trend_fdisp_subsets.png"),
+  plot = last_plot(), # Expliciet de laatste plot kiezen
+  width = 40,
+  height = 20,
+  units = "cm",
+  dpi = 300,
+  bg = "white"
+)
 ################################################################################
 # CWM exploratie
 ################################################################################
@@ -252,6 +371,7 @@ cwm_full_data <- as.data.frame(res$CWM) %>% #laatste res uit loop -> die van _fu
   )
 
 save(cwm_full_data, file = here("data", "verwerkt", "mi_cwm.rdata"))
+load(file = here("data", "verwerkt", "mi_cwm.rdata"))
 
 load(file = here("data", "verwerkt", "mi_data.rdata"))
 
@@ -284,81 +404,9 @@ cwm_mi_plot_data <- cwm_full_data %>%
     )
   )
 
-
-cwm_mi_nat_sv_kempen <- cwm_full_data %>%
-  left_join(mi_data %>%
-              select(meetplaats, monsternamedatum, groep, statuut),
-            by = c("meetplaats", "monsternamedatum")) %>%
-  filter(groep == "kempen" & statuut %in% c("Natuurlijk", "Sterk Veranderd"))
-
 library(scales) # Voor nette percentage formatting
 
-plot_cwm_per_jaar_labels <- function(data, category_prefix) {
-  # 1. Voorbereiden en aggregeren
-  plot_df <- data %>%
-    mutate(jaar = year(monsternamedatum)) %>%
-    select(jaar, starts_with(category_prefix)) %>%
-    group_by(jaar) %>%
-    summarise(across(everything(), \(x) mean(x, na.rm = TRUE)), .groups = "drop") %>%
-    pivot_longer(cols = starts_with(category_prefix),
-                 names_to = "Modaliteit",
-                 values_to = "Waarde") %>%
-    mutate(Modaliteit = str_replace(Modaliteit, category_prefix, "")) %>%
-    # Maak een label-kolom (alleen als de waarde groot genoeg is, bijv. > 4%)
-    mutate(label = ifelse(Waarde > 0.04, percent(Waarde, accuracy = 1), ""))
-
-  # 2. De plot met tekst-labels
-  ggplot(plot_df, aes(x = factor(jaar), y = Waarde, fill = Modaliteit)) +
-    geom_bar(stat = "identity", position = "stack", width = 0.75) +
-    # Voeg de percentages toe in het midden van de segmenten
-    geom_text(aes(label = label),
-              position = position_stack(vjust = 0.5),
-              size = 3,
-              color = "white", # Of "black" afhankelijk van je kleurenschema
-              fontface = "bold") +
-    scale_fill_viridis_d(option = "viridis") +
-    theme_minimal() +
-    labs(title = paste("Jaarlijkse trend:", str_remove(category_prefix, "_")),
-         subtitle = "Getallen in balken geven het gemiddelde percentage weer",
-         x = "Jaar",
-         y = "Gemiddelde proportie (0-1)",
-         fill = "Kenmerk") +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1),
-          legend.position = "right",
-          panel.grid.major.x = element_blank())
-}
-
-# beek
-plot_cwm_per_jaar_labels(cwm_mi_nat_sv_beek, "saprobity_")
-plot_cwm_per_jaar_labels(cwm_mi_nat_sv_beek, "locomotion_")
-plot_cwm_per_jaar_labels(cwm_mi_nat_sv_beek, "temperature_")
-plot_cwm_per_jaar_labels(cwm_mi_nat_sv_beek, "current_velocity_")
-plot_cwm_per_jaar_labels(cwm_mi_nat_sv_beek, "dispersal_")
-plot_cwm_per_jaar_labels(cwm_mi_nat_sv_beek, "reproduction_")
-plot_cwm_per_jaar_labels(cwm_mi_nat_sv_beek, "substrate_")
-plot_cwm_per_jaar_labels(cwm_mi_nat_sv_beek, "trophic_status_")
-
-# kempen
-plot_cwm_per_jaar_labels(cwm_mi_nat_sv_kempen, "saprobity_")
-plot_cwm_per_jaar_labels(cwm_mi_nat_sv_kempen, "locomotion_")
-plot_cwm_per_jaar_labels(cwm_mi_nat_sv_kempen, "temperature_")
-plot_cwm_per_jaar_labels(cwm_mi_nat_sv_kempen, "current_velocity_")
-plot_cwm_per_jaar_labels(cwm_mi_nat_sv_kempen, "dispersal_")
-plot_cwm_per_jaar_labels(cwm_mi_nat_sv_kempen, "reproduction_")
-plot_cwm_per_jaar_labels(cwm_mi_nat_sv_kempen, "substrate_")
-plot_cwm_per_jaar_labels(cwm_mi_nat_sv_kempen, "trophic_status_")
-
-
-
-library(ggplot2)
-library(dplyr)
-
-library(ggplot2)
-library(tidyr)
-library(dplyr)
-library(scales)
-
-plot_cwm_subsets_jaar <- function(data, category_prefix, selected_subsets) {
+plot_cwm_subsets_jaar <- function(data, category_prefix, selected_subsets, start_jaar) {
 
   # 1. Filter data en bereid jaarlijkse gemiddelden voor PER SUBSET
   plot_df <- data %>%
@@ -374,7 +422,8 @@ plot_cwm_subsets_jaar <- function(data, category_prefix, selected_subsets) {
     mutate(Modaliteit = str_replace(Modaliteit, category_prefix, ""),
            subset = factor(subset, levels = selected_subsets)) %>%
     # Procentueel label (alleen voor segmenten > 5% voor leesbaarheid)
-    mutate(label = ifelse(Waarde > 0.05, percent(Waarde, accuracy = 1), ""))
+    mutate(label = ifelse(Waarde > 0.05, percent(Waarde, accuracy = 1), "")) %>%
+    filter(jaar > (start_jaar - 1))
 
   # 2. De Plot met Faceting
   ggplot(plot_df, aes(x = factor(jaar), y = Waarde, fill = Modaliteit)) +
@@ -395,28 +444,58 @@ plot_cwm_subsets_jaar <- function(data, category_prefix, selected_subsets) {
           strip.text = element_text(face = "bold"))
 }
 
-# Voorbeeld: Vergelijk ademhaling tussen beken en kunstmatig
-plot_cwm_subsets_jaar(
-  data = cwm_mi_plot_data,
-  category_prefix = "temperature_",
-  selected_subsets = c("nat_sv_beek", "kunstmatig")
-)
-
 # Voorbeeld: Vergelijk saprobiteit tussen alle 'natuurlijke' regio's
 plot_cwm_subsets_jaar(
   data = cwm_mi_plot_data,
   category_prefix = "saprobity_",
-  selected_subsets = c("nat_sv_beek", "nat_sv_kempen", "nat_sv_rivier", "nat_sv_polder")
+  selected_subsets = c("nat_sv_beek", "nat_sv_kempen", "nat_sv_rivier", "nat_sv_polder", "kunstmatig", "rtnt"),
+  start_jaar = 2010
 )
 
 plot_cwm_subsets_jaar(
   data = cwm_mi_plot_data,
   category_prefix = "current_velocity_",
-  selected_subsets = c("nat_sv_beek", "nat_sv_kempen", "nat_sv_rivier", "nat_sv_polder")
+  selected_subsets = c("nat_sv_beek", "nat_sv_kempen", "nat_sv_rivier", "nat_sv_polder", "kunstmatig", "rtnt"),
+  start_jaar = 2010
 )
 
 plot_cwm_subsets_jaar(
   data = cwm_mi_plot_data,
   category_prefix = "respiration_",
-  selected_subsets = c("nat_sv_beek", "nat_sv_kempen", "nat_sv_rivier", "nat_sv_polder")
+  selected_subsets = c("nat_sv_beek", "nat_sv_kempen", "nat_sv_rivier", "nat_sv_polder", "kunstmatig", "rtnt"),
+  start_jaar = 2010
+)
+
+plot_cwm_subsets_jaar(
+  data = cwm_mi_plot_data,
+  category_prefix = "temperature_",
+  selected_subsets = c("nat_sv_beek", "nat_sv_kempen", "nat_sv_rivier", "nat_sv_polder", "kunstmatig", "rtnt"),
+  start_jaar = 2010
+)
+
+plot_cwm_subsets_jaar(
+  data = cwm_mi_plot_data,
+  category_prefix = "trophic_status_",
+  selected_subsets = c("nat_sv_beek", "nat_sv_kempen", "nat_sv_rivier", "nat_sv_polder", "kunstmatig", "rtnt"),
+  start_jaar = 2010
+)
+
+plot_cwm_subsets_jaar(
+  data = cwm_mi_plot_data,
+  category_prefix = "substrate_",
+  selected_subsets = c("nat_sv_beek", "nat_sv_kempen", "nat_sv_rivier", "nat_sv_polder", "kunstmatig", "rtnt"),
+  start_jaar = 2010
+)
+plot_cwm_subsets_jaar(
+  data = cwm_mi_plot_data,
+  category_prefix = "reproduction_",
+  selected_subsets = c("nat_sv_beek", "nat_sv_kempen", "nat_sv_rivier", "nat_sv_polder", "kunstmatig", "rtnt"),
+  start_jaar = 2010
+)
+
+plot_cwm_subsets_jaar(
+  data = cwm_mi_plot_data,
+  category_prefix = "dispersal_",
+  selected_subsets = c("nat_sv_beek", "nat_sv_kempen", "nat_sv_rivier", "nat_sv_polder", "kunstmatig", "rtnt"),
+  start_jaar = 2010
 )

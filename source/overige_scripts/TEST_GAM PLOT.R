@@ -1,18 +1,3 @@
-
-
-
-
-gam <- glmmTMB(data = mi_nat_sv_beek %>%
-                 mutate(ept = ept / 4,
-                        bekken = as.factor(bekken),
-                        meetplaats = as.factor(meetplaats)),
-               formula = mmif ~ 1 + jaar + (1|meetplaats) + (1|bekken),
-               family = ordbeta,
-               na.action = na.omit)
-summary(gam)
-plot_model(gam, type = "pred", terms = "jaar [all]", show.data = TRUE)
-
-
 ######### gam
 
 library(mgcv)
@@ -71,6 +56,7 @@ mi_nested <- data4 %>%
          index = factor(index, levels = c("mmif", "tax", "swd", "nst", "mts", "ept")),
          meetplaats = as.factor(meetplaats),
          bekken = as.factor(bekken)) %>%
+  drop_na(waarde, jaar_num, meetplaats, bekken) %>%
   group_nest(subset, index)
 
 # %>%
@@ -117,13 +103,16 @@ plot_mi_trend_subsets <- ggplot(mi_trends, aes(x = x, y = predicted)) +
   labs(title = "Correcte GAM-trends (Beta-regressie)",
        subtitle = "Indices genormaliseerd naar 0-1 schaal",
        x = "Jaar", y = "Voorspelde waarde (0-1)")
-
+plot_mi_trend_subsets
 # Sla de plot op als een PDF (vector-formaat, beste voor rapporten) of PNG
+
+
 ggsave(
-  filename = here("output", "figuren", "GAM_trends_waterkwaliteit.pdf"),
-  plot = plot_mi_trend_subsets,
-  width = 16,        # Breedte in inches
-  height = 12,       # Hoogte in inches
-  units = "in",
-  device = "pdf"     # Je kunt ook "png" gebruiken
+  filename =  here("output", "figuren", "GAM_trends_waterkwaliteit.png"),
+  plot = last_plot(), # Expliciet de laatste plot kiezen
+  width = 30,
+  height = 20,
+  units = "cm",
+  dpi = 300,
+  bg = "white"
 )

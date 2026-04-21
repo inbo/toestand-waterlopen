@@ -1,3 +1,4 @@
+library(mgcv)
 # --- 1. Data Voorbereiding (met transformatie voor Beta) ---
 n_total <- nrow(data4)
 
@@ -154,3 +155,4 @@ ggplot(mi_trends, aes(x = x, y = predicted)) +
   labs(title = "Correcte GAM-trends (Beta-regressie)",
        subtitle = "Indices genormaliseerd naar 0-1 schaal",
        x = "Jaar", y = "Voorspelde waarde (0-1)")
+

@@ -269,6 +269,8 @@ r2_results %>%
   footnote(general = "De hoge Conditional R² waarden t.o.v. de Marginal R² duiden op een sterke invloed van de random effecten in de beken.")
 ```
 
+#### Functionele diversiteit en community gewogen trait waarden
+
 ### Macrofyten
 
 ### koppeling MI-MAFY

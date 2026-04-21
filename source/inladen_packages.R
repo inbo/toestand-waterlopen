@@ -36,6 +36,7 @@ library(lwgeom)
 library(corrr)
 library(patchwork)
 library(parallel)
+library(kableExtra)
 
 
 conflicted::conflict_prefer("select", "dplyr")

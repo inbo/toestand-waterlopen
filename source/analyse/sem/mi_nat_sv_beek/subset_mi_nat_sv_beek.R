@@ -486,13 +486,33 @@ summary(mmif_sem_nat_sv_beek)
 
 save(mmif_sem_nat_sv_beek, file = here("source", "analyse", "sem", "mi_nat_sv_beek", "mmif_sem_nat_sv_beek.rdata"))
 
+
 load(file = here("source", "analyse", "sem", "mi_nat_sv_beek", "mmif_sem_nat_sv_beek.rdata"))
+
 sem_resultaat <- mmif_sem_nat_sv_beek
 coefs_missing <- coefs(sem_resultaat)[,-9]
 source("source/analyse/sem/sem_standardised_coef_flexible.R")
 coefs_filled <- coefs_missing
 source(here("source", "analyse", "sem", "figuur_sem.R"))
 source(here("source", "analyse", "sem", "figuur_sem_zonder_corrfout.R")) #zonder cluster gecorreleerde fouten
+
+ggsave(
+  filename =  here("output", "figuren", "SEM_mi_nat_sv_beek_mmif.png"),
+  plot = last_plot(), # Expliciet de laatste plot kiezen
+  width = 40,
+  height = 20,
+  units = "cm",
+  dpi = 300,
+  bg = "white"
+)
+
+coefs_filled %>% # Rond getallen af
+  kable(format = "html", caption = "Piecewise SEM Pad-coëfficiënten") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"),
+                full_width = F,
+                position = "left") %>%
+  column_spec(8, color = ifelse(sem_results$P.Value < 0.05, "red", "black"), bold = T) # Markeer p < 0.05
+
 
 # EPT
 

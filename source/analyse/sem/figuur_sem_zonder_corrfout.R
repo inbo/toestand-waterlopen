@@ -21,6 +21,7 @@ edges_data <- coefs_filled %>%
   filter(P.Value < 0.05) %>%
   # FILTER HIER: verwijder rijen waar Predictor een correlatie is (bevat '~~')
   filter(!grepl("~~", Predictor)) %>%
+  filter(Predictor != "jaar_s" & Response != "jaar_s") %>%
   select(from = Predictor,
          to = Response,
          Std.Estimate,
@@ -38,14 +39,22 @@ nodes_data <- data.frame(name = node_names) %>%
   mutate(label = case_when(
     name == "n_t_log" ~ "Stikstof (log)",
     name == "p_t_log" ~ "Fosfor (log)",
-    name == "o2_fc_s" ~ "Zuurstof",
-    name == "intensiteit_combo_s" ~ "Landbouw Int.",
-    name == "mmif" ~ "MMIF (Macrofauna)",
+    name == "czv_log" ~ "CZV (log)",
+    name == "o2_s" ~ "Zuurstof",
+    name == "ec_20_s" ~ "geleidbaarheid",
+    name == "intensiteit_combo_afstr_s" ~ "Landbouw Int. (afstr.)",
+    name == "mmif" ~ "MMIF",
     name == "stress_prop" ~ "Stress %",
     name == "aantal_pesticiden_met_overschrijding" ~ "Pesticiden",
-    name == "ekc2_waterlichaam_s" ~ "EKC2",
-    name == "Neerslag_som_1jaar_s" ~ "Neerslag (Jaar)",
-    name == "Neerslag_som_10dagen_s" ~ "Neerslag (10d)",
+    name == "ekc2_waterlichaam_s" ~ "EKC Hydromorf.",
+    name == "spei6_s" ~ "SPEI6maand",
+    name == "p_sum_7d_s" ~ "Neerslagsom (7d)",
+    name == "p_sum_7d_s" ~ "Neerslagsom (7d)",
+    name == "lozingen_rwzi_ie_log" ~ "RWZI",
+    name == "lozingen_industrie_ie_log" ~ "Industrie",
+    name == "lozingen_riool_ie_log" ~ "Rioollozing",
+    name == "t_s" ~ "Watertemperatuur",
+    name == "verharding_afstr_s" ~ "Verharding (afstr.)",
     TRUE ~ name
   ))
 
@@ -94,3 +103,4 @@ plot <- ggraph(g, layout = "sugiyama") +
        subtitle = "Dikte pijl = Sterkte effect")
 
 print(plot)
+
