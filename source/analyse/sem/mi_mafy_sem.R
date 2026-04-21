@@ -58,22 +58,22 @@ mi_mafy_data <-  data_subset %>%
              by = c("mp_meetplaats" = "meetplaats",
                     "mp_monsternamedatum" = "monsternamedatum"),
              suffix = c("", "_mafy")) %>%
-  select(meetplaats, jaar_s, mmif, ept_prop, ta_xw, index_zonder_gep, o2_verz_s, n_t_log, p_t_log, czv_log, intensiteit_combo_afstr_s, overstorten_blootstelling_index_s, ekc2_waterlichaam_s) %>%
+  select(meetplaats, bekken, jaar_s, mmif, ept_prop, ta_xw, index_zonder_gep, o2_s, n_t_log, p_t_log, czv_log, intensiteit_combo_afstr_s, overstorten_blootstelling_index_s, ekc2_waterlichaam_s) %>%
   na.omit() %>%
   mutate(jaar_s_sq = jaar_s^2,
-          o2_verz_s_sq = o2_verz_s^2)
+          o2_s_sq = o2_s^2)
 
 
-# mmif <- glmmTMB(
-#   mmif ~ index_zonder_gep + o2_verz_s + o2_verz_s_sq + n_t_log + p_t_log + czv_log + intensiteit_combo_afstr_s + overstorten_blootstelling_index_s + ekc2_waterlichaam_s + jaar_s + jaar_s_sq + (1 | meetplaats),
-#   family = ordbeta,
-#   data = mi_mafy_data)
-# summary(mmif)
+mmif <- glmmTMB(
+  mmif ~ index_zonder_gep + o2_s + n_t_log + p_t_log + czv_log + intensiteit_combo_afstr_s + overstorten_blootstelling_index_s + ekc2_waterlichaam_s + jaar_s + (1 | meetplaats),
+  family = ordbeta,
+  data = mi_mafy_data)
+summary(mmif)
 
 ept <- glmmTMB(
-  ept_prop ~ index_zonder_gep + o2_verz_s + n_t_log + p_t_log + czv_log + intensiteit_combo_afstr_s + overstorten_blootstelling_index_s + ekc2_waterlichaam_s + jaar_s + (1 | meetplaats),
+  ept_prop ~ index_zonder_gep + o2_s + n_t_log + p_t_log + czv_log + intensiteit_combo_afstr_s + overstorten_blootstelling_index_s + ekc2_waterlichaam_s + jaar_s  + (1 | bekken),
   family = binomial(link = "logit"),
-  weights = ta_xw,
+  weights = mi_mafy_data$ta_xw,
   data = mi_mafy_data)
 summary(ept)
 
@@ -96,19 +96,19 @@ czv <- glmmTMB(
 summary(czv)
 
 o2 <- glmmTMB(
-  o2_verz_s ~ czv_log + overstorten_blootstelling_index_s + ekc2_waterlichaam_s + jaar_s + (1 | meetplaats),
+  o2_s ~ czv_log + overstorten_blootstelling_index_s + ekc2_waterlichaam_s + jaar_s + (1 | meetplaats),
   family = gaussian,
   data = mi_mafy_data)
 summary(o2)
 
 mafy <- glmmTMB(
-  index_zonder_gep ~ o2_verz_s + n_t_log + p_t_log + czv_log + intensiteit_combo_afstr_s + ekc2_waterlichaam_s + jaar_s + (1 | meetplaats),
+  index_zonder_gep ~ o2_s + n_t_log + p_t_log + czv_log + intensiteit_combo_afstr_s + ekc2_waterlichaam_s + jaar_s + (1 | meetplaats),
   family = ordbeta,
   data = mi_mafy_data)
 summary(mafy)
 
 
-sem_resultaat <- psem(ept, mafy, o2, ptot, ntot, czv, data = mi_mafy_data)
+sem_resultaat <- psem(mmif, mafy, o2, ptot, ntot, czv)
 # multigroup(sem_resultaat, group = data_sem_clean$groep_dummy)
 summary(sem_resultaat)
 # coefs(sem_resultaat)

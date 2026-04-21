@@ -492,6 +492,7 @@ coefs_missing <- coefs(sem_resultaat)[,-9]
 source("source/analyse/sem/sem_standardised_coef_flexible.R")
 coefs_filled <- coefs_missing
 source(here("source", "analyse", "sem", "figuur_sem.R"))
+source(here("source", "analyse", "sem", "figuur_sem_zonder_corrfout.R")) #zonder cluster gecorreleerde fouten
 
 # EPT
 
@@ -629,7 +630,7 @@ summary(sem_stress)
 
 
 ################################################################################
-# model full dredge MMIF
+# test model full dredge MMIF
 ################################################################################
 
 y_var <- "mmif"
