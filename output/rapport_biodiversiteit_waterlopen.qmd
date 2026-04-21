@@ -156,7 +156,13 @@ Om de invloed van weersomstandigheden op de biodiversiteit te vatten, berekenden
 
 -   **Aantal EPT-soorten (ept_prop)**: Het aandeel gevoelige taxa behorende tot de Ephemeroptera, Plecoptera en Trichoptera.
 
--   Functionele diversiteit en community gewogen trait waarden
+#### Functionele diversiteit en community gewogen trait waarden
+
+We selecteerden 8 eigenschappen (Tachet traits): dispersie, voorbeweging, reproductie, saprobiteit, stroomsnelheid, trofisch status respiratie en substraat. Deze leren ons hoe een gemeenschap functioneert. Op basis hiervan berekenden we community gewogen trait waarden die ons iets leren over het functioneren van de MI gemeenschap.
+
+Op basis van deze traits kunnen we ook kijken naar de functionele diversiteit van gemeenschappen van ongewervelden in de waterlopen. Functionele diversiteit is een maat van hoe divers de eigenschappen zijn van een gemeenschap. Zo kunnen er veel verschillende soorten aanwezig zijn, maar deze kunnen allemaal dezelfde eigenschappen of strategiën hebben. Een hoge functionele diversiteit wijst op een gezond ecosysteem dat beter bestand is tegen drukken en verstoringen.
+
+De eigenschappen zijn geselecteerd uit de Tachet trait databank: dispersie, voorbeweging, reproductie, saprobiteit, stroomsnelheid, trofisch status respiratie en substraat.
 
 ## Analysemethode
 
@@ -168,7 +174,7 @@ Het doel van de analyse is om een ecologisch logisch en *parsimonious* model te 
 
 Om instabiliteit in de modellen te voorkomen, filteren we vooraf variabelen met een te hoge onderlinge correlatie ($r > 0.7$) of een hoge mate van multicollineariteit (op basis van de *Variance Inflation Factor*, VIF).
 
-### Stap 2: Model-Dredging (Geautomatiseerde Selectie)
+### Stap 2: Model-Dredging
 
 Per responsvariabele (zowel de biologische indexen als de sturende fysico-chemische factoren) fitten we een globaal *mixed-effects* model (`glmmTMB`). We gebruiken hierbij specifieke verdelingen die passen bij de aard van de data:
 
@@ -196,7 +202,7 @@ Via de `dredge`-functie worden alle mogelijke combinaties van ecologisch relevan
 
 ### Stap 3: Opbouw van het Piecewise SEM (pSEM)
 
-De individuele topmodellen voor biologie en chemie worden samengevoegd in één overkoepelend structureel vergelijkingsmodel (**Piecewise SEM**). Dit netwerk maakt het mogelijk om zowel **directe effecten** (bijv. landgebruik $\rightarrow$ biologie) als **indirecte effecten** (bijv. landgebruik $\rightarrow$ nutriënten $\rightarrow$ biologie) te kwantificeren.
+De individuele topmodellen voor biologie en chemie worden samengevoegd in één overkoepelend SEM (**Piecewise SEM**). Dit netwerk maakt het mogelijk om zowel **directe effecten** (bijv. landgebruik $\rightarrow$ biologie) als **indirecte effecten** (bijv. landgebruik $\rightarrow$ nutriënten $\rightarrow$ biologie) te kwantificeren.
 
 ### Stap 4: Modelevaluatie en Verfijning
 
@@ -210,21 +216,68 @@ Het initiële pSEM wordt getoetst aan de hand van *directed separation* (d-sep) 
 
 ## Resultaten
 
-\![xoxoxo\](
+Evolutie van gemiddelde van de MMIF en deelmaatlatten (score geschaald tussen 0 en 1) over de tijd (2010-2023). Effecten gefit op basis van gam model met beta distributie. Probleem: toont onzekerheid rond gemiddelde, die klein is. Ik zoek nog naar een betere weergave die ook variatie over de populatie heen geeft.
 
-#### Eigenschappen van macroinvertebraten ('traits')
+![](figuren/GAM_trends_waterkwaliteit.png)
 
-Op basis van zeven kenmerken van macroinvertebraten kunnen we kijken naar de functionele diversiteit van gemeenschappen van ongewervelden in de waterlopen. Functionele diversiteit is een maat van hoe divers de eigenschappen zijn van een gemeenschap. Zo kunnen er veel verschillende soorten aanwezig zijn, maar deze kunnen allemaal dezelfde eigenschappen of strategiën hebben. Een hoge functionele diversiteit wijst op een gezond ecosysteem dat beter bestand is tegen drukken en verstoringen.
+Voor elk van de subsets worden SEMs gebouwd voor de verschillende responsen. Hieruit trachten we gelijkaardige patronen of verschillen te extraheren. Piecewise structural equation model rond MMIF voor natuurlijke en sterk veranderde beken.
 
-De eigenschappen zijn: dispersie, voorbeweging, reproductie, saprobiteit, stroomsnelheid, trofisch status en substraat.
+![](figuren/SEM_mi_nat_sv_beek_mmif.png){width="4750"}
+
+```{r echo = FALSE, warning = FALSE, message=FALSE}
+library(here)
+library(knitr)
+library(kableExtra)
+library(piecewiseSEM)
+load(file = here("source", "analyse", "sem", "mi_nat_sv_beek", "mmif_sem_nat_sv_beek.rdata"))
+
+sem_resultaat <- mmif_sem_nat_sv_beek
+coefs_missing <- coefs(sem_resultaat)[,-9]
+source(here("source", "analyse", "sem", "sem_standardised_coef_flexible.R"))
+coefs_filled <- coefs_missing
+coefs_filled %>% # Rond getallen af
+  kable(format = "html", caption = "Piecewise SEM Pad-coëfficiënten") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"),
+                full_width = F,
+                position = "left") %>%
+  column_spec(8, color = ifelse(coefs_filled$P.Value < 0.05, "red", "black"), bold = T) # Markeer p < 0.05
+
+# Je data in een object
+r2_results <- rsquared(mmif_sem_nat_sv_beek)
+
+# De tabel opbouwen
+r2_results %>%
+  mutate(across(c(Marginal, Conditional), ~ round(., 3))) %>%
+  select(Response, family, Marginal, Conditional) %>%
+  rename(
+    `Afhankelijke Variabele` = Response,
+    `Verdeling (Family)` = family,
+    `R² Vast (Marginal)` = Marginal,
+    `R² Totaal (Conditional)` = Conditional
+  ) %>%
+  kable(format = "html", caption = "Overzicht van verklaarde variantie per model-component") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), 
+                full_width = F, 
+                position = "center") %>%
+  # Markeer de MMIF resultaten omdat dit je hoofd-outcome is
+  row_spec(1, bold = TRUE, background = "#e6f2ff") %>% 
+  # Voeg een visuele indicator toe voor de sterkte van de Marginal R2
+  column_spec(3, 
+              color = "white",
+              background = spec_color(r2_results$Marginal, end = 0.7, option = "viridis"),
+              bold = TRUE) %>%
+  footnote(general = "De hoge Conditional R² waarden t.o.v. de Marginal R² duiden op een sterke invloed van de random effecten in de beken.")
+```
 
 ### Macrofyten
 
-### koppeling met MI
+### koppeling MI-MAFY
 
 extra beschaduwing
 
 geen effect zuurstof
+
+koppeling MI-VIS
 
 #### Verontreinigende stoffen
 

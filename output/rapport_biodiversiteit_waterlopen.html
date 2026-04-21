@@ -1,0 +1,1251 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.6.42">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>Analyse Biodiversiteit Waterlopen in Vlaanderen (NARA 26)</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+</style>
+
+
+<script src="rapport_biodiversiteit_waterlopen_files/libs/clipboard/clipboard.min.js"></script>
+<script src="rapport_biodiversiteit_waterlopen_files/libs/quarto-html/quarto.js"></script>
+<script src="rapport_biodiversiteit_waterlopen_files/libs/quarto-html/popper.min.js"></script>
+<script src="rapport_biodiversiteit_waterlopen_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="rapport_biodiversiteit_waterlopen_files/libs/quarto-html/anchor.min.js"></script>
+<link href="rapport_biodiversiteit_waterlopen_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="rapport_biodiversiteit_waterlopen_files/libs/quarto-html/quarto-syntax-highlighting-2f5df379a58b258e96c21c0638c20c03.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="rapport_biodiversiteit_waterlopen_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="rapport_biodiversiteit_waterlopen_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="rapport_biodiversiteit_waterlopen_files/libs/bootstrap/bootstrap-1bc8a17f135ab3d594c857e9f48e611b.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script src="rapport_biodiversiteit_waterlopen_files/libs/kePrint-0.0.1/kePrint.js"></script>
+
+<link href="rapport_biodiversiteit_waterlopen_files/libs/lightable-0.0.1/lightable.css" rel="stylesheet">
+
+
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN") {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+</head>
+
+<body class="fullcontent">
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Analyse Biodiversiteit Waterlopen in Vlaanderen (NARA 26)</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<p>Voor het <strong>Natuurrapport 2026 (NARA26)</strong> voeren we een diepgaande analyse uit naar de biodiversiteit in de waterlopen in Vlaanderen en de drukfactoren die deze beïnvloeden. We focussen hierbij specifiek op drie biologische groepen: <strong>macro-invertebraten, macrofyten en vissen.</strong></p>
+<section id="databronnen-en-methodiek" class="level2" data-number="1">
+<h2 data-number="1" class="anchored" data-anchor-id="databronnen-en-methodiek"><span class="header-section-number">1</span> Databronnen en Methodiek</h2>
+<p>De basis voor dit onderzoek wordt gevormd door monitoringsdata van de <strong>Kaderrichtlijn Water (KRW)</strong>. Deze gegevens worden verzameld door de <strong>VMM</strong> (macro-invertebraten, macrofyten, fytobenthos, hydromorfologie, fysico-chemie en vervuilende stoffen) en het <strong>INBO</strong> (vissen).</p>
+<p>Hoewel de KRW-rapportage gebruikmaakt van verzamelindexen om de waterkwaliteit weer te geven, schieten deze vaak tekort voor een gedetailleerde ecologische analyse:</p>
+<ul>
+<li><p><strong>Het OOAO-principe (One Out, All Out):</strong> Geaggregeerde indexen maskeren vaak onderliggende trends. Een slechte score op één deelmaatlat of biologische groep kan de vooruitgang op andere vlakken onzichtbaar maken.</p></li>
+<li><p><strong>Typologie en Statuut:</strong> Door data van verschillende watertypes (zoals beken, Kempense beken en rivieren) te bundelen, gaan nuances verloren. Een opgesplitste analyse per watertype biedt een ecologisch nauwkeuriger beeld.</p></li>
+</ul>
+<p>Het doel van deze analyse is om via de onderliggende deelmetrieken de werkelijke veranderingen in biodiversiteit bloot te leggen. We onderzoeken specifiek welke <strong>drukfactoren</strong> de verschillende biotische groepen beïnvloeden en op welke <strong>ruimtelijke schaal</strong> deze effecten spelen.</p>
+<p>Onderstaand overzicht geeft de resultaten van de drukanalyse voor macro-invertebraten.</p>
+<section id="macro-invertebraten" class="level3" data-number="1.1">
+<h3 data-number="1.1" class="anchored" data-anchor-id="macro-invertebraten"><span class="header-section-number">1.1</span> Macro-invertebraten</h3>
+<section id="beschikbare-data" class="level4">
+<h4 class="anchored" data-anchor-id="beschikbare-data">Beschikbare data</h4>
+<p>Voor de analyse van de macro-invertebraten beschikken we over de data van <strong>1989 tot 2023</strong>, bestaande uit de <strong>Belgische Biotische Index (BBI)</strong> en de <strong>Multimetrische Macro-invertebratenindex (MMIF)</strong>.</p>
+<p>Hoewel het monitoringsprogramma sinds 2007 volledig is afgestemd op de Europese Kaderrichtlijn Water (KRW), hebben we de focus voor deze analyse vernauwd naar de periode <strong>vanaf 2010</strong> omdat vanaf dat jaar consistente en koppelbare data voor <strong>fysico-chemie</strong> beschikbaar werd gesteld, wat essentieel is voor de drukanalyse.</p>
+</section>
+<section id="indeling-van-de-monitoringsdata" class="level4">
+<h4 class="anchored" data-anchor-id="indeling-van-de-monitoringsdata">Indeling van de monitoringsdata</h4>
+<p>Voor een nauwkeurige drukanalyse hebben we de monitoringsdata opgedeeld in zes ecologisch relevante subsets. Hierbij maken we onderscheid tussen het type waterloop, het statuut en de schaal (Vlaams, L1 of L2):</p>
+<p><strong>Natuurlijke en sterk veranderde waterlopen (Vlaams &amp; L1)</strong></p>
+<p>Deze zijn onderverdeeld in vier hoofdtypes:</p>
+<ol type="1">
+<li><p><strong>Beken:</strong> Kleine en grote beken (excl. Kempen).</p></li>
+<li><p><strong>Kempense beken:</strong> Kleine en grote Kempense beken.</p></li>
+<li><p><strong>Rivieren:</strong> Kleine, grote en zeer grote rivieren.</p></li>
+<li><p><strong>Polderlopen:</strong> Zowel zoete als brakke poldersystemen.</p></li>
+</ol>
+<p>In deze analyse worden <strong>natuurlijke</strong> en <strong>sterk veranderde</strong> waterlopen als één groep behandeld. De reden hiervoor is dat sterk veranderde waterlopen in essentie natuurlijke systemen zijn; het statuut is slechts een administratieve toekenning voor waterlopen die sterk gewijzigd zijn door menselijk ingrijpen. Omdat de ecologische potentie en de basistypologie van deze systemen van nature gelijk zijn, beschouwen wij ze in deze drukanalyse als één geheel.</p>
+<p><strong>Overige subsets</strong></p>
+<p>5. <strong>Kunstmatige waterlopen:</strong> Volledig kunstmatige systemen (zoals kanalen).</p>
+<p>6. <strong>Kleine bovenstroomse, lokale waterlopen (L2):</strong> hoofdzakelijk gelegen op onbevaarbare waterlopen van categorie 2.</p>
+</section>
+</section>
+<section id="drukken-omgevingsvariabelen" class="level3" data-number="1.2">
+<h3 data-number="1.2" class="anchored" data-anchor-id="drukken-omgevingsvariabelen"><span class="header-section-number">1.2</span> Drukken: omgevingsvariabelen</h3>
+<section id="fysico-chemische-basisparameters" class="level4">
+<h4 class="anchored" data-anchor-id="fysico-chemische-basisparameters">Fysico-chemische basisparameters</h4>
+<p>Variabelen zoals <strong>temperatuur, pH, opgeloste zuurstof (</strong><span class="math inline">\(O_2\)</span>) en geleidbaarheid (<span class="math inline">\(EC_{20}\)</span>) worden standaard gemeten bij elke staalname van macro-invertebraten (MI). Voor macrofyten (MAFY) wordt hieraan de <strong>Secchi-diepte</strong> (doorzicht) toegevoegd.</p>
+</section>
+<section id="nutriënten-en-chemische-belasting" class="level4">
+<h4 class="anchored" data-anchor-id="nutriënten-en-chemische-belasting">Nutriënten en chemische belasting</h4>
+<p>Daarnaast analyseren we parameters zoals <strong>totaal stikstof (</strong><span class="math inline">\(N_t\)</span>), totaal fosfor (<span class="math inline">\(P_t\)</span>), zwevende stof (ZS) en chemisch zuurstofverbruik (CZV).</p>
+<p>Omdat deze nutriënten niet standaard bij elke biologische staalname worden gemeten, is een specifiek <strong>koppelingsprotocol</strong> ontwikkeld om de MI-metingen in tijd en ruimte te verbinden met de meest relevante meetpunten voor waterkwaliteit.</p>
+<section id="methodiek-het-koppelingsprotocol" class="level5">
+<h5 class="anchored" data-anchor-id="methodiek-het-koppelingsprotocol">Methodiek: Het Koppelingsprotocol</h5>
+<p><a href="https://github.com/inbo/toestand-waterlopen/blob/main/source/koppeling/koppeling_biota_fc_finaal.R">Code Github</a></p>
+<p>De koppeling tussen MI-metingen en nutriëntendata gebeurt via een <strong>netwerkanalyse (graaf)</strong>. Hierbij wordt gebruikgemaakt van een fijnmazig riviermodel met segmenten van maximaal 200 meter met stroomrichting.</p>
+<p>Voor elke MI-meting selecteert een script de best passende nutriëntenmeting op basis van de volgende criteria:</p>
+<ul>
+<li><p><strong>Ruimtelijke nabijheid:</strong></p>
+<ul>
+<li><p>Punten binnen <strong>5 km stroomopwaarts</strong> (gemeten via de waterloop).</p></li>
+<li><p>Of punten binnen <strong>200 meter vogelvlucht</strong>.</p></li>
+<li><p><strong>Voorwaarde:</strong> De match moet binnen dezelfde <strong>VHAG-zone</strong> liggen.</p></li>
+</ul></li>
+<li><p><strong>Temporele nabijheid:</strong></p>
+<ul>
+<li>De nutriëntenmeting moet hebben plaatsgevonden in een venster van <strong>180 dagen vóór</strong> tot <strong>30 dagen ná</strong> de biologische staalname.</li>
+</ul></li>
+</ul>
+<p>Indien er meerdere matches zijn, wordt de <strong>dichtstbijzijnde meting</strong> als definitieve koppeling geselecteerd voor de analyse.</p>
+</section>
+</section>
+<section id="hydromorfologie" class="level4">
+<h4 class="anchored" data-anchor-id="hydromorfologie"><strong>Hydromorfologie</strong></h4>
+<p>Hiervoor wordt gebruikgemaakt van de hydromorfologische kwaliteitsscore op waterlichaamniveau. Deze index geeft een algemeen beeld van de natuurlijkheid van de waterloop.</p>
+</section>
+</section>
+<section id="lozingsdruk-van-puntbronnen" class="level3" data-number="1.3">
+<h3 data-number="1.3" class="anchored" data-anchor-id="lozingsdruk-van-puntbronnen"><span class="header-section-number">1.3</span> Lozingsdruk van puntbronnen</h3>
+<p><a href="https://github.com/inbo/toestand-waterlopen/blob/main/source/lozingen/lozingen_standardiseren_IE.R">Code Github</a></p>
+<p>We analyseren de impact van diverse puntbronnen, waaronder industriële lozingen, RWZI-effluent, rioollozingen en riooloverstorten. De methodiek berekent de stroomopwaartse druk op elk biologisch meetpunt door lozingsvrachten te standardiseren en deze ruimtelijk te aggregeren via de functie <code>calculate_upstream_pressure</code>.</p>
+<p>De kern van deze aanpak bestaat uit vier stappen:</p>
+<ul>
+<li><p><strong>IE-Normalisatie:</strong> Om verschillende lozingstypes vergelijkbaar te maken, worden vrachten van industrie en RWZI’s voor stoffen zoals CZV, N en P via specifieke omzettingsfactoren getransformeerd naar <strong>Inwoners Equivalenten (IE)</strong>. De waarde van de parameter met de hoogste IE (Max-IE) bepaalt hierbij de uiteindelijke lozingsdruk.</p></li>
+<li><p>Voor rioollozingen zonder jaarlijkse data simuleren we een tijdreeks. Hierbij schatten we historische lozingswaarden op basis van de jaarlijkse evolutie in de gemeentelijke zuiveringsgraad.</p></li>
+<li><p><strong>Netwerkanalyse met Distance Decay:</strong> We identificeren alle lozingsbronnen binnen een straal van <strong>5 km stroomopwaarts</strong>. De impact van elke bron wordt gewogen met een <em>distance decay</em>-functie: naarmate de afstand tot het meetpunt groter is, neemt de berekende impact af. De snelheid van dit verval verschilt per type lozing; zo is het verval voor incidentele overstorten groter dan voor continue RWZI-lozingen.</p></li>
+<li><p>Overstortdruk: een drukindex werd berekend op gelijke wijze als hierboven. Hiervoor werd gebruik gemaakt van de VMM datalaag met overstorten die uitlaten in een VHA waterloop. De berekende index combineert de <strong>locatie van overstorten</strong> met een inschatting van hun <strong>frequentie en intensiteit</strong> (ipv IE van de lozing) binnen een specifiek A0-afstroomgebied (blootstellingsfactor in prioriteringsoefening).</p></li>
+</ul>
+</section>
+<section id="landgebruik" class="level3" data-number="1.4">
+<h3 data-number="1.4" class="anchored" data-anchor-id="landgebruik"><span class="header-section-number">1.4</span> Landgebruik</h3>
+<p>De impact van landgebruik op drie verschillende ruimtelijke schalen: het <strong>volledige afstroomgebied</strong>, de <strong>oeverzone</strong> en een <strong>lokale buffer (100m)</strong> rond het meetpunt.</p>
+<section id="ruimtelijke-afbakening" class="level4">
+<h4 class="anchored" data-anchor-id="ruimtelijke-afbakening">Ruimtelijke Afbakening</h4>
+<ul>
+<li><p><strong>Afstroomgebieden:</strong> Op basis van een digitaal hoogtemodel (DHM) is voor elk meetpunt de volledige oppervlakte bepaald waarbinnen regenwater bovengronds naar het meetpunt toe stroomt. <a href="https://github.com/inbo/toestand-waterlopen/blob/main/source/afstroomgebieden.R">Code op Github</a></p></li>
+<li><p><strong>Oeverzones:</strong> Deze zones zijn gedefinieerd over een specifiek traject stroomop- en stroomafwaarts, waarbij de breedte van de oever afhankelijk is van het type waterloop.</p></li>
+</ul>
+</section>
+<section id="verharding-en-natuur" class="level4">
+<h4 class="anchored" data-anchor-id="verharding-en-natuur">Verharding en Natuur</h4>
+<p>Voor het bepalen van de mate van verharding en het aandeel natuur maken we gebruik van de <strong>landgebruikskaarten</strong> (tijdsstappen 2013, 2016, 2019 en 2022). Elke biologische meting wordt voor de analyse gekoppeld aan het chronologisch dichtstbijzijnde jaar van de landgebruikskaart.</p>
+</section>
+<section id="landbouwintensiteit" class="level4">
+<h4 class="anchored" data-anchor-id="landbouwintensiteit">Landbouwintensiteit</h4>
+<p><a href="https://github.com/inbo/toestand-waterlopen/blob/main/source/landgebruik/landgebruik_landbouw_afstroomgebied.R">Code Github</a></p>
+<p>De landbouwdruk wordt berekend door de jaarlijkse <strong>landbouwgebruikspercelenkaarten</strong> te kruisen met de hierboven beschreven ruimtelijke zones.</p>
+<p>Aan elk gewastype is een score toegekend voor het gebruik van <strong>gewasbeschermingsmiddelen en nitraatresiduen</strong>. Het resultaat is een oppervlakte-gewogen jaarscore die de potentiële impact van landbouwactiviteiten op de waterkwaliteit weergeeft.</p>
+</section>
+</section>
+<section id="hydrologie---klimaat" class="level3" data-number="1.5">
+<h3 data-number="1.5" class="anchored" data-anchor-id="hydrologie---klimaat"><span class="header-section-number">1.5</span> <strong>Hydrologie - Klimaat</strong></h3>
+<p><a href="https://github.com/inbo/toestand-waterlopen/blob/main/source/hydrologische_variabelen.R">Code op Github</a></p>
+<p>Om de invloed van weersomstandigheden op de biodiversiteit te vatten, berekenden we drie hydrologische variabelen voor het volledige afstroomgebied van elk meetpunt. Deze geven een beeld van zowel <strong>chronische stress</strong> (langdurige droogte) als <strong>acute verstoringen</strong> (extreme neerslag).</p>
+<ul>
+<li><p><strong>SPEI6 (Standardized Precipitation Evapotranspiration Index):</strong> Deze droogte-index meet de balans tussen neerslag en verdamping over een periode van zes maanden. De SPEI6 is een indicator voor de <strong>baseflow</strong> (basisafvoer) van een waterloop. Voor de berekening is de periode <strong>1991–2020</strong> als referentie gehanteerd. Een langdurig neerslagtekort leidt tot lagere waterstanden en een verminderde verdunning van lozingen, wat resulteert in hogere concentraties vervuilende stoffen en kritisch lage zuurstofgehaltes.</p></li>
+<li><p><strong>Extreme neerslagdagen:</strong> Dit is het aantal extreme neerslagdagen in de 30 dagen voorafgaand van een MI meting met uitzonderlijk hoge neerslaghoeveelheden. Om te definiëren wat een “extreme neerslagdag” is, hebben we per afstroomgebied een specifieke drempelwaarde berekend op basis van het <strong>95e percentiel (P95)</strong> van de dagelijkse neerslagsom tijdens de referentieperiode (1991–2020). Dergelijke piekdagen veroorzaken hydraulische stress in de waterloop, waarbij organismen kunnen wegspoelen (drift) en riooloverstorten vaker in werking treden.</p></li>
+<li><p><strong>Neerslagsom voorgaande 7 dagen:</strong> Deze variabele meet de cumulatieve neerslag in de week voorafgaand aan de biologische staalname. Het geeft inzicht in de actuele verzadiging van het bekken en de directe impact van afspoeling (sediment en nutriënten) op de waargenomen biodiversiteit op het moment van bemonstering.</p></li>
+</ul>
+</section>
+<section id="responsen" class="level3" data-number="1.6">
+<h3 data-number="1.6" class="anchored" data-anchor-id="responsen"><span class="header-section-number">1.6</span> Responsen</h3>
+<ul>
+<li><p><strong>MMIF</strong>: De Multimetrische Macro-Invertebraten Index Vlaanderen, die het algemene beeld schetst. Som van de scores van 0-4 van de 5 deelmaatlatten geschaald tussen 0 en 1.</p></li>
+<li><p><strong>Taxonomische rijkdom (ta_xw)</strong>: Het absolute aantal waargenomen taxa.</p></li>
+<li><p><strong>Shannon-Wiener diversiteit (sw_dw)</strong></p></li>
+<li><p><strong>Mean Stress Tolerance Score (mt_sw_prop)</strong>: De <strong>genormaliseerde gemiddelde tolerantiescore</strong> berekend als de som van de individuele tolerantiescores gedeeld door het aantal aanwezige taxa, waarbij het resultaat naar een schaal van 0 tot 1 werd herleid.</p></li>
+<li><p><strong>Aantal stress-tolerante soorten (nst_prop)</strong>: Het aandeel taxa dat gevoelig is aan verstoring (tolerantiescore &gt; 6; exclusief EPT).</p></li>
+<li><p><strong>Aantal EPT-soorten (ept_prop)</strong>: Het aandeel gevoelige taxa behorende tot de Ephemeroptera, Plecoptera en Trichoptera.</p></li>
+<li><p>Functionele diversiteit en community gewogen trait waarden</p></li>
+</ul>
+</section>
+</section>
+<section id="analysemethode" class="level2" data-number="2">
+<h2 data-number="2" class="anchored" data-anchor-id="analysemethode"><span class="header-section-number">2</span> Analysemethode</h2>
+<p><a href="https://github.com/inbo/toestand-waterlopen/blob/main/source/analyse/sem/mi_nat_sv_beek/subset_mi_nat_sv_beek.R">Code Github voor macro-invertebraten in natuurlijke en sterk veranderde beken</a></p>
+<p>Het doel van de analyse is om een ecologisch logisch en <em>parsimonious</em> model te bouwen dat de complexe relaties tussen drukfactoren en biologische respons verklaart. We hanteren hiervoor een stapsgewijze aanpak:</p>
+<section id="stap-1-voorbereiding-en-variabelenselectie" class="level3" data-number="2.1">
+<h3 data-number="2.1" class="anchored" data-anchor-id="stap-1-voorbereiding-en-variabelenselectie"><span class="header-section-number">2.1</span> Stap 1: Voorbereiding en Variabelenselectie</h3>
+<p>Om instabiliteit in de modellen te voorkomen, filteren we vooraf variabelen met een te hoge onderlinge correlatie (<span class="math inline">\(r &gt; 0.7\)</span>) of een hoge mate van multicollineariteit (op basis van de <em>Variance Inflation Factor</em>, VIF).</p>
+</section>
+<section id="stap-2-model-dredging" class="level3" data-number="2.2">
+<h3 data-number="2.2" class="anchored" data-anchor-id="stap-2-model-dredging"><span class="header-section-number">2.2</span> Stap 2: Model-Dredging</h3>
+<p>Per responsvariabele (zowel de biologische indexen als de sturende fysico-chemische factoren) fitten we een globaal <em>mixed-effects</em> model (<code>glmmTMB</code>). We gebruiken hierbij specifieke verdelingen die passen bij de aard van de data:</p>
+<ul>
+<li><p><strong>Ordbeta:</strong> Voor indexen en proporties tussen 0 en 1 (zoals de MMIF en MTS).</p></li>
+<li><p><strong>Poisson:</strong> Voor taxa-aantallen.</p></li>
+<li><p><strong>Binomiaal:</strong> Voor proporties ept-, stressgevoelige (nst) soorten.</p></li>
+<li><p><strong>Gaussian:</strong> Voor log-getransformeerde nutriëntconcentraties, EC20, …</p></li>
+</ul>
+<p>Om de herhaalde metingen en de ruimtelijke structuur van de dataset correct te analyseren, maken we gebruik van <strong>Generalized Linear Mixed Models (GLMM)</strong> via het <code>glmmTMB</code> package.</p>
+<p>De modelstructuur is als volgt opgebouwd:</p>
+<ul>
+<li><p><strong>Fixed effect (Jaar):</strong> We nemen ‘jaar’ op als fixed effect om de temporele trends in de biodiversiteit en drukfactoren over de volledige studieperiode te identificeren.</p></li>
+<li><p><strong>Random effects (Meetplaats &amp; Bekken):</strong></p>
+<ul>
+<li><p><strong>Meetplaats:</strong> Door meetplaats als random effect op te nemen, corrigeren we voor de afhankelijkheid tussen herhaalde waarnemingen op dezelfde locatie (<em>repeated measures</em>).</p></li>
+<li><p><strong>Bekken:</strong> Een extra random effect voor bekken vangt de ruimtelijke variatie en omgevingsverschillen op tussen de verschillende stroomgebieden in Vlaanderen.</p></li>
+</ul></li>
+</ul>
+<p>Via de <code>dredge</code>-functie worden alle mogelijke combinaties van ecologisch relevante predictoren getest en gerangschikt op basis van de <strong>AICc</strong>. Om de complexiteit en rekentijd te beperken werden per gedredged model 4 parameters toegestaan (inclusief jaar). Hieruit selecteren we het best presterende model.</p>
+</section>
+<section id="stap-3-opbouw-van-het-piecewise-sem-psem" class="level3" data-number="2.3">
+<h3 data-number="2.3" class="anchored" data-anchor-id="stap-3-opbouw-van-het-piecewise-sem-psem"><span class="header-section-number">2.3</span> Stap 3: Opbouw van het Piecewise SEM (pSEM)</h3>
+<p>De individuele topmodellen voor biologie en chemie worden samengevoegd in één overkoepelend structureel vergelijkingsmodel (<strong>Piecewise SEM</strong>). Dit netwerk maakt het mogelijk om zowel <strong>directe effecten</strong> (bijv. landgebruik <span class="math inline">\(\rightarrow\)</span> biologie) als <strong>indirecte effecten</strong> (bijv. landgebruik <span class="math inline">\(\rightarrow\)</span> nutriënten <span class="math inline">\(\rightarrow\)</span> biologie) te kwantificeren.</p>
+</section>
+<section id="stap-4-modelevaluatie-en-verfijning" class="level3" data-number="2.4">
+<h3 data-number="2.4" class="anchored" data-anchor-id="stap-4-modelevaluatie-en-verfijning"><span class="header-section-number">2.4</span> Stap 4: Modelevaluatie en Verfijning</h3>
+<p>Het initiële pSEM wordt getoetst aan de hand van <em>directed separation</em> (d-sep) en de <em>Fisher’s C-statistiek</em> om de pasvorm te beoordelen. Op basis hiervan verfijnen we het model:</p>
+<ul>
+<li><p><strong>Pad-optimalisatie:</strong> Ontbrekende maar ecologisch relevante paden die significant blijken, worden toegevoegd.</p></li>
+<li><p><strong>Stroomlijning:</strong> Variabelen zonder verklarende kracht worden verwijderd.</p></li>
+<li><p><strong>Gecorreleerde fouten:</strong> Relaties tussen nauw verwante stuurvariabelen (zoals stikstof en fosfor) worden expliciet gemodelleerd om de betrouwbaarheid van de padcoëfficiënten te garanderen.</p></li>
+</ul>
+</section>
+</section>
+<section id="resultaten" class="level2" data-number="3">
+<h2 data-number="3" class="anchored" data-anchor-id="resultaten"><span class="header-section-number">3</span> Resultaten</h2>
+<p>Evolutie van gemiddelde van de MMIF en deelmaatlatten (score geschaald tussen 0 en 1) over de tijd (2010-2023). Effecten gefit op basis van gam model met beta distributie. Probleem: toont onzekerheid rond gemiddelde, die klein is.</p>
+<p><img src="figuren/GAM_trends_waterkwaliteit.png" class="img-fluid"></p>
+<p>Piecewise structural equation model rond MMIF voor natuurlijke en sterk veranderde beken.</p>
+<p><img src="figuren/SEM_mi_nat_sv_beek_mmif.png" class="img-fluid" width="4750"></p>
+<div class="cell">
+<div class="cell-output-display">
+<table class="table table-striped table-hover table-condensed caption-top table-sm small" data-quarto-postprocess="true">
+<caption>Piecewise SEM Pad-coëfficiënten</caption>
+<thead>
+<tr class="header">
+<th style="text-align: left;" data-quarto-table-cell-role="th">Response</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">Predictor</th>
+<th style="text-align: right;" data-quarto-table-cell-role="th">Estimate</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">Std.Error</th>
+<th style="text-align: right;" data-quarto-table-cell-role="th">DF</th>
+<th style="text-align: right;" data-quarto-table-cell-role="th">Crit.Value</th>
+<th style="text-align: right;" data-quarto-table-cell-role="th">P.Value</th>
+<th style="text-align: right;" data-quarto-table-cell-role="th">Std.Estimate</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">mmif</td>
+<td style="text-align: left;">ec_20_s</td>
+<td style="text-align: right;">-0.0923</td>
+<td style="text-align: left;">0.0244</td>
+<td style="text-align: right;">918</td>
+<td style="text-align: right;">-3.7836</td>
+<td style="text-align: right;">0.0002</td>
+<td style="text-align: right; font-weight: bold; color: red !important;">-0.0439052</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">mmif</td>
+<td style="text-align: left;">o2_s</td>
+<td style="text-align: right;">0.0671</td>
+<td style="text-align: left;">0.0214</td>
+<td style="text-align: right;">918</td>
+<td style="text-align: right;">3.1304</td>
+<td style="text-align: right;">0.0017</td>
+<td style="text-align: right; font-weight: bold; color: red !important;">0.0334855</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">mmif</td>
+<td style="text-align: left;">spei6_s</td>
+<td style="text-align: right;">-0.0725</td>
+<td style="text-align: left;">0.0175</td>
+<td style="text-align: right;">918</td>
+<td style="text-align: right;">-4.1402</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right; font-weight: bold; color: red !important;">-0.0369173</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">mmif</td>
+<td style="text-align: left;">jaar_s</td>
+<td style="text-align: right;">0.2366</td>
+<td style="text-align: left;">0.0181</td>
+<td style="text-align: right;">918</td>
+<td style="text-align: right;">13.0381</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right; font-weight: bold; color: red !important;">0.1169416</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">mmif</td>
+<td style="text-align: left;">intensiteit_combo_afstr_s</td>
+<td style="text-align: right;">-0.1773</td>
+<td style="text-align: left;">0.0437</td>
+<td style="text-align: right;">918</td>
+<td style="text-align: right;">-4.0548</td>
+<td style="text-align: right;">0.0001</td>
+<td style="text-align: right; font-weight: bold; color: red !important;">-0.0894865</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">mmif</td>
+<td style="text-align: left;">t_s</td>
+<td style="text-align: right;">0.0734</td>
+<td style="text-align: left;">0.02</td>
+<td style="text-align: right;">918</td>
+<td style="text-align: right;">3.6721</td>
+<td style="text-align: right;">0.0002</td>
+<td style="text-align: right; font-weight: bold; color: red !important;">0.0374516</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">mmif</td>
+<td style="text-align: left;">n_t_log</td>
+<td style="text-align: right;">-0.3056</td>
+<td style="text-align: left;">0.0478</td>
+<td style="text-align: right;">918</td>
+<td style="text-align: right;">-6.3902</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right; font-weight: bold; color: red !important;">-0.0853728</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">mmif</td>
+<td style="text-align: left;">p_t_log</td>
+<td style="text-align: right;">-0.1282</td>
+<td style="text-align: left;">0.033</td>
+<td style="text-align: right;">918</td>
+<td style="text-align: right;">-3.8868</td>
+<td style="text-align: right;">0.0001</td>
+<td style="text-align: right; font-weight: bold; color: red !important;">-0.0494541</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">mmif</td>
+<td style="text-align: left;">verharding_afstr_s</td>
+<td style="text-align: right;">-0.1584</td>
+<td style="text-align: left;">0.0392</td>
+<td style="text-align: right;">918</td>
+<td style="text-align: right;">-4.0378</td>
+<td style="text-align: right;">0.0001</td>
+<td style="text-align: right; font-weight: bold; color: red !important;">-0.0794095</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">n_t_log</td>
+<td style="text-align: left;">ekc2_waterlichaam_s</td>
+<td style="text-align: right;">-0.0619</td>
+<td style="text-align: left;">0.0238</td>
+<td style="text-align: right;">918</td>
+<td style="text-align: right;">-2.6034</td>
+<td style="text-align: right;">0.0092</td>
+<td style="text-align: right; font-weight: bold; color: red !important;">-0.1123000</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">n_t_log</td>
+<td style="text-align: left;">intensiteit_combo_afstr_s</td>
+<td style="text-align: right;">0.2618</td>
+<td style="text-align: left;">0.0314</td>
+<td style="text-align: right;">918</td>
+<td style="text-align: right;">8.3457</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right; font-weight: bold; color: red !important;">0.4730000</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">n_t_log</td>
+<td style="text-align: left;">lozingen_industrie_ie_log</td>
+<td style="text-align: right;">0.0268</td>
+<td style="text-align: left;">0.0113</td>
+<td style="text-align: right;">918</td>
+<td style="text-align: right;">2.3782</td>
+<td style="text-align: right;">0.0174</td>
+<td style="text-align: right; font-weight: bold; color: red !important;">0.0852000</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">n_t_log</td>
+<td style="text-align: left;">jaar_s</td>
+<td style="text-align: right;">-0.0547</td>
+<td style="text-align: left;">0.0128</td>
+<td style="text-align: right;">918</td>
+<td style="text-align: right;">-4.2887</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right; font-weight: bold; color: red !important;">-0.0968000</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">n_t_log</td>
+<td style="text-align: left;">t_s</td>
+<td style="text-align: right;">0.0554</td>
+<td style="text-align: left;">0.0136</td>
+<td style="text-align: right;">918</td>
+<td style="text-align: right;">4.0607</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right; font-weight: bold; color: red !important;">0.1011000</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">n_t_log</td>
+<td style="text-align: left;">verharding_afstr_s</td>
+<td style="text-align: right;">0.0626</td>
+<td style="text-align: left;">0.0297</td>
+<td style="text-align: right;">918</td>
+<td style="text-align: right;">2.1056</td>
+<td style="text-align: right;">0.0352</td>
+<td style="text-align: right; font-weight: bold; color: red !important;">0.1123000</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">p_t_log</td>
+<td style="text-align: left;">intensiteit_combo_afstr_s</td>
+<td style="text-align: right;">0.3156</td>
+<td style="text-align: left;">0.0431</td>
+<td style="text-align: right;">918</td>
+<td style="text-align: right;">7.3240</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right; font-weight: bold; color: red !important;">0.4129000</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">p_t_log</td>
+<td style="text-align: left;">spei6_s</td>
+<td style="text-align: right;">0.0692</td>
+<td style="text-align: left;">0.0188</td>
+<td style="text-align: right;">918</td>
+<td style="text-align: right;">3.6854</td>
+<td style="text-align: right;">0.0002</td>
+<td style="text-align: right; font-weight: bold; color: red !important;">0.0913000</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">p_t_log</td>
+<td style="text-align: left;">verharding_afstr_s</td>
+<td style="text-align: right;">0.1814</td>
+<td style="text-align: left;">0.0403</td>
+<td style="text-align: right;">918</td>
+<td style="text-align: right;">4.4985</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right; font-weight: bold; color: red !important;">0.2357000</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">p_t_log</td>
+<td style="text-align: left;">jaar_s</td>
+<td style="text-align: right;">-0.1106</td>
+<td style="text-align: left;">0.0191</td>
+<td style="text-align: right;">918</td>
+<td style="text-align: right;">-5.7873</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right; font-weight: bold; color: red !important;">-0.1417000</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">p_t_log</td>
+<td style="text-align: left;">lozingen_riool_ie_log</td>
+<td style="text-align: right;">0.0321</td>
+<td style="text-align: left;">0.0107</td>
+<td style="text-align: right;">918</td>
+<td style="text-align: right;">3.0008</td>
+<td style="text-align: right;">0.0027</td>
+<td style="text-align: right; font-weight: bold; color: red !important;">0.1033000</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">p_t_log</td>
+<td style="text-align: left;">t_s</td>
+<td style="text-align: right;">-0.0835</td>
+<td style="text-align: left;">0.0205</td>
+<td style="text-align: right;">918</td>
+<td style="text-align: right;">-4.0689</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right; font-weight: bold; color: red !important;">-0.1105000</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">p_t_log</td>
+<td style="text-align: left;">lozingen_rwzi_ie_log</td>
+<td style="text-align: right;">0.0234</td>
+<td style="text-align: left;">0.0086</td>
+<td style="text-align: right;">918</td>
+<td style="text-align: right;">2.7254</td>
+<td style="text-align: right;">0.0064</td>
+<td style="text-align: right; font-weight: bold; color: red !important;">0.1019000</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">czv_log</td>
+<td style="text-align: left;">lozingen_riool_ie_log</td>
+<td style="text-align: right;">-0.0098</td>
+<td style="text-align: left;">0.0093</td>
+<td style="text-align: right;">918</td>
+<td style="text-align: right;">-1.0632</td>
+<td style="text-align: right;">0.2877</td>
+<td style="text-align: right; font-weight: bold; color: black !important;">-0.0392000</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">czv_log</td>
+<td style="text-align: left;">overstorten_blootstelling_index_log</td>
+<td style="text-align: right;">-0.0572</td>
+<td style="text-align: left;">0.0327</td>
+<td style="text-align: right;">918</td>
+<td style="text-align: right;">-1.7471</td>
+<td style="text-align: right;">0.0806</td>
+<td style="text-align: right; font-weight: bold; color: black !important;">-0.0774000</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">czv_log</td>
+<td style="text-align: left;">jaar_s</td>
+<td style="text-align: right;">-0.0518</td>
+<td style="text-align: left;">0.0164</td>
+<td style="text-align: right;">918</td>
+<td style="text-align: right;">-3.1551</td>
+<td style="text-align: right;">0.0016</td>
+<td style="text-align: right; font-weight: bold; color: red !important;">-0.0819000</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">czv_log</td>
+<td style="text-align: left;">t_s</td>
+<td style="text-align: right;">0.0034</td>
+<td style="text-align: left;">0.0179</td>
+<td style="text-align: right;">918</td>
+<td style="text-align: right;">0.1883</td>
+<td style="text-align: right;">0.8506</td>
+<td style="text-align: right; font-weight: bold; color: black !important;">0.0055000</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">czv_log</td>
+<td style="text-align: left;">intensiteit_combo_afstr_s</td>
+<td style="text-align: right;">0.0407</td>
+<td style="text-align: left;">0.0325</td>
+<td style="text-align: right;">918</td>
+<td style="text-align: right;">1.2539</td>
+<td style="text-align: right;">0.2099</td>
+<td style="text-align: right; font-weight: bold; color: black !important;">0.0658000</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">o2_s</td>
+<td style="text-align: left;">czv_log</td>
+<td style="text-align: right;">-0.2904</td>
+<td style="text-align: left;">0.0541</td>
+<td style="text-align: right;">918</td>
+<td style="text-align: right;">-5.3703</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right; font-weight: bold; color: red !important;">-0.1818000</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">o2_s</td>
+<td style="text-align: left;">lozingen_rwzi_ie_log</td>
+<td style="text-align: right;">0.0237</td>
+<td style="text-align: left;">0.0107</td>
+<td style="text-align: right;">918</td>
+<td style="text-align: right;">2.2192</td>
+<td style="text-align: right;">0.0265</td>
+<td style="text-align: right; font-weight: bold; color: red !important;">0.0798000</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">o2_s</td>
+<td style="text-align: left;">t_s</td>
+<td style="text-align: right;">-0.1621</td>
+<td style="text-align: left;">0.0295</td>
+<td style="text-align: right;">918</td>
+<td style="text-align: right;">-5.4948</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right; font-weight: bold; color: red !important;">-0.1658000</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">o2_s</td>
+<td style="text-align: left;">jaar_s</td>
+<td style="text-align: right;">0.0105</td>
+<td style="text-align: left;">0.028</td>
+<td style="text-align: right;">918</td>
+<td style="text-align: right;">0.3764</td>
+<td style="text-align: right;">0.7066</td>
+<td style="text-align: right; font-weight: bold; color: black !important;">0.0104000</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">o2_s</td>
+<td style="text-align: left;">ec_20_s</td>
+<td style="text-align: right;">-0.0977</td>
+<td style="text-align: left;">0.0356</td>
+<td style="text-align: right;">918</td>
+<td style="text-align: right;">-2.7418</td>
+<td style="text-align: right;">0.0061</td>
+<td style="text-align: right; font-weight: bold; color: red !important;">-0.0932000</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">o2_s</td>
+<td style="text-align: left;">p_sum_7d_s</td>
+<td style="text-align: right;">-0.0678</td>
+<td style="text-align: left;">0.0285</td>
+<td style="text-align: right;">918</td>
+<td style="text-align: right;">-2.3809</td>
+<td style="text-align: right;">0.0173</td>
+<td style="text-align: right; font-weight: bold; color: red !important;">-0.0719000</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">ec_20_s</td>
+<td style="text-align: left;">lozingen_industrie_ie_log</td>
+<td style="text-align: right;">0.1421</td>
+<td style="text-align: left;">0.0202</td>
+<td style="text-align: right;">918</td>
+<td style="text-align: right;">7.0314</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right; font-weight: bold; color: red !important;">0.2658000</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">ec_20_s</td>
+<td style="text-align: left;">p_sum_7d_s</td>
+<td style="text-align: right;">-0.1965</td>
+<td style="text-align: left;">0.0219</td>
+<td style="text-align: right;">918</td>
+<td style="text-align: right;">-8.9532</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right; font-weight: bold; color: red !important;">-0.2188000</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">ec_20_s</td>
+<td style="text-align: left;">spei6_s</td>
+<td style="text-align: right;">-0.1140</td>
+<td style="text-align: left;">0.0215</td>
+<td style="text-align: right;">918</td>
+<td style="text-align: right;">-5.3083</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right; font-weight: bold; color: red !important;">-0.1220000</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">ec_20_s</td>
+<td style="text-align: left;">jaar_s</td>
+<td style="text-align: right;">0.0023</td>
+<td style="text-align: left;">0.0221</td>
+<td style="text-align: right;">918</td>
+<td style="text-align: right;">0.1023</td>
+<td style="text-align: right;">0.9185</td>
+<td style="text-align: right; font-weight: bold; color: black !important;">0.0023000</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">ec_20_s</td>
+<td style="text-align: left;">intensiteit_combo_afstr_s</td>
+<td style="text-align: right;">0.2534</td>
+<td style="text-align: left;">0.0527</td>
+<td style="text-align: right;">918</td>
+<td style="text-align: right;">4.8052</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right; font-weight: bold; color: red !important;">0.2689000</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">ec_20_s</td>
+<td style="text-align: left;">t_s</td>
+<td style="text-align: right;">0.0767</td>
+<td style="text-align: left;">0.0236</td>
+<td style="text-align: right;">918</td>
+<td style="text-align: right;">3.2448</td>
+<td style="text-align: right;">0.0012</td>
+<td style="text-align: right; font-weight: bold; color: red !important;">0.0823000</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">ec_20_s</td>
+<td style="text-align: left;">verharding_afstr_s</td>
+<td style="text-align: right;">0.1628</td>
+<td style="text-align: left;">0.0516</td>
+<td style="text-align: right;">918</td>
+<td style="text-align: right;">3.1530</td>
+<td style="text-align: right;">0.0016</td>
+<td style="text-align: right; font-weight: bold; color: red !important;">0.1716000</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">~~n_t_log</td>
+<td style="text-align: left;">~~p_t_log</td>
+<td style="text-align: right;">0.2816</td>
+<td style="text-align: left;">-</td>
+<td style="text-align: right;">918</td>
+<td style="text-align: right;">8.8785</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right; font-weight: bold; color: red !important;">0.2816000</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">~~p_t_log</td>
+<td style="text-align: left;">~~czv_log</td>
+<td style="text-align: right;">0.4956</td>
+<td style="text-align: left;">-</td>
+<td style="text-align: right;">918</td>
+<td style="text-align: right;">17.2613</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right; font-weight: bold; color: red !important;">0.4956000</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">~~n_t_log</td>
+<td style="text-align: left;">~~czv_log</td>
+<td style="text-align: right;">0.1618</td>
+<td style="text-align: left;">-</td>
+<td style="text-align: right;">918</td>
+<td style="text-align: right;">4.9589</td>
+<td style="text-align: right;">0.0000</td>
+<td style="text-align: right; font-weight: bold; color: red !important;">0.1618000</td>
+</tr>
+</tbody>
+</table>
+
+
+</div>
+<div class="cell-output-display">
+<table class="table table-striped table-hover table-condensed caption-top table-sm small" data-quarto-postprocess="true">
+<caption>Overzicht van verklaarde variantie per model-component</caption>
+<thead>
+<tr class="header">
+<th style="text-align: left;" data-quarto-table-cell-role="th">Afhankelijke Variabele</th>
+<th style="text-align: left;" data-quarto-table-cell-role="th">Verdeling (Family)</th>
+<th style="text-align: right;" data-quarto-table-cell-role="th">R² Vast (Marginal)</th>
+<th style="text-align: right;" data-quarto-table-cell-role="th">R² Totaal (Conditional)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left; font-weight: bold; background-color: rgba(230, 242, 255, 255) !important;">mmif</td>
+<td style="text-align: left; font-weight: bold; background-color: rgba(230, 242, 255, 255) !important;">ordbeta</td>
+<td style="text-align: right; font-weight: bold; background-color: rgba(230, 242, 255, 255) !important; font-weight: bold; color: white !important; background-color: rgba(67, 191, 113, 255) !important;">0.449</td>
+<td style="text-align: right; font-weight: bold; background-color: rgba(230, 242, 255, 255) !important;">0.905</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">n_t_log</td>
+<td style="text-align: left;">gaussian</td>
+<td style="text-align: right; font-weight: bold; color: white !important; background-color: rgba(52, 96, 141, 255) !important;">0.205</td>
+<td style="text-align: right;">0.660</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">p_t_log</td>
+<td style="text-align: left;">gaussian</td>
+<td style="text-align: right; font-weight: bold; color: white !important; background-color: rgba(58, 85, 140, 255) !important;">0.180</td>
+<td style="text-align: right;">0.594</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">czv_log</td>
+<td style="text-align: left;">gaussian</td>
+<td style="text-align: right; font-weight: bold; color: white !important; background-color: rgba(68, 1, 84, 255) !important;">0.020</td>
+<td style="text-align: right;">0.535</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">o2_s</td>
+<td style="text-align: left;">gaussian</td>
+<td style="text-align: right; font-weight: bold; color: white !important; background-color: rgba(72, 37, 119, 255) !important;">0.084</td>
+<td style="text-align: right;">0.397</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">ec_20_s</td>
+<td style="text-align: left;">gaussian</td>
+<td style="text-align: right; font-weight: bold; color: white !important; background-color: rgba(49, 104, 142, 255) !important;">0.225</td>
+<td style="text-align: right;">0.673</td>
+</tr>
+</tbody><tfoot>
+<tr class="odd">
+<td style="text-align: left; padding: 0;"><span style="font-style: italic;">Note: </span></td>
+<td style="text-align: left;"></td>
+<td style="text-align: right;"></td>
+<td style="text-align: right;"></td>
+</tr>
+<tr class="even">
+<td style="text-align: left; padding: 0;"><sup></sup> De hoge Conditional R² waarden t.o.v. de Marginal R² duiden op een sterke invloed van de random effecten in de beken.</td>
+<td style="text-align: left;"></td>
+<td style="text-align: right;"></td>
+<td style="text-align: right;"></td>
+</tr>
+</tfoot>
+
+</table>
+
+
+</div>
+</div>
+<section id="eigenschappen-van-macroinvertebraten-traits" class="level4">
+<h4 class="anchored" data-anchor-id="eigenschappen-van-macroinvertebraten-traits">Eigenschappen van macroinvertebraten (‘traits’)</h4>
+<p>Op basis van zeven kenmerken van macroinvertebraten kunnen we kijken naar de functionele diversiteit van gemeenschappen van ongewervelden in de waterlopen. Functionele diversiteit is een maat van hoe divers de eigenschappen zijn van een gemeenschap. Zo kunnen er veel verschillende soorten aanwezig zijn, maar deze kunnen allemaal dezelfde eigenschappen of strategiën hebben. Een hoge functionele diversiteit wijst op een gezond ecosysteem dat beter bestand is tegen drukken en verstoringen.</p>
+<p>De eigenschappen zijn: dispersie, voorbeweging, reproductie, saprobiteit, stroomsnelheid, trofisch status en substraat.</p>
+</section>
+<section id="macrofyten" class="level3" data-number="3.1">
+<h3 data-number="3.1" class="anchored" data-anchor-id="macrofyten"><span class="header-section-number">3.1</span> Macrofyten</h3>
+</section>
+<section id="koppeling-mi-mafy" class="level3" data-number="3.2">
+<h3 data-number="3.2" class="anchored" data-anchor-id="koppeling-mi-mafy"><span class="header-section-number">3.2</span> koppeling MI-MAFY</h3>
+<p>extra beschaduwing</p>
+<p>geen effect zuurstof</p>
+<p>koppeling MI-VIS</p>
+<section id="verontreinigende-stoffen" class="level4">
+<h4 class="anchored" data-anchor-id="verontreinigende-stoffen">Verontreinigende stoffen</h4>
+<p>subset</p>
+<p>EC50 waarde uit ecotox</p>
+<p>TU waarde pesticiden -&gt; TU max insecteciden</p>
+<section id="in-het-water" class="level5">
+<h5 class="anchored" data-anchor-id="in-het-water">In het water</h5>
+</section>
+<section id="in-biota" class="level5">
+<h5 class="anchored" data-anchor-id="in-biota">In biota</h5>
+</section>
+<section id="in-de-waterbodem" class="level5">
+<h5 class="anchored" data-anchor-id="in-de-waterbodem">In de waterbodem</h5>
+</section>
+</section>
+</section>
+<section id="invasieve-druk" class="level3" data-number="3.3">
+<h3 data-number="3.3" class="anchored" data-anchor-id="invasieve-druk"><span class="header-section-number">3.3</span> Invasieve druk</h3>
+</section>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+window.document.addEventListener("DOMContentLoaded", function (event) {
+  const toggleBodyColorMode = (bsSheetEl) => {
+    const mode = bsSheetEl.getAttribute("data-mode");
+    const bodyEl = window.document.querySelector("body");
+    if (mode === "dark") {
+      bodyEl.classList.add("quarto-dark");
+      bodyEl.classList.remove("quarto-light");
+    } else {
+      bodyEl.classList.add("quarto-light");
+      bodyEl.classList.remove("quarto-dark");
+    }
+  }
+  const toggleBodyColorPrimary = () => {
+    const bsSheetEl = window.document.querySelector("link#quarto-bootstrap");
+    if (bsSheetEl) {
+      toggleBodyColorMode(bsSheetEl);
+    }
+  }
+  toggleBodyColorPrimary();  
+  const icon = "";
+  const anchorJS = new window.AnchorJS();
+  anchorJS.options = {
+    placement: 'right',
+    icon: icon
+  };
+  anchorJS.add('.anchored');
+  const isCodeAnnotation = (el) => {
+    for (const clz of el.classList) {
+      if (clz.startsWith('code-annotation-')) {                     
+        return true;
+      }
+    }
+    return false;
+  }
+  const onCopySuccess = function(e) {
+    // button target
+    const button = e.trigger;
+    // don't keep focus
+    button.blur();
+    // flash "checked"
+    button.classList.add('code-copy-button-checked');
+    var currentTitle = button.getAttribute("title");
+    button.setAttribute("title", "Copied!");
+    let tooltip;
+    if (window.bootstrap) {
+      button.setAttribute("data-bs-toggle", "tooltip");
+      button.setAttribute("data-bs-placement", "left");
+      button.setAttribute("data-bs-title", "Copied!");
+      tooltip = new bootstrap.Tooltip(button, 
+        { trigger: "manual", 
+          customClass: "code-copy-button-tooltip",
+          offset: [0, -8]});
+      tooltip.show();    
+    }
+    setTimeout(function() {
+      if (tooltip) {
+        tooltip.hide();
+        button.removeAttribute("data-bs-title");
+        button.removeAttribute("data-bs-toggle");
+        button.removeAttribute("data-bs-placement");
+      }
+      button.setAttribute("title", currentTitle);
+      button.classList.remove('code-copy-button-checked');
+    }, 1000);
+    // clear code selection
+    e.clearSelection();
+  }
+  const getTextToCopy = function(trigger) {
+      const codeEl = trigger.previousElementSibling.cloneNode(true);
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+  }
+  const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+    text: getTextToCopy
+  });
+  clipboard.on('success', onCopySuccess);
+  if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+    const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+      text: getTextToCopy,
+      container: window.document.getElementById('quarto-embedded-source-code-modal')
+    });
+    clipboardModal.on('success', onCopySuccess);
+  }
+    var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+    var mailtoRegex = new RegExp(/^mailto:/);
+      var filterRegex = new RegExp('/' + window.location.host + '/');
+    var isInternal = (href) => {
+        return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+    }
+    // Inspect non-navigation links and adorn them if external
+ 	var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+    for (var i=0; i<links.length; i++) {
+      const link = links[i];
+      if (!isInternal(link.href)) {
+        // undo the damage that might have been done by quarto-nav.js in the case of
+        // links that we want to consider external
+        if (link.dataset.originalHref !== undefined) {
+          link.href = link.dataset.originalHref;
+        }
+      }
+    }
+  function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+    const config = {
+      allowHTML: true,
+      maxWidth: 500,
+      delay: 100,
+      arrow: false,
+      appendTo: function(el) {
+          return el.parentElement;
+      },
+      interactive: true,
+      interactiveBorder: 10,
+      theme: 'quarto',
+      placement: 'bottom-start',
+    };
+    if (contentFn) {
+      config.content = contentFn;
+    }
+    if (onTriggerFn) {
+      config.onTrigger = onTriggerFn;
+    }
+    if (onUntriggerFn) {
+      config.onUntrigger = onUntriggerFn;
+    }
+    window.tippy(el, config); 
+  }
+  const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+  for (var i=0; i<noterefs.length; i++) {
+    const ref = noterefs[i];
+    tippyHover(ref, function() {
+      // use id or data attribute instead here
+      let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+      try { href = new URL(href).hash; } catch {}
+      const id = href.replace(/^#\/?/, "");
+      const note = window.document.getElementById(id);
+      if (note) {
+        return note.innerHTML;
+      } else {
+        return "";
+      }
+    });
+  }
+  const xrefs = window.document.querySelectorAll('a.quarto-xref');
+  const processXRef = (id, note) => {
+    // Strip column container classes
+    const stripColumnClz = (el) => {
+      el.classList.remove("page-full", "page-columns");
+      if (el.children) {
+        for (const child of el.children) {
+          stripColumnClz(child);
+        }
+      }
+    }
+    stripColumnClz(note)
+    if (id === null || id.startsWith('sec-')) {
+      // Special case sections, only their first couple elements
+      const container = document.createElement("div");
+      if (note.children && note.children.length > 2) {
+        container.appendChild(note.children[0].cloneNode(true));
+        for (let i = 1; i < note.children.length; i++) {
+          const child = note.children[i];
+          if (child.tagName === "P" && child.innerText === "") {
+            continue;
+          } else {
+            container.appendChild(child.cloneNode(true));
+            break;
+          }
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(container);
+        }
+        return container.innerHTML
+      } else {
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        return note.innerHTML;
+      }
+    } else {
+      // Remove any anchor links if they are present
+      const anchorLink = note.querySelector('a.anchorjs-link');
+      if (anchorLink) {
+        anchorLink.remove();
+      }
+      if (window.Quarto?.typesetMath) {
+        window.Quarto.typesetMath(note);
+      }
+      if (note.classList.contains("callout")) {
+        return note.outerHTML;
+      } else {
+        return note.innerHTML;
+      }
+    }
+  }
+  for (var i=0; i<xrefs.length; i++) {
+    const xref = xrefs[i];
+    tippyHover(xref, undefined, function(instance) {
+      instance.disable();
+      let url = xref.getAttribute('href');
+      let hash = undefined; 
+      if (url.startsWith('#')) {
+        hash = url;
+      } else {
+        try { hash = new URL(url).hash; } catch {}
+      }
+      if (hash) {
+        const id = hash.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note !== null) {
+          try {
+            const html = processXRef(id, note.cloneNode(true));
+            instance.setContent(html);
+          } finally {
+            instance.enable();
+            instance.show();
+          }
+        } else {
+          // See if we can fetch this
+          fetch(url.split('#')[0])
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.getElementById(id);
+            if (note !== null) {
+              const html = processXRef(id, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      } else {
+        // See if we can fetch a full url (with no hash to target)
+        // This is a special case and we should probably do some content thinning / targeting
+        fetch(url)
+        .then(res => res.text())
+        .then(html => {
+          const parser = new DOMParser();
+          const htmlDoc = parser.parseFromString(html, "text/html");
+          const note = htmlDoc.querySelector('main.content');
+          if (note !== null) {
+            // This should only happen for chapter cross references
+            // (since there is no id in the URL)
+            // remove the first header
+            if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+              note.children[0].remove();
+            }
+            const html = processXRef(null, note);
+            instance.setContent(html);
+          } 
+        }).finally(() => {
+          instance.enable();
+          instance.show();
+        });
+      }
+    }, function(instance) {
+    });
+  }
+      let selectedAnnoteEl;
+      const selectorForAnnotation = ( cell, annotation) => {
+        let cellAttr = 'data-code-cell="' + cell + '"';
+        let lineAttr = 'data-code-annotation="' +  annotation + '"';
+        const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+        return selector;
+      }
+      const selectCodeLines = (annoteEl) => {
+        const doc = window.document;
+        const targetCell = annoteEl.getAttribute("data-target-cell");
+        const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+        const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+        const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+        const lineIds = lines.map((line) => {
+          return targetCell + "-" + line;
+        })
+        let top = null;
+        let height = null;
+        let parent = null;
+        if (lineIds.length > 0) {
+            //compute the position of the single el (top and bottom and make a div)
+            const el = window.document.getElementById(lineIds[0]);
+            top = el.offsetTop;
+            height = el.offsetHeight;
+            parent = el.parentElement.parentElement;
+          if (lineIds.length > 1) {
+            const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+            const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+            height = bottom - top;
+          }
+          if (top !== null && height !== null && parent !== null) {
+            // cook up a div (if necessary) and position it 
+            let div = window.document.getElementById("code-annotation-line-highlight");
+            if (div === null) {
+              div = window.document.createElement("div");
+              div.setAttribute("id", "code-annotation-line-highlight");
+              div.style.position = 'absolute';
+              parent.appendChild(div);
+            }
+            div.style.top = top - 2 + "px";
+            div.style.height = height + 4 + "px";
+            div.style.left = 0;
+            let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+            if (gutterDiv === null) {
+              gutterDiv = window.document.createElement("div");
+              gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+              gutterDiv.style.position = 'absolute';
+              const codeCell = window.document.getElementById(targetCell);
+              const gutter = codeCell.querySelector('.code-annotation-gutter');
+              gutter.appendChild(gutterDiv);
+            }
+            gutterDiv.style.top = top - 2 + "px";
+            gutterDiv.style.height = height + 4 + "px";
+          }
+          selectedAnnoteEl = annoteEl;
+        }
+      };
+      const unselectCodeLines = () => {
+        const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+        elementsIds.forEach((elId) => {
+          const div = window.document.getElementById(elId);
+          if (div) {
+            div.remove();
+          }
+        });
+        selectedAnnoteEl = undefined;
+      };
+        // Handle positioning of the toggle
+    window.addEventListener(
+      "resize",
+      throttle(() => {
+        elRect = undefined;
+        if (selectedAnnoteEl) {
+          selectCodeLines(selectedAnnoteEl);
+        }
+      }, 10)
+    );
+    function throttle(fn, ms) {
+    let throttle = false;
+    let timer;
+      return (...args) => {
+        if(!throttle) { // first call gets through
+            fn.apply(this, args);
+            throttle = true;
+        } else { // all the others get throttled
+            if(timer) clearTimeout(timer); // cancel #2
+            timer = setTimeout(() => {
+              fn.apply(this, args);
+              timer = throttle = false;
+            }, ms);
+        }
+      };
+    }
+      // Attach click handler to the DT
+      const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+      for (const annoteDlNode of annoteDls) {
+        annoteDlNode.addEventListener('click', (event) => {
+          const clickedEl = event.target;
+          if (clickedEl !== selectedAnnoteEl) {
+            unselectCodeLines();
+            const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+            if (activeEl) {
+              activeEl.classList.remove('code-annotation-active');
+            }
+            selectCodeLines(clickedEl);
+            clickedEl.classList.add('code-annotation-active');
+          } else {
+            // Unselect the line
+            unselectCodeLines();
+            clickedEl.classList.remove('code-annotation-active');
+          }
+        });
+      }
+  const findCites = (el) => {
+    const parentEl = el.parentElement;
+    if (parentEl) {
+      const cites = parentEl.dataset.cites;
+      if (cites) {
+        return {
+          el,
+          cites: cites.split(' ')
+        };
+      } else {
+        return findCites(el.parentElement)
+      }
+    } else {
+      return undefined;
+    }
+  };
+  var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+  for (var i=0; i<bibliorefs.length; i++) {
+    const ref = bibliorefs[i];
+    const citeInfo = findCites(ref);
+    if (citeInfo) {
+      tippyHover(citeInfo.el, function() {
+        var popup = window.document.createElement('div');
+        citeInfo.cites.forEach(function(cite) {
+          var citeDiv = window.document.createElement('div');
+          citeDiv.classList.add('hanging-indent');
+          citeDiv.classList.add('csl-entry');
+          var biblioDiv = window.document.getElementById('ref-' + cite);
+          if (biblioDiv) {
+            citeDiv.innerHTML = biblioDiv.innerHTML;
+          }
+          popup.appendChild(citeDiv);
+        });
+        return popup.innerHTML;
+      });
+    }
+  }
+});
+</script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>
