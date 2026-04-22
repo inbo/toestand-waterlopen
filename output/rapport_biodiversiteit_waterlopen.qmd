@@ -164,7 +164,17 @@ We selecteerden 8 eigenschappen (Tachet traits): dispersie, voorbeweging, reprod
 
 Op basis van deze traits kunnen we ook kijken naar de functionele diversiteit van gemeenschappen van ongewervelden in de waterlopen. Functionele diversiteit is een maat van hoe divers de eigenschappen zijn van een gemeenschap. Zo kunnen er veel verschillende soorten aanwezig zijn, maar deze kunnen allemaal dezelfde eigenschappen of strategiën hebben. Een hoge functionele diversiteit wijst op een gezond ecosysteem dat beter bestand is tegen drukken en verstoringen.
 
-De eigenschappen zijn geselecteerd uit de Tachet trait databank: dispersie, voorbeweging, reproductie, saprobiteit, stroomsnelheid, trofisch status respiratie en substraat.
+De eigenschappen zijn geselecteerd uit de Tachet trait databank: temperatuur, dispersie, voortbeweging (locomotion), reproductie, saprobiteit, stroomsnelheid, trofisch status, respiratie, ph en substraat.
+
+We berekenden functionele dispersie, richness en eveness voor 3 subsets van traits.
+
+-   alle bovenstaande traits
+
+-   waterkwaliteit: saprobiteit, trofisch status, respiratie, ph
+
+-   habitat: substraat, stroomsnelheid, voortbeweging
+
+Enkel metingen met een "trait-coverage" \> 80% werden behouden voor analyse.
 
 ## Analysemethode
 
@@ -272,6 +282,8 @@ r2_results %>%
 ```
 
 #### Functionele diversiteit en community gewogen trait waarden
+
+![](figuren/trend_fd_subsets.png)
 
 ### Macrofyten
 
