@@ -158,6 +158,8 @@ Om de invloed van weersomstandigheden op de biodiversiteit te vatten, berekenden
 
 #### Functionele diversiteit en community gewogen trait waarden
 
+[Code op Github](https://github.com/inbo/toestand-waterlopen/blob/main/source/functionele_diversiteit_mi.R)
+
 We selecteerden 8 eigenschappen (Tachet traits): dispersie, voorbeweging, reproductie, saprobiteit, stroomsnelheid, trofisch status respiratie en substraat. Deze leren ons hoe een gemeenschap functioneert. Op basis hiervan berekenden we community gewogen trait waarden die ons iets leren over het functioneren van de MI gemeenschap.
 
 Op basis van deze traits kunnen we ook kijken naar de functionele diversiteit van gemeenschappen van ongewervelden in de waterlopen. Functionele diversiteit is een maat van hoe divers de eigenschappen zijn van een gemeenschap. Zo kunnen er veel verschillende soorten aanwezig zijn, maar deze kunnen allemaal dezelfde eigenschappen of strategiën hebben. Een hoge functionele diversiteit wijst op een gezond ecosysteem dat beter bestand is tegen drukken en verstoringen.
@@ -202,7 +204,7 @@ Via de `dredge`-functie worden alle mogelijke combinaties van ecologisch relevan
 
 ### Stap 3: Opbouw van het Piecewise SEM (pSEM)
 
-De individuele topmodellen voor biologie en chemie worden samengevoegd in één overkoepelend SEM (**Piecewise SEM**). Dit netwerk maakt het mogelijk om zowel **directe effecten** (bijv. landgebruik $\rightarrow$ biologie) als **indirecte effecten** (bijv. landgebruik $\rightarrow$ nutriënten $\rightarrow$ biologie) te kwantificeren.
+De individuele beste modellen voor biologie en de andere drivers worden samengevoegd in één overkoepelend SEM (**Piecewise SEM**). Dit netwerk maakt het mogelijk om zowel **directe effecten** (bijv. landgebruik $\rightarrow$ biologie) als **indirecte effecten** (bijv. landgebruik $\rightarrow$ nutriënten $\rightarrow$ biologie) te kwantificeren.
 
 ### Stap 4: Modelevaluatie en Verfijning
 

@@ -22,4 +22,3 @@ libs
 renv/library
 data/verwerkt/hydrologisch/dagelijkse_reeksen_per_catchment.rds
 
-!output/rapport_biodiversiteit_waterlopen.html
