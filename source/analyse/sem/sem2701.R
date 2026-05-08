@@ -56,6 +56,8 @@ m1 <- glmmTMB(data = data_sem_clean,
               n_t_log ~ intensiteit_combo_s + ekc2_waterlichaam_s + jaar_s + spei6_s + n_extreme_3m_s + overstorten_blootstelling_index_log + verharding_afstr_s + lozingen_industrie_ie_log + lozingen_rwzi_ie_log + lozingen_riool_ie_log + (1 | meetplaats),
               family = gaussian)
 
+
+
 m3 <- glmmTMB(data = data_sem_clean,
               p_t_log ~ intensiteit_combo_s + ekc2_waterlichaam_s  + n_t_log + jaar_s + overstorten_blootstelling_index_log +
                 spei6_s + n_extreme_3m_s + verharding_afstr_s + lozingen_industrie_ie_log + lozingen_rwzi_ie_log +
@@ -76,12 +78,18 @@ m2 <- glmmTMB(
   family = ordbeta,
   data = data_sem_clean)
 # #
-# m2 <- glmmTMB(
-#   ept_prop ~ n_t_log + intensiteit_combo_s + spei6_s + n_extreme_3m_s + verharding_afstr_s  + ekc2_waterlichaam_s + o2_verz_fc_s + jaar_s + p_t_log + overstorten_blootstelling_index_log + czv_log + lozingen_industrie_ie_log + lozingen_rwzi_p_t_log + (1 | meetplaats),
-#   weights = data_sem_clean$ta_xw,
-#   data = data_sem_clean,
-#   family =  binomial)
-# #
+m2 <- glmmTMB(
+  ept_prop ~ n_t_log + intensiteit_combo_s + spei6_s + n_extreme_3m_s + verharding_afstr_s  + ekc2_waterlichaam_s + o2_verz_fc_s + jaar_s + p_t_log + overstorten_blootstelling_index_log + czv_log + lozingen_industrie_ie_log + lozingen_rwzi_p_t_log + (1 | meetplaats),
+  weights = data_sem_clean$ta_xw,
+  data = data_sem_clean,
+  family =  binomial)
+
+simulationOutput <- simulateResiduals(m2, plot = TRUE)
+testDispersion(simulationOutput) # geen overdispersie
+testZeroInflation(simulationOutput) # geen zero_inflation
+testUniformity(simulationOutput)
+
+#
 # m2 <- glmmTMB(
 #   ta_xw ~ n_t_log + intensiteit_combo_s + spei6_s + n_extreme_3m_s + verharding_afstr_s  + ekc2_waterlichaam_s + o2_verz_fc_s + jaar_s + p_t_log + overstorten_blootstelling_index_log + czv_log + (1 | meetplaats),
 #   family = poisson,
@@ -110,10 +118,7 @@ m2 <- glmmTMB(
 #   data = data_sem_clean,
 #   family =  binomial(link = "logit"))
 
-# simulationOutput <- simulateResiduals(m1, plot = TRUE)
-# testDispersion(simulationOutput) # geen overdispersie
-# testZeroInflation(simulationOutput) # geen zero_inflation
-# testUniformity(simulationOutput)
+
 
 sem_resultaat <- psem(m1, m2, m3, m4, m5)
 # multigroup(sem_resultaat, group = data_sem_clean$groep_dummy)

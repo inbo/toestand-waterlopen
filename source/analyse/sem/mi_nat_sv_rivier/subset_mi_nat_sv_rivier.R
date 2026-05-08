@@ -12,7 +12,7 @@ source(here::here("source", "functies.R"))
 # -----------------------------------------------------------
 data_subset <- mi_nat_sv_rivier %>%
   drop_na(meetplaats, jaar) %>%
-  select(meetplaats, monsternamedatum, jaar, bekken,
+  select(meetplaats, monsternamedatum, jaar, bekken, owl,
          mmif, ta_xw, ep_tw, sw_dw, ns_tw, mt_sw,
          t, p_h, o2, o2_verz, ec_20,
          czv, n_t, no2, no3, nh4, p_t, zs,
@@ -38,6 +38,7 @@ data_subset <- mi_nat_sv_rivier %>%
                 no3_log = log(no3),
                 czv_log = log(czv),
                 nh4_log = log(nh4),
+                ec_20_log = log(ec_20),
                 overstorten_index_log = log(overstorten_index + 1),
                 overstorten_blootstelling_index_log = log(overstorten_blootstelling_index + 1),
                 lozingen_rwzi_ie_log = log(lozingen_rwzi_ie + 1),
@@ -47,7 +48,7 @@ data_subset <- mi_nat_sv_rivier %>%
 
 # 1. Definieer je ruwe lijsten met variabelen (nog niet gefilterd)
 # -----------------------------------------------------------
-raw_fysico        <- c("t_s", "p_h_s", "o2_s", "ec_20_s", "zs_s") # o2_verz_s weg en keuze o2
+raw_fysico        <- c("t_s", "p_h_s", "o2_s", "ec_20_log", "zs_s") # o2_verz_s weg en keuze o2
 raw_nutrients     <- c("czv_log", "n_t_log", "no2_log", "no3_log", "nh4_log", "p_t_log")
 raw_hydmo         <- c("breedte_diepte_ratio_s", "sinuositeit_s", "bodemsub_s", "doodhout_s", "profiel_s", "ekc2_waterlichaam_s", "ekc2_traject_s", "stroomsnelheid_s")
 raw_landuse <- c("verharding_afstr_s", "natuur_afstr_s", "intensiteit_combo_afstr_s", "verharding_oever_s", "natuur_oever_s", "intensiteit_combo_oeverzone_s")
@@ -80,7 +81,7 @@ clean_all <- filter_collinear_vars(data_subset, raw_all)
 
 data_subset %>%
   select(
-    meetplaats, monsternamedatum, jaar_s, bekken,
+    meetplaats, monsternamedatum, jaar_s, bekken, owl,
     mmif, ept_prop, ta_xw, sw_dw, mt_sw_prop, nst_prop, stress_prop,
     n_t_log, p_t_log, czv_log,
     ekc2_waterlichaam_s,
@@ -93,7 +94,7 @@ data_subset %>%
 
 data_subset2 <- data_subset %>%
   select(
-    meetplaats, monsternamedatum, jaar_s, bekken,
+    meetplaats, monsternamedatum, jaar_s, bekken, jaar, owl,
     mmif, ept_prop, ta_xw, sw_dw, mt_sw_prop, nst_prop, stress_prop,
     n_t_log, p_t_log, czv_log,
     ekc2_waterlichaam_s,
@@ -105,7 +106,7 @@ data_subset2 <- data_subset %>%
   na.omit
 
 dredge_data <- data_subset2
-
+dredge_data_rivier <- dredge_data
 ################################################################################
 # model fitten MMIF
 ################################################################################
@@ -350,7 +351,7 @@ plot_model_vif(ptot_best_model_rivier, "VIF Check")
 # model fitten o2
 ################################################################################
 y_var <- "o2_s"
-predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen, "n_t_log", "p_t_log", "czv_log", "t_s", "ec_20_s")
+predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen, "n_t_log", "p_t_log", "czv_log", "t_s", "ec_20_log")
 
 source(here("source", "analyse", "sem", "dredge_formula.R"))
 
@@ -401,7 +402,7 @@ plot_model_vif(czv_best_model_rivier, "VIF Check")
 # model fitten ec20
 ################################################################################
 
-y_var <- "ec_20_s"
+y_var <- "ec_20_log"
 predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen, "n_t_log", "p_t_log")
 
 source(here("source", "analyse", "sem", "dredge_formula.R"))
@@ -424,11 +425,11 @@ summary(ec20_best_model_rivier)
 plot_model_vif(ec20_best_model_rivier, "VIF Check")
 
 ################################################################################
-# model fitten czv
+# model fitten ph
 ################################################################################
 
 y_var <- "p_h_s"
-predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen, "n_t_log", "p_t_log", "czv_log", "t_s", "ec_20_s")
+predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen, "n_t_log", "p_t_log", "czv_log", "t_s", "ec_20_log")
 
 source(here("source", "analyse", "sem", "dredge_formula.R"))
 
@@ -467,12 +468,12 @@ sem_mmif_rivier <- psem(
 summary(sem_mmif_rivier)
 
 # model updaten op basis van dSepS
-mmif_best_model_updated <- update(mmif_best_model_rivier, . ~ . + spei6_s + p_t_log + o2_s + n_extreme_3m_s)
-ntot_best_model_updated <- update(ntot_best_model_rivier, . ~ . + intensiteit_combo_afstr_s + n_extreme_3m_s)
-ptot_best_model_updated <- update(ptot_best_model_rivier, . ~ . + intensiteit_combo_afstr_s)
+mmif_best_model_updated <- update(mmif_best_model_rivier, . ~ . + spei6_s)
+ntot_best_model_updated <- update(ntot_best_model_rivier, . ~ . + t_s)
+ptot_best_model_updated <- update(ptot_best_model_rivier, . ~ . - (1 | meetplaats))
 czv_best_model_updated <- czv_best_model_rivier
 ec20_best_model_updated <- update(ec20_best_model_rivier, . ~ . )
-o2_best_model_updated <- update(o2_best_model_rivier, . ~ . + n_extreme_3m_s + spei6_s)
+o2_best_model_updated <- update(o2_best_model_rivier, . ~ . )
 
 mmif_sem_nat_sv_rivier <- psem(mmif_best_model_updated,
                                ntot_best_model_updated,
@@ -480,17 +481,87 @@ mmif_sem_nat_sv_rivier <- psem(mmif_best_model_updated,
                                czv_best_model_updated,
                                o2_best_model_updated,
                                ec20_best_model_updated,
+                               ec_20_log %~~% p_h_s,
+                               o2_s %~~% p_h_s,
+                               n_t_log %~~% p_t_log
+                               )
+
+,
                                n_t_log %~~% p_t_log,
-                               n_t_log %~~% ec_20_s)
+                               n_t_log %~~% ec_20_log)
 summary(mmif_sem_nat_sv_rivier)
 
 save(mmif_sem_nat_sv_rivier, file = here("source", "analyse", "sem", "mi_nat_sv_rivier", "mmif_sem_nat_sv_rivier.rdata"))
+load(file = here("source", "analyse", "sem", "mi_nat_sv_rivier", "mmif_sem_nat_sv_rivier.rdata"))
 
-sem_resultaat <- mmif_sem_nat_sv_rivier
+sem_resultaat <- sem_mmif_rivier
 coefs_missing <- coefs(sem_resultaat)[,-9]
 source("source/analyse/sem/sem_standardised_coef_flexible.R")
 coefs_filled <- coefs_missing
 source(here("source", "analyse", "sem", "figuur_sem.R"))
+
+
+standardize_psem <- function(psem_obj) {
+  # 1. Haal de coëfficiënten op (ongestandaardiseerd + gestandaardiseerd waar mogelijk)
+  coef_table <- piecewiseSEM::coefs(psem_obj, standardize = "scale")
+
+  # 2. Identificeer welke rijen de Std.Estimate missen
+  # We checken op NA of op het "-" teken dat piecewiseSEM vaak gebruikt
+  missing_idx <- which(is.na(coef_table$Std.Estimate) | coef_table$Std.Estimate == "-")
+
+  if (length(missing_idx) == 0) {
+    message("✅ Alle Std.Estimates zijn al aanwezig.")
+    return(coef_table)
+  }
+
+  # 3. Haal unieke responses op die reparatie nodig hebben
+  responses_to_fix <- unique(coef_table$Response[missing_idx])
+
+  for (resp_name in responses_to_fix) {
+    # Zoek het specifieke model in de psem lijst
+    # We zoeken op basis van de naam van de afhankelijke variabele
+    model_obj <- psem_obj[[which(sapply(psem_obj, function(x)
+      tryCatch(insight::find_response(x) == resp_name, error = function(e) FALSE)))]]
+
+    if (is.null(model_obj)) next
+
+    message("🔧 Berekenen gestandaardiseerde waarden voor: ", resp_name)
+
+    # --- De 'insight/performance' magie ---
+    # Haal de varianties op (Nakagawa methode)
+    vars <- insight::get_variance(model_obj)
+
+    # Bereken totale latente SD: sqrt(Var_fixed + Var_random + Var_distribution)
+    # De 'var.distribution' is cruciaal voor non-gaussian modellen (Varm)
+    total_latent_sd <- sqrt(sum(unlist(vars[c("var.fixed", "var.random", "var.distribution")]), na.rm = TRUE))
+
+    # Haal de data op om SD van de predictors te berekenen
+    model_data <- insight::get_data(model_obj)
+
+    # Update de specifieke rijen in de tabel
+    curr_rows <- which(coef_table$Response == resp_name & (is.na(coef_table$Std.Estimate) | coef_table$Std.Estimate == "-"))
+
+    for (idx in curr_rows) {
+      pred_name <- coef_table$Predictor[idx]
+      beta_unstd <- coef_table$Estimate[idx]
+
+      if (pred_name %in% names(model_data)) {
+        sd_x <- sd(model_data[[pred_name]], na.rm = TRUE)
+        # De formule: beta * (SD_x / SD_y_totaal)
+        coef_table$Std.Estimate[idx] <- as.numeric(beta_unstd * (sd_x / total_latent_sd))
+      }
+    }
+  }
+
+  # Dwing de kolom naar numeriek voor verdere analyse
+  coef_table$Std.Estimate <- as.numeric(coef_table$Std.Estimate)
+
+  return(coef_table)
+}
+coefs_filled <- standardize_psem(mmif_sem_nat_sv_rivier)[,-9]
+source(here("source", "analyse", "sem", "figuur_sem_zonder_corrfout.R")) #zonder cluster gecorreleerde fouten
+
+
 
 # EPT
 
@@ -520,10 +591,11 @@ ept_sem_nat_sv_rivier <- psem(ept_best_model_updated,
                               o2_best_model_updated,
                               ec20_best_model_updated,
                               n_t_log %~~% p_t_log,
-                              n_t_log %~~% ec_20_s)
+                              n_t_log %~~% ec_20_log)
 summary(ept_sem_nat_sv_rivier)
 
 save(ept_sem_nat_sv_rivier, file = here("source", "analyse", "sem", "mi_nat_sv_rivier", "ept_sem_nat_sv_rivier.rdata"))
+load(file = here("source", "analyse", "sem", "mi_nat_sv_rivier", "ept_sem_nat_sv_rivier.rdata"))
 
 sem_resultaat <- ept_sem_nat_sv_rivier
 coefs_missing <- coefs(sem_resultaat)[,-9]

@@ -12,7 +12,7 @@ source(here::here("source", "functies.R"))
 # -----------------------------------------------------------
 data_subset <- mi_nat_sv_kempen %>%
   drop_na(meetplaats, jaar) %>%
-  select(meetplaats, monsternamedatum, jaar, bekken,
+  select(meetplaats, monsternamedatum, jaar, bekken, deelbekken, owl,
          mmif, ta_xw, ep_tw, sw_dw, ns_tw, mt_sw,
          t, p_h, o2, o2_verz, ec_20,
          czv, n_t, no2, no3, nh4, p_t, zs,
@@ -38,6 +38,7 @@ data_subset <- mi_nat_sv_kempen %>%
                 no3_log = log(no3),
                 czv_log = log(czv),
                 nh4_log = log(nh4),
+                ec_20_log = log(ec_20),
                 overstorten_index_log = log(overstorten_index + 1),
                 overstorten_blootstelling_index_log = log(overstorten_blootstelling_index + 1),
                 lozingen_rwzi_ie_log = log(lozingen_rwzi_ie + 1),
@@ -47,7 +48,7 @@ data_subset <- mi_nat_sv_kempen %>%
 
 # 1. Definieer je ruwe lijsten met variabelen (nog niet gefilterd)
 # -----------------------------------------------------------
-raw_fysico        <- c("t_s", "p_h_s", "o2_s", "ec_20_s", "zs_s") # o2_verz_s weg en keuze o2
+raw_fysico        <- c("t_s", "p_h_s", "o2_s", "ec_20_log", "zs_s") # o2_verz_s weg en keuze o2
 raw_nutrients     <- c("czv_log", "n_t_log", "no2_log", "no3_log", "nh4_log", "p_t_log")
 raw_hydmo         <- c("breedte_diepte_ratio_s", "sinuositeit_s", "bodemsub_s", "doodhout_s", "profiel_s", "ekc2_waterlichaam_s", "ekc2_traject_s", "stroomsnelheid_s")
 raw_landuse <- c("verharding_afstr_s", "natuur_afstr_s", "intensiteit_combo_afstr_s", "verharding_oever_s", "natuur_oever_s", "intensiteit_combo_oeverzone_s")
@@ -80,7 +81,7 @@ clean_all <- filter_collinear_vars(data_subset, raw_all)
 
 data_subset2 <- data_subset %>%
   select(
-    meetplaats, monsternamedatum, jaar_s, bekken,
+    meetplaats, monsternamedatum, jaar_s, bekken, jaar, deelbekken, owl,
     mmif, ept_prop, ta_xw, sw_dw, mt_sw_prop, nst_prop, stress_prop,
     n_t_log, p_t_log, czv_log,
     ekc2_waterlichaam_s,
@@ -92,6 +93,7 @@ data_subset2 <- data_subset %>%
   na.omit
 
 dredge_data <- data_subset2
+dredge_data_kempen <- dredge_data
 
 ################################################################################
 # model fitten MMIF
@@ -330,7 +332,7 @@ plot_model_vif(ptot_best_model_kempen, "VIF Check")
 # model fitten o2
 ################################################################################
 y_var <- "o2_s"
-predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen, "n_t_log", "p_t_log", "czv_log", "t_s", "ec_20_s")
+predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen, "n_t_log", "p_t_log", "czv_log", "t_s", "ec_20_log")
 
 source(here("source", "analyse", "sem", "dredge_formula.R"))
 
@@ -381,7 +383,7 @@ plot_model_vif(czv_best_model_kempen, "VIF Check")
 # model fitten ec20
 ################################################################################
 
-y_var <- "ec_20_s"
+y_var <- "ec_20_log"
 predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen, "n_t_log", "p_t_log")
 
 source(here("source", "analyse", "sem", "dredge_formula.R"))
@@ -408,7 +410,7 @@ plot_model_vif(ec20_best_model_kempen, "VIF Check")
 ################################################################################
 
 y_var <- "p_h_s"
-predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen, "n_t_log", "p_t_log", "czv_log", "t_s", "ec_20_s")
+predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen, "n_t_log", "p_t_log", "czv_log", "t_s", "ec_20_log")
 
 source(here("source", "analyse", "sem", "dredge_formula.R"))
 
@@ -452,8 +454,8 @@ mmif_best_model_updated <- update(mmif_best_model_kempen, . ~ . + p_t_log + o2_s
 ntot_best_model_updated <- update(ntot_best_model_kempen, . ~ . + t_s + spei6_s) # loop dood dus uit model
 ptot_best_model_updated <- update(ptot_best_model_kempen, . ~ . + t_s)
 czv_best_model_updated <- update(czv_best_model_kempen, . ~ . ) # loop dood dus laten we uit het model!
-ec20_best_model_updated <- update(ec20_best_model_kempen, . ~ . + t_s - n_t_log)
-o2_best_model_updated <- update(o2_best_model_kempen, . ~ . + ec_20_s + overstorten_blootstelling_index_log)
+ec20_best_model_updated <- update(ec20_best_model_kempen, . ~ . + t_s - n_t_log + verharding_afstr_s)
+o2_best_model_updated <- update(o2_best_model_kempen, . ~ . + ec_20_log + overstorten_blootstelling_index_log)
 ph_best_model_updated <- update(ph_best_model_kempen, . ~ . )
 
 mmif_sem_nat_sv_kempen <- psem(mmif_best_model_updated,
@@ -464,8 +466,8 @@ mmif_sem_nat_sv_kempen <- psem(mmif_best_model_updated,
                              ec20_best_model_updated,
                              ph_best_model_updated,
                              # n_t_log %~~% p_t_log,
-                             o2_s %~~% p_h_s
-                             # ec_20_s %~~% p_h_s,
+                             o2_s %~~% p_h_s,
+                             ec_20_log %~~% p_t_log
                              # czv_log %~~% p_h_s
                              )
 summary(mmif_sem_nat_sv_kempen)
@@ -474,12 +476,13 @@ summary(mmif_sem_nat_sv_kempen)
 
 save(mmif_sem_nat_sv_kempen, file = here("source", "analyse", "sem", "mi_nat_sv_kempen", "mmif_sem_nat_sv_kempen.rdata"))
 #
-# model_test_mmif <- glmmTMB(data = dredge_data, formula = mmif ~ ec_20_s + p_h_s + spei6_s + p_t_log + intensiteit_combo_afstr_s + n_t_log + o2_s + t_s + verharding_afstr_s +  n_extreme_3m_s + lozingen_riool_ie_log + jaar_s + (1|meetplaats),
+# model_test_mmif <- glmmTMB(data = dredge_data, formula = mmif ~ ec_20_log + p_h_s + spei6_s + p_t_log + intensiteit_combo_afstr_s + n_t_log + o2_s + t_s + verharding_afstr_s +  n_extreme_3m_s + lozingen_riool_ie_log + jaar_s + (1|meetplaats),
 #                  REML = TRUE,
 #                  family = ordbeta, na.action = "na.omit")
 #
 # summary(model_test_mmif)
 # plot_model_vif(model_test_mmif)
+load(file = here("source", "analyse", "sem", "mi_nat_sv_kempen", "mmif_sem_nat_sv_kempen.rdata"))
 
 sem_resultaat <- mmif_sem_nat_sv_kempen
 coefs_missing <- coefs(sem_resultaat)[,-9]
@@ -506,7 +509,7 @@ ntot_best_model_updated <- update(ntot_best_model_kempen, . ~ . + t_s)
 ptot_best_model_updated <- update(ptot_best_model_kempen, . ~ . + t_s )
 czv_best_model_updated <- update(czv_best_model_kempen, . ~ . )
 ec20_best_model_updated <- update(ec20_best_model_kempen, . ~ . + t_s - n_t_log)
-o2_best_model_updated <- update(o2_best_model_kempen, . ~ . + overstorten_blootstelling_index_log + verharding_oever_s + ec_20_s)
+o2_best_model_updated <- update(o2_best_model_kempen, . ~ . + overstorten_blootstelling_index_log + verharding_oever_s + ec_20_log)
 
 ept_sem_nat_sv_kempen <- psem(ept_best_model_updated,
                             # ntot_best_model_updated,
@@ -549,7 +552,7 @@ ntot_best_model_updated <- update(ntot_best_model_kempen, . ~ . + t_s)
 ptot_best_model_updated <- update(ptot_best_model_kempen, . ~ . + t_s)
 czv_best_model_updated <- update(czv_best_model_kempen, . ~ . )
 ec20_best_model_updated <- update(ec20_best_model_kempen, . ~ . + t_s - n_t_log)
-o2_best_model_updated <- update(o2_best_model_kempen, . ~ . + overstorten_blootstelling_index_log + verharding_oever_s + ec_20_s)
+o2_best_model_updated <- update(o2_best_model_kempen, . ~ . + overstorten_blootstelling_index_log + verharding_oever_s + ec_20_log)
 
 swd_sem_nat_sv_kempen <- psem(swd_best_model_updated,
                             # ntot_best_model_updated,

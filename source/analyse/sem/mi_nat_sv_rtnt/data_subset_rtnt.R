@@ -453,6 +453,7 @@ mmif_sem_nat_sv_rtnt <- psem(mmif_best_model_updated,
 summary(mmif_sem_nat_sv_rtnt)
 
 save(mmif_sem_nat_sv_rtnt, file = here("source", "analyse", "sem", "mi_nat_sv_rtnt", "mmif_sem_nat_sv_rtnt.rdata"))
+load(file = here("source", "analyse", "sem", "mi_nat_sv_rtnt", "mmif_sem_nat_sv_rtnt.rdata"))
 
 sem_resultaat <- mmif_sem_nat_sv_rtnt
 coefs_missing <- coefs(sem_resultaat)[,-9]

@@ -225,6 +225,7 @@ fd_mi <- fd_combined_df %>%
 # Opslaan
 save(fd_mi, file = here("data", "verwerkt", "mi_fd_multiset.rdata"))
 load(file = here("data", "verwerkt", "mi_fd_multiset.rdata"))
+load(file = here("data", "verwerkt", "mi_data.rdata"))
 
 #---------------------------------------------------------------------------------------------------
 # --- 8. Bonus: Snelle Check/Visualisatie ---
@@ -281,6 +282,8 @@ left_join(
     )
   )
 
+# figuur fdisp op basis van GAM
+
 fd_mi_plot_data %>%
   filter(fd_maat == "fdisp") %>%
   filter(jaar > 2009) %>%
@@ -288,14 +291,8 @@ fd_mi_plot_data %>%
   geom_smooth(method = "gam") +
   facet_grid(~subset)
 
-### Figuur op bais van GAMs
-
-library(tidyverse)
-library(mgcv)
-library(ggeffects)
-
 fd_nested <- fd_mi_plot_data %>%
-  filter(fd_maat == "fdisp") %>%
+  filter(fd_maat %in% c("fdisp", "fric", "feve")) %>%
   filter(jaar > 2009) %>%
   filter(subset != "overig") %>%
   mutate(
@@ -303,10 +300,11 @@ fd_nested <- fd_mi_plot_data %>%
     type_fd = as.factor(type_fd),
     meetplaats = as.factor(meetplaats),
     bekken = as.factor(bekken),
-    jaar_num = as.numeric(jaar)
+    jaar_num = as.numeric(jaar),
+    fd_maat = as.factor(fd_maat),
   ) %>%
   drop_na(fd_waarde, jaar_num, meetplaats, bekken) %>%
-  group_nest(subset, type_fd)
+  group_nest(subset, type_fd, fd_maat)
 
 fd_models <- fd_nested %>%
   mutate(
@@ -324,30 +322,58 @@ fd_models <- fd_nested %>%
     })
   )
 
-fd_trends <- fd_models %>%
-  select(subset, type_fd, predictions) %>%
-  unnest(predictions)
+# fd_trends <- fd_models %>%
+#   select(subset, type_fd, predictions) %>%
+#   unnest(predictions)
+#
+# plot_fd_gam <- ggplot(fd_trends, aes(x = x, y = predicted, group = type_fd)) +
+#   # Betrouwbaarheidsintervallen
+#   geom_ribbon(aes(ymin = conf.low, ymax = conf.high, fill = type_fd), alpha = 0.2) +
+#   # De trendlijn
+#   geom_line(aes(color = type_fd), size = 1) +
+#   # Faceting op basis van je subset (natuurlijk, kunstmatig, etc.)
+#   facet_wrap(~ subset, scales = "free_y") +
+#   theme_minimal() +
+#   labs(
+#     title = "Functionele Diversiteit (FDisp) Trends",
+#     subtitle = "Gefit met Mixed Effect GAM (Random Effects: Meetplaats & Bekken)",
+#     x = "Jaar",
+#     y = "Voorspelde FDisp waarde",
+#     color = "Type FD",
+#     fill = "Type FD"
+#   )
 
-plot_fd_gam <- ggplot(fd_trends, aes(x = x, y = predicted, group = type_fd)) +
-  # Betrouwbaarheidsintervallen
+
+
+fd_trends <- fd_models %>%
+  select(subset, type_fd, fd_maat, predictions) %>% # fd_maat meenemen
+  unnest(predictions)
+save(fd_trends, file = "")
+
+plot_all_fd <- ggplot(fd_trends, aes(x = x, y = predicted, group = type_fd)) +
   geom_ribbon(aes(ymin = conf.low, ymax = conf.high, fill = type_fd), alpha = 0.2) +
-  # De trendlijn
   geom_line(aes(color = type_fd), size = 1) +
-  # Faceting op basis van je subset (natuurlijk, kunstmatig, etc.)
-  facet_wrap(~ subset, scales = "free_y") +
+
+  # GEBRUIK FACET_GRID: Rijen = Maat, Kolommen = Watertype
+  # scales = "free_y" is cruciaal omdat FRic heel andere schaal heeft dan FEve
+  facet_grid(fd_maat ~ subset, scales = "free_y") +
+
   theme_minimal() +
+  theme(legend.position = "bottom",
+        strip.text = element_text(face = "bold")) +
   labs(
-    title = "Functionele Diversiteit (FDisp) Trends",
-    subtitle = "Gefit met Mixed Effect GAM (Random Effects: Meetplaats & Bekken)",
+    title = "Trends in Functionele Diversiteit Indices",
+    subtitle = "GAM fits gecorrigeerd voor meetplaats en bekken",
     x = "Jaar",
-    y = "Voorspelde FDisp waarde",
-    color = "Type FD",
-    fill = "Type FD"
+    y = "Voorspelde Waarde",
+    color = "Trait Subset",
+    fill = "Trait Subset"
   )
 
-print(plot_fd_gam)
+print(plot_all_fd)
+
 ggsave(
-  filename =  here("output", "figuren", "trend_fdisp_subsets.png"),
+  filename =  here("output", "figuren", "trend_fd_subsets.png"),
   plot = last_plot(), # Expliciet de laatste plot kiezen
   width = 40,
   height = 20,
@@ -499,3 +525,6 @@ plot_cwm_subsets_jaar(
   selected_subsets = c("nat_sv_beek", "nat_sv_kempen", "nat_sv_rivier", "nat_sv_polder", "kunstmatig", "rtnt"),
   start_jaar = 2010
 )
+################################################################################
+# Overzicht traitklasses
+################################################################################

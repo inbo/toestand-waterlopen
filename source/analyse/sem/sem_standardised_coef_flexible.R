@@ -51,12 +51,45 @@ if (length(missing_indices) > 0) {
     # 2. Bereken de Latente Variantie Componenten op basis van de familie
     family_info <- family(model_obj)
 
-    # Residuele variantie (Varm)
+    # --- 1. Bereken mu (gemiddelde verwachte waarde) ---
+    # Essentieel voor de Nakagawa formules bij nbinom en tweedie!
+    mu <- mean(predict(model_obj, type = "response"), na.rm = TRUE)
+
+    # --- 2. Haal de Tweedie power parameter (p) veilig op ---
+    # glmmTMB schat p intern als 'thetaf'. Met plogis() + 1 dwingen we dit netjes
+    # naar de wiskundige schaal tussen 1 en 2, exact zoals glmmTMB dat onder de motorkap doet.
+    p_tweedie <- if (family_info$family == "tweedie") {
+      as.numeric(plogis(model_obj$fit$par["thetaf"]) + 1)
+    } else {
+      NA
+    }
+
+    # --- 3. Bereken de residuele variantie (Varm) ---
     Varm <- case_when(
+      # 1. LOGIT LINKS (Ordbeta en standaard binomial)
+      # Exacte theoretische variantie voor een logistische verdeling
       family_info$family == "ordbeta" ~ (pi^2) / 3,
-      family_info$family == "nbinom1" ~ (pi^2) / 3, # Of specifieke nbinom variantie
       family_info$link == "logit"     ~ (pi^2) / 3,
-      TRUE                            ~ 0 # Voor gaussian vult piecewiseSEM het meestal zelf al in
+
+      # 2. NEGATIVE BINOMIAL 2 (Kwadratische variantie)
+      # Formule Nakagawa: ln(1 + 1/mu + 1/theta)
+      # In glmmTMB is sigma() de veiligste manier om theta op te roepen
+      family_info$family == "nbinom2" ~ log(1 + (1 / mu) + (1 / sigma(model_obj))),
+
+      # 3. NEGATIVE BINOMIAL 1 (Lineaire variantie)
+      # Formule afgeleid: ln(1 + (1 + alpha)/mu)
+      # In glmmTMB is sigma() de veiligste manier om alpha op te roepen
+      family_info$family == "nbinom1" ~ log(1 + ((1 + sigma(model_obj)) / mu)),
+
+      # 4. TWEEDIE (Zero-inflated / Continue log-link)
+      # Formule Nakagawa: ln(1 + phi * mu^(p - 2))
+      # sigma() geeft de dispersie (phi), p_tweedie is de dynamische power parameter
+      family_info$family == "tweedie" ~ log(1 + (sigma(model_obj) * (mu^(p_tweedie - 2)))),
+
+      # 5. GAUSSIAN / STANDAARD
+      # Voor normale (gaussian) modellen vult piecewiseSEM het over het algemeen al goed in.
+      # Als dat niet lukt, is wiskundig gezien 'sigma(model_obj)^2' de juiste Varm.
+      TRUE                            ~ 0
     )
 
     # Willekeurige effecten variantie

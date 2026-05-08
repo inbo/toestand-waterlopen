@@ -37,6 +37,8 @@ library(corrr)
 library(patchwork)
 library(parallel)
 library(kableExtra)
+library(mgcv)
+library(insight)
 
 
 conflicted::conflict_prefer("select", "dplyr")

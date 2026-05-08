@@ -1,6 +1,8 @@
 ---
 title: "Analyse Biodiversiteit Waterlopen in Vlaanderen (NARA 26)"
-format: html
+format:
+  html:
+    embed-resources: true
 editor: visual
 number-sections: true
 number-depth: 3
@@ -14,9 +16,9 @@ De basis voor dit onderzoek wordt gevormd door monitoringsdata van de **Kaderric
 
 Hoewel de KRW-rapportage gebruikmaakt van verzamelindexen om de waterkwaliteit weer te geven, schieten deze vaak tekort voor een gedetailleerde ecologische analyse:
 
--   **Het OOAO-principe (One Out, All Out):** Geaggregeerde indexen maskeren vaak onderliggende trends. Een slechte score op één deelmaatlat of biologische groep kan de vooruitgang op andere vlakken onzichtbaar maken.
+- **Het OOAO-principe (One Out, All Out):** Geaggregeerde indexen maskeren vaak onderliggende trends. Een slechte score op één deelmaatlat of biologische groep kan de vooruitgang op andere vlakken onzichtbaar maken.
 
--   **Typologie en Statuut:** Door data van verschillende watertypes (zoals beken, Kempense beken en rivieren) te bundelen, gaan nuances verloren. Een opgesplitste analyse per watertype biedt een ecologisch nauwkeuriger beeld.
+- **Typologie en Statuut:** Door data van verschillende watertypes (zoals beken, Kempense beken en rivieren) te bundelen, gaan nuances verloren. Een opgesplitste analyse per watertype biedt een ecologisch nauwkeuriger beeld.
 
 Het doel van deze analyse is om via de onderliggende deelmetrieken de werkelijke veranderingen in biodiversiteit bloot te leggen. We onderzoeken specifiek welke **drukfactoren** de verschillende biotische groepen beïnvloeden en op welke **ruimtelijke schaal** deze effecten spelen.
 
@@ -60,7 +62,7 @@ In deze analyse worden **natuurlijke** en **sterk veranderde** waterlopen als é
 
 Variabelen zoals **temperatuur, pH, opgeloste zuurstof (**$O_2$) en geleidbaarheid ($EC_{20}$) worden standaard gemeten bij elke staalname van macro-invertebraten (MI). Voor macrofyten (MAFY) wordt hieraan de **Secchi-diepte** (doorzicht) toegevoegd.
 
-#### Nutriënten en chemische belasting
+#### Nutriënten en (chemische) belasting
 
 Daarnaast analyseren we parameters zoals **totaal stikstof (**$N_t$), totaal fosfor ($P_t$), zwevende stof (ZS) en chemisch zuurstofverbruik (CZV).
 
@@ -74,17 +76,17 @@ De koppeling tussen MI-metingen en nutriëntendata gebeurt via een **netwerkanal
 
 Voor elke MI-meting selecteert een script de best passende nutriëntenmeting op basis van de volgende criteria:
 
--   **Ruimtelijke nabijheid:**
+- **Ruimtelijke nabijheid:**
 
-    -   Punten binnen **5 km stroomopwaarts** (gemeten via de waterloop).
+  - Punten binnen **5 km stroomopwaarts** (gemeten via de waterloop).
 
-    -   Of punten binnen **200 meter vogelvlucht**.
+  - Of punten binnen **200 meter vogelvlucht**.
 
-    -   **Voorwaarde:** De match moet binnen dezelfde **VHAG-zone** liggen.
+  - **Voorwaarde:** De match moet binnen dezelfde **VHAG-zone** liggen.
 
--   **Temporele nabijheid:**
+- **Temporele nabijheid:**
 
-    -   De nutriëntenmeting moet hebben plaatsgevonden in een venster van **180 dagen vóór** tot **30 dagen ná** de biologische staalname.
+  - De nutriëntenmeting moet hebben plaatsgevonden in een venster van **180 dagen vóór** tot **30 dagen ná** de biologische staalname.
 
 Indien er meerdere matches zijn, wordt de **dichtstbijzijnde meting** als definitieve koppeling geselecteerd voor de analyse.
 
@@ -100,13 +102,13 @@ We analyseren de impact van diverse puntbronnen, waaronder industriële lozingen
 
 De kern van deze aanpak bestaat uit vier stappen:
 
--   **IE-Normalisatie:** Om verschillende lozingstypes vergelijkbaar te maken, worden vrachten van industrie en RWZI’s voor stoffen zoals CZV, N en P via specifieke omzettingsfactoren getransformeerd naar **Inwoners Equivalenten (IE)**. De waarde van de parameter met de hoogste IE (Max-IE) bepaalt hierbij de uiteindelijke lozingsdruk.
+- **IE-Normalisatie:** Om verschillende lozingstypes vergelijkbaar te maken, worden vrachten van industrie en RWZI’s voor stoffen zoals CZV, N en P via specifieke omzettingsfactoren getransformeerd naar **Inwoners Equivalenten (IE)**. De waarde van de parameter met de hoogste IE (Max-IE) bepaalt hierbij de uiteindelijke lozingsdruk.
 
--   Voor rioollozingen zonder jaarlijkse data simuleren we een tijdreeks. Hierbij schatten we historische lozingswaarden op basis van de jaarlijkse evolutie in de gemeentelijke zuiveringsgraad.
+- Voor rioollozingen zonder jaarlijkse data simuleren we een tijdreeks. Hierbij schatten we historische lozingswaarden op basis van de jaarlijkse evolutie in de gemeentelijke zuiveringsgraad.
 
--   **Netwerkanalyse met Distance Decay:** We identificeren alle lozingsbronnen binnen een straal van **5 km stroomopwaarts**. De impact van elke bron wordt gewogen met een *distance decay*-functie: naarmate de afstand tot het meetpunt groter is, neemt de berekende impact af. De snelheid van dit verval verschilt per type lozing; zo is het verval voor incidentele overstorten groter dan voor continue RWZI-lozingen.
+- **Netwerkanalyse met Distance Decay:** We identificeren alle lozingsbronnen binnen een straal van **5 km stroomopwaarts**. De impact van elke bron wordt gewogen met een *distance decay*-functie: naarmate de afstand tot het meetpunt groter is, neemt de berekende impact af. De snelheid van dit verval verschilt per type lozing; zo is het verval voor incidentele overstorten groter dan voor continue RWZI-lozingen.
 
--   Overstortdruk: een drukindex werd berekend op gelijke wijze als hierboven. Hiervoor werd gebruik gemaakt van de VMM datalaag met overstorten die uitlaten in een VHA waterloop. De berekende index combineert de **locatie van overstorten** met een inschatting van hun **frequentie en intensiteit** (ipv IE van de lozing) binnen een specifiek A0-afstroomgebied (blootstellingsfactor in prioriteringsoefening).
+- Overstortdruk: een drukindex werd berekend op gelijke wijze als hierboven. Hiervoor werd gebruik gemaakt van de VMM datalaag met overstorten die uitlaten in een VHA waterloop. De berekende index combineert de **locatie van overstorten** met een inschatting van hun **frequentie en intensiteit** (ipv IE van de lozing) binnen een specifiek A0-afstroomgebied (blootstellingsfactor in prioriteringsoefening).
 
 ### Landgebruik
 
@@ -114,9 +116,9 @@ De impact van landgebruik op drie verschillende ruimtelijke schalen: het **volle
 
 #### Ruimtelijke Afbakening
 
--   **Afstroomgebieden:** Op basis van een digitaal hoogtemodel (DHM) is voor elk meetpunt de volledige oppervlakte bepaald waarbinnen regenwater bovengronds naar het meetpunt toe stroomt. [Code op Github](https://github.com/inbo/toestand-waterlopen/blob/main/source/afstroomgebieden.R)
+- **Afstroomgebieden:** Op basis van een digitaal hoogtemodel (DHM) is voor elk meetpunt de volledige oppervlakte bepaald waarbinnen regenwater bovengronds naar het meetpunt toe stroomt. [Code op Github](https://github.com/inbo/toestand-waterlopen/blob/main/source/afstroomgebieden.R)
 
--   **Oeverzones:** Deze zones zijn gedefinieerd over een specifiek traject stroomop- en stroomafwaarts, waarbij de breedte van de oever afhankelijk is van het type waterloop.
+- **Oeverzones:** Deze zones zijn gedefinieerd over een specifiek traject stroomop- en stroomafwaarts, waarbij de breedte van de oever afhankelijk is van het type waterloop.
 
 #### Verharding en Natuur
 
@@ -136,25 +138,25 @@ Aan elk gewastype is een score toegekend voor het gebruik van **gewasbescherming
 
 Om de invloed van weersomstandigheden op de biodiversiteit te vatten, berekenden we drie hydrologische variabelen voor het volledige afstroomgebied van elk meetpunt. Deze geven een beeld van zowel **chronische stress** (langdurige droogte) als **acute verstoringen** (extreme neerslag).
 
--   **SPEI6 (Standardized Precipitation Evapotranspiration Index):** Deze droogte-index meet de balans tussen neerslag en verdamping over een periode van zes maanden. De SPEI6 is een indicator voor de **baseflow** (basisafvoer) van een waterloop. Voor de berekening is de periode **1991–2020** als referentie gehanteerd. Een langdurig neerslagtekort leidt tot lagere waterstanden en een verminderde verdunning van lozingen, wat resulteert in hogere concentraties vervuilende stoffen en kritisch lage zuurstofgehaltes.
+- **SPEI6 (Standardized Precipitation Evapotranspiration Index):** Deze droogte-index meet de balans tussen neerslag en verdamping over een periode van zes maanden. De SPEI6 is een indicator voor de **baseflow** (basisafvoer) van een waterloop. Voor de berekening is de periode **1991–2020** als referentie gehanteerd. Een langdurig neerslagtekort leidt tot lagere waterstanden en een verminderde verdunning van lozingen, wat resulteert in hogere concentraties vervuilende stoffen en kritisch lage zuurstofgehaltes.
 
--   **Extreme neerslagdagen:** Dit is het aantal extreme neerslagdagen in de 30 dagen voorafgaand van een MI meting met uitzonderlijk hoge neerslaghoeveelheden. Om te definiëren wat een "extreme neerslagdag" is, hebben we per afstroomgebied een specifieke drempelwaarde berekend op basis van het **95e percentiel (P95)** van de dagelijkse neerslagsom tijdens de referentieperiode (1991–2020). Dergelijke piekdagen veroorzaken hydraulische stress in de waterloop, waarbij organismen kunnen wegspoelen (drift) en riooloverstorten vaker in werking treden.
+- **Extreme neerslagdagen:** Dit is het aantal extreme neerslagdagen in de 30 dagen voorafgaand van een MI meting met uitzonderlijk hoge neerslaghoeveelheden. Om te definiëren wat een "extreme neerslagdag" is, hebben we per afstroomgebied een specifieke drempelwaarde berekend op basis van het **95e percentiel (P95)** van de dagelijkse neerslagsom tijdens de referentieperiode (1991–2020). Dergelijke piekdagen veroorzaken hydraulische stress in de waterloop, waarbij organismen kunnen wegspoelen (drift) en riooloverstorten vaker in werking treden.
 
--   **Neerslagsom voorgaande 7 dagen:** Deze variabele meet de cumulatieve neerslag in de week voorafgaand aan de biologische staalname. Het geeft inzicht in de actuele verzadiging van het bekken en de directe impact van afspoeling (sediment en nutriënten) op de waargenomen biodiversiteit op het moment van bemonstering.
+- **Neerslagsom voorgaande 7 dagen:** Deze variabele meet de cumulatieve neerslag in de week voorafgaand aan de biologische staalname. Het geeft inzicht in de actuele verzadiging van het bekken en de directe impact van afspoeling (sediment en nutriënten) op de waargenomen biodiversiteit op het moment van bemonstering.
 
 ### Responsen
 
--   **MMIF**: De Multimetrische Macro-Invertebraten Index Vlaanderen, die het algemene beeld schetst. Som van de scores van 0-4 van de 5 deelmaatlatten geschaald tussen 0 en 1.
+- **MMIF**: De Multimetrische Macro-Invertebraten Index Vlaanderen, die het algemene beeld schetst. Som van de scores van 0-4 van de 5 deelmaatlatten geschaald tussen 0 en 1.
 
--   **Taxonomische rijkdom (ta_xw)**: Het absolute aantal waargenomen taxa.
+- **Taxonomische rijkdom (ta_xw)**: Het absolute aantal waargenomen taxa.
 
--   **Shannon-Wiener diversiteit (sw_dw)**
+- **Shannon-Wiener diversiteit (sw_dw)**
 
--   **Mean Stress Tolerance Score (mt_sw_prop)**: De **genormaliseerde gemiddelde tolerantiescore** berekend als de som van de individuele tolerantiescores gedeeld door het aantal aanwezige taxa, waarbij het resultaat naar een schaal van 0 tot 1 werd herleid.
+- **Mean Stress Tolerance Score (mt_sw_prop)**: De **genormaliseerde gemiddelde tolerantiescore** berekend als de som van de individuele tolerantiescores gedeeld door het aantal aanwezige taxa, waarbij het resultaat naar een schaal van 0 tot 1 werd herleid.
 
--   **Aantal stress-tolerante soorten (nst_prop)**: Het aandeel taxa dat gevoelig is aan verstoring (tolerantiescore \> 6; exclusief EPT).
+- **Aantal stress-tolerante soorten (nst)**: Deelmaatlat is aantal. In deze analyse als aandeel van totale aantal taxa dat gevoelig is aan verstoring (tolerantiescore \> 6; exclusief EPT).
 
--   **Aantal EPT-soorten (ept_prop)**: Het aandeel gevoelige taxa behorende tot de Ephemeroptera, Plecoptera en Trichoptera.
+- **Aantal EPT-soorten (ept)**: Idem als nst; het aandeel gevoelige taxa behorende tot de Ephemeroptera, Plecoptera en Trichoptera.
 
 #### Functionele diversiteit en community gewogen trait waarden
 
@@ -168,11 +170,11 @@ De eigenschappen zijn geselecteerd uit de Tachet trait databank: temperatuur, di
 
 We berekenden functionele dispersie, richness en eveness voor 3 subsets van traits.
 
--   alle bovenstaande traits
+- alle bovenstaande traits
 
--   waterkwaliteit: saprobiteit, trofisch status, respiratie, ph
+- waterkwaliteit: saprobiteit, trofisch status, respiratie, ph
 
--   habitat: substraat, stroomsnelheid, voortbeweging
+- habitat: substraat, stroomsnelheid, voortbeweging
 
 Enkel metingen met een "trait-coverage" \> 80% werden behouden voor analyse.
 
@@ -184,31 +186,31 @@ Het doel van de analyse is om een ecologisch logisch en *parsimonious* model te 
 
 ### Stap 1: Voorbereiding en Variabelenselectie
 
-Om instabiliteit in de modellen te voorkomen, filteren we vooraf variabelen met een te hoge onderlinge correlatie ($r > 0.7$) of een hoge mate van multicollineariteit (op basis van de *Variance Inflation Factor*, VIF).
+Om instabiliteit in de modellen te voorkomen, filteren we vooraf variabelen met een te hoge onderlinge correlatie ($r > 0.7$) of een hoge mate van multicollineariteit (op basis van de *Variance Inflation Factor*, VIF). Stikstofconcentratie, fosforconcentratie, lozingsvariabelen werden log-getransformeerd.
 
 ### Stap 2: Model-Dredging
 
 Per responsvariabele (zowel de biologische indexen als de sturende fysico-chemische factoren) fitten we een globaal *mixed-effects* model (`glmmTMB`). We gebruiken hierbij specifieke verdelingen die passen bij de aard van de data:
 
--   **Ordbeta:** Voor indexen en proporties tussen 0 en 1 (zoals de MMIF en MTS).
+- **Ordbeta:** Voor indexen en proporties tussen 0 en 1 (zoals de MMIF en MTS).
 
--   **Poisson:** Voor taxa-aantallen.
+- **Poisson:** Voor taxa-aantallen.
 
--   **Binomiaal:** Voor proporties ept-, stressgevoelige (nst) soorten.
+- **Binomiaal:** Voor proporties ept-, stressgevoelige (nst) soorten.
 
--   **Gaussian:** Voor log-getransformeerde nutriëntconcentraties, EC20, ...
+- **Gaussian:** Voor log-getransformeerde nutriëntconcentraties, EC20, ...
 
 Om de herhaalde metingen en de ruimtelijke structuur van de dataset correct te analyseren, maken we gebruik van **Generalized Linear Mixed Models (GLMM)** via het `glmmTMB` package.
 
 De modelstructuur is als volgt opgebouwd:
 
--   **Fixed effect (Jaar):** We nemen 'jaar' op als fixed effect om de temporele trends in de biodiversiteit en drukfactoren over de volledige studieperiode te identificeren.
+- **Fixed effect (Jaar):** We nemen 'jaar' op als fixed effect om de temporele trends in de biodiversiteit en drukfactoren over de volledige studieperiode te identificeren.
 
--   **Random effects (Meetplaats & Bekken):**
+- **Random effects (Meetplaats & Bekken):**
 
-    -   **Meetplaats:** Door meetplaats als random effect op te nemen, corrigeren we voor de afhankelijkheid tussen herhaalde waarnemingen op dezelfde locatie (*repeated measures*).
+  - **Meetplaats:** Door meetplaats als random effect op te nemen, corrigeren we voor de afhankelijkheid tussen herhaalde waarnemingen op dezelfde locatie (*repeated measures*).
 
-    -   **Bekken:** Een extra random effect voor bekken vangt de ruimtelijke variatie en omgevingsverschillen op tussen de verschillende stroomgebieden in Vlaanderen.
+  - **Bekken:** Een extra random effect voor bekken vangt de ruimtelijke variatie en omgevingsverschillen op tussen de verschillende stroomgebieden in Vlaanderen.
 
 Via de `dredge`-functie worden alle mogelijke combinaties van ecologisch relevante predictoren getest en gerangschikt op basis van de **AICc**. Om de complexiteit en rekentijd te beperken werden per gedredged model 4 parameters toegestaan (inclusief jaar). Hieruit selecteren we het best presterende model.
 
@@ -218,19 +220,21 @@ De individuele beste modellen voor biologie en de andere drivers worden samengev
 
 ### Stap 4: Modelevaluatie en Verfijning
 
-Het initiële pSEM wordt getoetst aan de hand van *directed separation* (d-sep) en de *Fisher's C-statistiek* om de pasvorm te beoordelen. Op basis hiervan verfijnen we het model:
+Het initiële pSEM wordt getoetst aan de hand van *directed separation* (d-sep) en de *Fisher's C-statistiek* om de fit te beoordelen. Op basis hiervan verfijnen we het model:
 
--   **Pad-optimalisatie:** Ontbrekende maar ecologisch relevante paden die significant blijken, worden toegevoegd.
+- **Pad-optimalisatie:** Ontbrekende maar ecologisch relevante paden die significant blijken, worden toegevoegd.
 
--   **Stroomlijning:** Variabelen zonder verklarende kracht worden verwijderd.
+- **Gecorreleerde fouten:** Relaties tussen nauw verwante stuurvariabelen (zoals stikstof en fosfor) worden expliciet als gecorreleerde fouten gemodelleerd.
 
--   **Gecorreleerde fouten:** Relaties tussen nauw verwante stuurvariabelen (zoals stikstof en fosfor) worden expliciet gemodelleerd om de betrouwbaarheid van de padcoëfficiënten te garanderen.
-
-## Resultaten
+## Enkele resultaten
 
 Evolutie van gemiddelde van de MMIF en deelmaatlatten (score geschaald tussen 0 en 1) over de tijd (2010-2023). Effecten gefit op basis van gam model met beta distributie. Probleem: toont onzekerheid rond gemiddelde, die klein is. Ik zoek nog naar een betere weergave die ook variatie over de populatie heen geeft.
 
 ![](figuren/GAM_trends_waterkwaliteit.png)
+
+Missing values voor mi_nat_sv_beek. Vnl. nutrientvariabelen (zie "Nutriënten en (chemische) belasting").
+
+![](figuren/missing_values_mi_nat_sv_beken.png)
 
 Voor elk van de subsets worden SEMs gebouwd voor de verschillende responsen. Hieruit trachten we gelijkaardige patronen of verschillen te extraheren. Piecewise structural equation model rond MMIF voor natuurlijke en sterk veranderde beken.
 
@@ -281,32 +285,18 @@ r2_results %>%
   footnote(general = "De hoge Conditional R² waarden t.o.v. de Marginal R² duiden op een sterke invloed van de random effecten in de beken.")
 ```
 
+Piecewise sem resultaat voor EPT - zeer stressgevoelige soorten met hoge o2 vereisten - voor de natuurlijke en sterk veranderde beken.
+
+![](figuren/SEM_mi_nat_sv_beek_ept.png)
+
 #### Functionele diversiteit en community gewogen trait waarden
 
 ![](figuren/trend_fd_subsets.png)
 
-### Macrofyten
+Deze trends zijn op basis van een gam model met gaussiaanse distributie. Probleem is dat de FD waarden rechts skewed zijn van verdeling. Ik zou de FD graag ook modelleren, maar weet niet zo goed met welke distributie dit best te doen; de residuelenplots geven sterk schending van de normaliteit etc aan.
 
-### koppeling MI-MAFY
+![](figuren/CWM_trend_current_velocity.png)
 
-extra beschaduwing
+Voorbeeld van een plot die de trend weergeeft van 1 van de traits gebruikt voor de berekening van FD. Hier stroomsnelheid. Echter voorzichtig te interpreteren, vnl voor de subsets voor rivieren, polders, rtnt (bovenlopen) en kunstmatig. Bij deze subsets is er wel wat jaarlijkse variatie in samplinglocatie; het samplingzwaartepunt verschuift sterk tussen jaren. Zie onderstaande figuur ter illustratie (legende nog aanpassen; grotere bolletjes is meer metingen in dat jaar):
 
-geen effect zuurstof
-
-koppeling MI-VIS
-
-#### Verontreinigende stoffen
-
-subset
-
-EC50 waarde uit ecotox
-
-TU waarde pesticiden -\> TU max insecteciden
-
-##### In het water
-
-##### In biota
-
-##### In de waterbodem
-
-### Invasieve druk
+![](figuren/ruimtelijke_drift_samples_per_jaar.png)

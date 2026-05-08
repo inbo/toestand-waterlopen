@@ -55,6 +55,9 @@ nodes_data <- data.frame(name = node_names) %>%
     name == "lozingen_riool_ie_log" ~ "Rioollozing",
     name == "t_s" ~ "Watertemperatuur",
     name == "verharding_afstr_s" ~ "Verharding (afstr.)",
+    name == "overstorten_blootstelling_index_log" ~ "Overstorten index",
+    name == "index_zonder_gep" ~ "MAFY index",
+    name == "EQR" ~ "VIS index",
     TRUE ~ name
   ))
 

@@ -1,0 +1,457 @@
+---
+title: "Random forest"
+output: html_document
+date: "2026-03-17"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(DHARMa)
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(here)
+library(caret)
+library(randomForest)
+library(doParallel)
+library(wrappedtools)
+library(doSNOW) # Nieuw: voor de progress bar
+library(permimp)
+library(party)
+
+```
+
+# laad data
+```{r}
+load(file=here("data","koppeling","VIS_env.Rdata"))
+
+waterloop_type <- "beek"
+typeGroep <- "B"
+
+```
+
+# filter variabelen voor modeleren
+Ik maak een groepering variabele die VHAG en deelbekken combineerd om locatieID te gebruiken. Ik heb vhag genomen en niet owl omdat alles gelinkt is op basis van de vhag. Ik heb deze groep gemaakt om lange VHAG's (rivieren) meer te kunnen opsplitsen. Bij random forest zullen alle variabelen vaak een importance groter dan 0 hebben zelfs als het random noise is, zeker als het model overfit. Om een onderscheid te kunnen maken tussen variabelen die overfitting veroorzaken en variabelen die meer consistent bijdragen aan het model, heb ik een noise of null_importance variabele toegevoegd dat uit random waarden bestaad. Alle variabelen die een importance lager of gelijk aan de null_importance hebben zijn minder geschikt voor het voorspellen van mijn response variabele (soortenrijkdom).
+```{r}
+model_data <-  VIS_comb_EQR%>%
+  dplyr::filter(statuut_co!="KWL")%>%
+  mutate(groep=paste(VHAG,DEELBEKKEN),
+         EC20_log=log(EC20),
+         CZV_log=log(CZV),
+         totP_log=log(totP),
+         totN_log=log(totN),
+         breedte_diepte_ratio_log=log(breedte_diepte_ratio),
+         doodhout_log=log(doodhout+1),
+         stroomsnelheid_log=log(stroomsnelheid),
+         lozingen_rwzi_ie_log= log(lozingen_rwzi_ie+1),
+         lozingen_riool_ie_log=log(lozingen_riool_ie+1),
+         lozingen_industrie_ie_log=log(lozingen_industrie_ie+1),
+         overstorten_blootstelling_index_log=log(overstorten_blootstelling_index+1),
+         overstorten_index_log=log(overstorten_index+1),
+         lozingen_rwzi_p_t_log=log(lozingen_rwzi_p_t+1)
+         )%>% 
+  select(# response + correctie data
+          totSoort,typeGroup,groep,MethodeGroepOmschrijving, cyclus,Datum,
+         # fysico-chemie
+         EC20_log, O2, T, pH, 
+         # nutrienten
+         CZV_log, totP_log, totN_log,
+         # hydmo
+         breedte_diepte_ratio_log, sinuositeit, bodemsub, doodhout_log, profiel, ekc2_waterlichaam, stroomsnelheid_log,
+         # landgebruik
+         verhardingafstroom, natuurafstroom, intensiteit_comboafstroom, verhardingoever, natuuroever, intensiteit_combo100m,
+         # lozingen
+         lozingen_rwzi_ie_log, lozingen_riool_ie_log, lozingen_industrie_ie_log, overstorten_blootstelling_index_log, overstorten_index_log,
+         lozingen_rwzi_p_t_log,
+         # neerslag
+         spei6, n_extreme_3m, p_sum_7d)%>%
+  mutate(Jaar  = lubridate::year(Datum),
+    Maand = lubridate::month(Datum),
+    groep=as.factor(groep),
+    MethodeOmschrijving=as.factor(MethodeGroepOmschrijving),
+    cyclus=as.numeric(cyclus),
+    null_importance=sample(rnorm(n())))%>% # dit is een variabele met random data (noise) alle variabelen die uiteindelijk een importance lager dan deze waarde hebben zijn niet te betrouwen en moeten we zowiezo verwijderen
+  select(-c(Datum,MethodeGroepOmschrijving))%>%
+    na.omit()%>%
+  ungroup()
+
+
+
+  
+# vector van predictors
+num_pred <- setdiff(colnames(model_data)[unlist(lapply(model_data,is.numeric))],"totSoort")
+
+# schaal predictors
+model_data_scaled <- model_data%>%
+  mutate_at(num_pred,scale)
+
+```
+
+
+
+# nested random forest model
+
+## Nested Random Forest: Grouped Bootstrap Approach
+Onze metingen zijn herhaalde metingen en daardoor geclusterd per locatie. Bij een standaard cross-validatie zou het model een observatie kunnen "voorspellen" op basis van een andere observatie uit dezelfde waterloop. Dit noemen we data leakage. Om dit te voorkomen, gebruiken we een Grouped Bootstrap in twee lagen (een "binnenlus" en een "buitenlus").
+
+**De Buitenste Lus (Eerlijke Prestatie per waterloop)**
+In plaats van individuele rijen te trekken, trekken we steekproeven op basis van groepen (VHAG + deelbekken).
+
+- **Bootstrap Resampling**: We trekken met teruglegging een set waterlopen die we gebruiken voor de training.
+- **Out-of-Bag (OOB) Validatie**: De waterlopen die niet in de steekproef zitten, vormen de test-set. Omdat het model deze specifieke locaties nog nooit heeft "gezien", is dit een harde test voor de generaliseerbaarheid naar nieuwe waterlopen.
+- **Verdeling van de Accuraatheid**: We herhalen dit proces 100 keer. Hierdoor krijgen we niet één getal, maar een gemiddelde met een 95% betrouwbaarheidsinterval voor de RMSE en $R^2$. Dit laat zien hoe stabiel het model presteert.
+
+**De Binnenste Lus (Optimale Instellingen: Hyperparameter Tuning)**
+Binnen elke bootstrap-iteratie moet het model de beste instellingen vinden. Dit noemen we mtry (het aantal variabelen dat het algoritme mag bekijken bij elke splitsing in de boom).
+
+- **Grouped 5-fold CV**: De trainingsdata (de geselecteerde waterlopen) wordt nogmaals opgesplitst in 5 stukken. We testen een reeks mtry-waarden (van zeer laag tot hoog) om te zien welke de kleinste fout geeft. Mtry is het aantal predictor variabelen die random uit je data wordt geselecteerd om de split in een boom te maken. Random forest gebruikt dus niet alle variabelen wanneer het een vertaking maakt, maar enkel een random subset. Door de mtry waarde lager te houden kun je overfitting proberen tegen te gaan.
+
+Waarom Nested? Door de tuning binnen de bootstrap uit te voeren, voorkomen we dat de uiteindelijke test-data (de OOB-waterlopen) de keuze van de parameters beïnvloedt. Dit houdt de validatie volledig onbevooroordeeld.
+
+## Conditional Variable Importance
+
+Onze variabelen zijn gecorreleerd. Standaard Random Forest "importance" geeft vaak een vertekend beeld: het geeft te veel gewicht aan categorische variabelen met veel levels of aan variabelen die sterk met elkaar correleren.
+
+- Dit script gebruikt party::varimp(conditional = TRUE). Dit werkt als een partiële correlatie in de statistiek. Het berekent de waarde van een predictor gegeven de andere variabelen. Als twee variabelen hetzelfde vertellen, zal de "conditional importance" ze niet allebei onterecht hoog inschatten, maar kijken wat de werkelijke toegevoegde waarde is van elke variabele afzonderlijk.
+
+- Door de importance over 100 verschillende scenario's (bootstraps) te berekenen, zien we welke variabelen consistent belangrijk zijn, ongeacht welke waterlopen in de dataset zitten.
+
+
+nested bootstrap function
+```{r}
+run_nested_cforest_grouped_bootstrap <- function(data, 
+                                                 target_name, 
+                                                 group_name, 
+                                                 n_boot = 100,
+                                                 num_cores = 5,
+                                                 mtry_grid,
+                                                 checkpoint_dir = "checkpoints") {
+  
+  if (!dir.exists(checkpoint_dir)) dir.create(checkpoint_dir)
+  
+  # data voorbereiding
+  data <- as.data.frame(data)
+  target_vector <- data[[target_name]]
+  group_vector <- data[[group_name]] # Bewaar de groepen
+  predictor_data <- data[, !(colnames(data) %in% c(target_name, group_name))]
+  
+  # maak dummie variabelen
+  dummies <- caret::dummyVars(" ~ .", data = predictor_data)
+  predictor_data <- as.data.frame(predict(dummies, newdata = predictor_data))
+  
+  # verwijder variabelen zonder variantie
+  nzv <- caret::nearZeroVar(predictor_data)
+  if(length(nzv) > 0) predictor_data <- predictor_data[, -nzv]
+  
+  # maak opgekuiste dataframe (inclusief groep voor filtering)
+  data_clean <- cbind(target_y = target_vector, group_id = group_vector, predictor_data)
+  
+  # unieke groepen bepalen
+  unique_groups <- unique(data_clean$group_id)
+  
+  # Parallel Setup
+  cl <- snow::makeCluster(num_cores)
+  registerDoSNOW(cl)
+  
+  # maak progressbar
+  pb <- txtProgressBar(max = n_boot, style = 3)
+  progress <- function(n) setTxtProgressBar(pb, n)
+  opts <- list(progress = progress)
+  
+  on.exit({
+    close(pb)
+    stopCluster(cl)
+    registerDoSEQ()
+  })
+  
+  # hervat indien functie onderbroken
+  todo_boots <- setdiff(1:n_boot, as.numeric(gsub("result_|.rds", "", list.files(checkpoint_dir, pattern = "^result_.*\\.rds$"))))
+  
+  # --- MAIN LOOP (GROUPED BOOTSTRAP) ---
+  foreach(i = todo_boots, .packages = c("caret", "party"), .options.snow = opts) %dopar% {
+    
+    # Gebruik een unieke seed per bootstrap voor reproduceerbaarheid in parallel
+    set.seed(123 + i)
+    
+    # 1. GROUPED RESAMPLING: Selecteer groepen met teruglegging
+    boot_groups <- sample(unique_groups, size = length(unique_groups), replace = TRUE)
+    oob_groups <- setdiff(unique_groups, boot_groups) # Groepen die het model NOOIT ziet (test)
+    
+    # Maak train_set door de geselecteerde groepen samen te voegen (behoudt alle observaties per groep)
+    train_set <- do.call(rbind, lapply(boot_groups, function(g) data_clean[data_clean$group_id == g, ]))
+    # Maak test_set (Out-of-Bag groepen)
+    test_set <- data_clean[data_clean$group_id %in% oob_groups, ]
+    
+    # Verwijder de group_id kolom voor de model-fitting
+    train_fit_data <- train_set[, colnames(train_set) != "group_id"]
+    test_fit_data <- test_set[, colnames(test_set) != "group_id"]
+    
+    # --- MANUAL INNER 5-FOLD CV FOR MTRY (OP GROEP NIVEAU) ---
+    inner_groups <- unique(train_set$group_id)
+    inner_folds <- sample(cut(seq_len(length(inner_groups)), breaks = 5, labels = FALSE))
+    
+    # voer hyperparameter tuning uit
+    mtry_results <- sapply(mtry_grid, function(m) {
+      fold_errors <- sapply(1:5, function(f) {
+        val_group_ids <- inner_groups[which(inner_folds == f)]
+        inner_train <- train_set[!(train_set$group_id %in% val_group_ids), colnames(train_set) != "group_id"]
+        inner_val   <- train_set[train_set$group_id %in% val_group_ids, colnames(train_set) != "group_id"]
+        
+        inner_fit <- party::cforest(target_y ~ ., data = inner_train, 
+                                    control = party::cforest_unbiased(mtry = m, ntree = 200))
+        
+        preds <- unlist(predict(inner_fit, newdata = inner_val))
+        return(sqrt(mean((inner_val$target_y - preds)^2)))
+      })
+      return(mean(fold_errors, na.rm = TRUE))
+    })
+    
+    # identificeer beste mtry
+    best_mtry <- mtry_grid[which.min(mtry_results)]
+    
+    # --- FINAL MODEL ON FULL BOOTSTRAP TRAIN SET ---
+    final_fit <- party::cforest(target_y ~ ., data = train_fit_data, 
+                                control = party::cforest_unbiased(mtry = best_mtry, ntree = 2000))
+    
+  
+    # Conditional Importance
+    imp_values <- party::varimp(final_fit, conditional = TRUE, threshold = 0.7)
+    
+    # Training Performance (op de bootstrap-set zelf)
+    train_preds <- as.numeric(unlist(predict(final_fit, newdata = train_fit_data)))
+    train_obs   <- train_fit_data$target_y
+    
+    iter_train_perf <- data.frame(
+      RMSE = sqrt(mean((train_obs - train_preds)^2)),
+      Rsquared = 1 - (sum((train_obs - train_preds)^2) / sum((train_obs - mean(train_obs))^2)),
+      MAE = mean(abs(train_obs - train_preds))
+    )
+
+    # Test/OOB Performance (op de weggelaten groepen/waterlopen)
+    # Belangrijk: dit is de ECHTE onafhankelijke accuraatheid per iteratie
+    test_preds <- as.numeric(unlist(predict(final_fit, newdata = test_fit_data)))
+    test_obs   <- test_fit_data$target_y
+    
+    iter_test_perf <- data.frame(
+      RMSE = sqrt(mean((test_obs - test_preds)^2)),
+      Rsquared = 1 - (sum((test_obs - test_preds)^2) / sum((test_obs - mean(test_obs))^2)),
+      MAE = mean(abs(test_obs - test_preds))
+    )
+
+    # Voeg beide toe aan je res_list
+    res_list <- list(
+      observed      = test_obs,
+      predicted     = test_preds,
+      train_perf    = iter_train_perf,
+      test_perf     = iter_test_perf, # NIEUW: accuraatheid per iteratie
+      all_tuning    = data.frame(mtry = mtry_grid, RMSE = mtry_results),
+      importance    = imp_values,
+      best_mtry     = best_mtry
+    )
+    
+    saveRDS(res_list, file = file.path(checkpoint_dir, paste0("result_", i, ".rds")))
+    return(NULL)
+  }
+
+  # --- POST-PROCESSING (ONGEWIJZIGD) ---
+  all_files <- list.files(checkpoint_dir, pattern = "^result_.*\\.rds$", full.names = TRUE)
+  indices <- as.numeric(gsub(".*result_|.rds", "", all_files))
+  results <- lapply(all_files[order(indices)], readRDS)
+
+
+  tuning_data <- do.call(rbind, lapply(results, function(x) x$all_tuning))
+  tuning_summary <- tuning_data %>%
+    group_by(mtry) %>%
+    summarise(
+      MeanRMSE = mean(RMSE, na.rm = TRUE),
+      SERMSE   = sd(RMSE, na.rm = TRUE) / sqrt(n()),
+      .groups  = 'drop'
+    ) 
+
+# maak gemiddelde plot van de tuning  
+  tuning_plot <- ggplot(tuning_summary, aes(x = mtry, y = MeanRMSE)) +
+    geom_line(linewidth = 1) + 
+    geom_point(size = 2) +
+    geom_errorbar(aes(ymin = MeanRMSE - SERMSE, ymax = MeanRMSE + SERMSE), width = 0.5) +
+    theme_minimal() +
+    labs(title    = "Gemiddelde Tuning Curve over Grouped Bootstrap iteraties",
+         x        = "mtry", 
+         y        = "Internal CV RMSE")
+
+# verzamle accuraatheid metrieken  
+  train_perf_df <- do.call(rbind, lapply(results, function(x) x$train_perf))
+  test_perf_df <- do.call(rbind, lapply(results, function(x) x$test_perf))
+  
+  safe_se <- function(x) {
+    x_clean <- x[is.finite(x)]
+    n_valid <- length(x_clean)
+    if (n_valid < 2) return(NA)
+    return(sd(x_clean) / sqrt(n_valid))
+  }
+  
+  # Functie voor samenvattende statistieken inclusief 95% CI
+  summarize_metrics <- function(df) {
+      res <- do.call(rbind, lapply(colnames(df), function(col) {
+      vals <- df[[col]]
+      vals <- vals[is.finite(vals)] # Verwijder eventuele Inf/-Inf bij R2
+      
+      n_val  <- length(vals)
+      m_val  <- mean(vals)
+      se_val <- safe_se(vals)
+      ci_lo  <- m_val - (1.96 * se_val)
+      ci_hi  <- m_val + (1.96 * se_val)
+      
+      data.frame(
+        Metric = col,
+        Mean = m_val,
+        Median = median(vals),
+        SE = se_val,
+        CI_Lower = ci_lo,
+        CI_Upper = ci_hi
+      )
+    }))
+    return(res)
+  }
+
+  # Bereken de finale tabel voor Test (OOB) Performance
+  test_summary <- summarize_metrics(test_perf_df)
+  train_summary<- summarize_metrics(train_perf_df)
+
+  imp_matrix <- do.call(cbind, lapply(results, function(x) x$importance))
+  
+  # Gebruik een robuuste maat voor importance over bootstraps
+  importance_df <- data.frame(
+    Feature = rownames(imp_matrix),
+    MedianImportance = apply(imp_matrix, 1, median),
+    StandardError = apply(imp_matrix, 1, function(x) sd(x)/sqrt(length(x)))
+  )
+  
+  # extract test observations and predictions
+  obs <- unlist(lapply(results, function(x) x$observed))
+  preds <- unlist(lapply(results,function(x) x$predicted)) 
+  
+  return(list(
+    Outer_Performance = test_summary,
+    Training_Performance = train_summary,
+    Tuning_Plot = tuning_plot,
+    Importance = importance_df[order(-importance_df$MedianImportance), ],
+    Predictions = data.frame(Observed = obs, Predicted = preds),
+    Results=results
+  ))
+}
+```
+
+
+# RF model
+```{r}
+# maak sub dataset per type
+model_data_sub <- model_data_scaled%>%
+  dplyr::filter(typeGroup==typeGroep)%>%
+  select(-typeGroup)
+
+mtry_range <- unique(round(c(
+  2,3, 4,5, 6,7,# Extra kleine waarden om het optimum te vinden
+  sqrt(ncol(model_data_sub)-2)/4, 
+  (ncol(model_data_sub)-2)/3.5,
+  (ncol(model_data_sub)-2)/3,
+  (ncol(model_data_sub)-2)/2.5,
+   (ncol(model_data_sub)-2)/2
+  )
+))
+
+# loop nested random forest
+RF <- run_nested_cforest_grouped_bootstrap(data=model_data_sub,
+                               target_name="totSoort",
+                               group_name="groep",
+                               n_boot = 100,
+                               num_cores = 5,
+                               mtry_grid=mtry_range,
+                               checkpoint_dir = "G:/Mijn Drive/NARA_VIS/results/RF/checkpoints")
+
+# bekijk tuning plot en performance
+RF$Tuning_Plot
+
+RF$Outer_Performance
+RF$Training_Performance
+
+# plot importance van variabelen
+# Haal de statistieken van de null_importance op
+null_stats <- RF$Importance[RF$Importance$Feature == "null_importance", ]
+null_threshold <- null_stats$MedianImportance - null_stats$StandardError
+
+# Voeg een kolom toe voor de kleur-logica
+# We markeren variabelen als 'Reliable' als hun Median - SE boven de null_threshold uitkomt
+plot_data <- RF$Importance %>%
+  mutate(
+    Status = ifelse(MedianImportance - StandardError > null_threshold, "Signal", "Noise"),
+    # Zorg dat de null_importance zelf herkenbaar blijft
+    Status = ifelse(Feature == "null_importance", "Baseline", Status)
+  )
+
+# De aangepaste plot
+p_imp <- ggplot(plot_data, aes(x = reorder(Feature, MedianImportance), 
+                               y = MedianImportance, 
+                               fill = Status)) +
+  # Bar layer met dynamische kleuren
+  geom_bar(stat = "identity", width = 0.7) +
+  # Error bar layer
+  geom_errorbar(aes(ymin = MedianImportance - StandardError, 
+                    ymax = MedianImportance + StandardError), 
+                width = 0.2, color = "black", linewidth = 0.5, alpha = 0.7) +
+  # Voeg een horizontale lijn (geflipte verticale lijn) toe voor de baseline
+  geom_hline(yintercept = null_threshold, linetype = "dashed", color = "red", linewidth = 0.8) +
+  # Kleurenpalet instellen
+  scale_fill_manual(values = c("Signal" = "steelblue", "Noise" = "grey80", "Baseline" = "orange")) +
+  coord_flip() +
+  labs(title = "Feature Importance Ranking",
+       subtitle = paste("Red line: Lower bound of Null Importance (Threshold =", round(null_threshold, 4), ")"),
+       x = "Feature",
+       y = "Median Importance",
+       fill = "Classification") +
+  theme_minimal()
+
+p_imp
+
+# save plost en accuraatheden
+ggsave(p_imp, file=here("G:/Mijn Drive/NARA_VIS/results/RF/",paste0(waterloop_type, "_RF_model_importance.png")),height = 10)
+
+cat("\nModel Fit (LOOCV R²) vs :", round(RF$Outer_Performance$Median[2], 3), "\n", 
+    file=here("G:/Mijn Drive/NARA_VIS/results/RF/",paste0(waterloop_type,"_accuracy_RF.txt")))
+cat("\nModel Fit (LOOCV RMSE) vs :", round(RF$Outer_Performance$Median[1], 3), "\n", 
+                                           file=here("G:/Mijn Drive/NARA_VIS/results/RF/",paste0(waterloop_type,"_accuracy_RF.txt")), append=TRUE)
+cat("\nModel Fit (training R²) vs :", round(RF$Training_Performance$Median[2], 3), "\n",
+    file=here("G:/Mijn Drive/NARA_VIS/results/RF/",paste0(waterloop_type,"_accuracy_RF.txt")), append=TRUE)
+cat("\nModel Fit (training RMSE) vs :", round(RF$Training_Performance$Median[1], 3), "\n", 
+    file=here("G:/Mijn Drive/NARA_VIS/results/RF/",paste0(waterloop_type,"_accuracy_RF.txt")), append=TRUE)
+
+
+```
+Het model overfit sterk OOB R2:0.1, train R2:0.7, maar omdat je importance voor 100 apparte modellen berekend en de naar de mediaan en gemiddelde met fouten marges kijkt kun je toch een inschatting maken van welke variabelen belangrijker zijn dan andere.
+
+# sla definitieve resultaten op en verwijder de tijdelijke resultaten
+
+```{r}
+# 1. Sla eerst je definitieve resultaat op
+saveRDS(RF, here("G:/Mijn Drive/NARA_VIS/results/RF/",paste0(waterloop_type, "_RF_model_resultaten.rds")))
+
+# 2. Controleer of het bestand echt bestaat op de schijf
+if (file.exists( here("G:/Mijn Drive/NARA_VIS/results/RF/",paste0(waterloop_type, "_RF_model_resultaten.rds")))) {
+  
+  message("Check: Final resultaat is succesvol opgeslagen.")
+  
+  # 3. Verwijder de checkpoint map en alle inhoud
+  checkpoint_path <- "G:/Mijn Drive/NARA_VIS/results/RF/checkpoints" # Zorg dat dit overeenkomt met je functienaam
+  
+  if (dir.exists(checkpoint_path)) {
+    unlink(checkpoint_path, recursive = TRUE)
+    message("Succes: Checkpoint-map is verwijderd.")
+  } else {
+    message("Info: Checkpoint-map bestond al niet meer.")
+  }
+  
+} else {
+  stop("FOUT: Het finale bestand is niet gevonden. Checkpoints worden NIET verwijderd!")
+}
+```
+
+

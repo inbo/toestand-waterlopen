@@ -84,7 +84,7 @@ mi_models <- mi_nested %>%
 
       as.data.frame(res)
     })  )
-
+save(mi_models, file = here("source/analyse/data_figuur_gam_beta.rdata"))
 # --- 3. Uitpakken en Visualiseren ---
 mi_trends <- mi_models %>%
   select(subset, index, predictions) %>%

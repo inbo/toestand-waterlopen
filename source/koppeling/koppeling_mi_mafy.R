@@ -336,6 +336,18 @@ mafy_data <- st_read(here("data", "ruw", "macrofyten", "mafy_meetpunten_datum.gp
 mi_data <- st_read(here("data", "ruw", "macroinvertebraten", "mi_meetpunten_datum.gpkg"), quiet = T) %>%
   filter(monsternamedatum > '2009-12-31')
 
+load(here("data", "ruw", "vis", "traits_all_obs_no_marien_EQR.Rdata"))
+vis_data <- data_traits_EQR %>%
+  filter(MethodeGroepOmschrijving == "Elektrisch") %>%
+  select(Datum, WaarnemingVispuntID, VispuntX, VispuntY, VHAS, VHAG,
+         perc_inv_fresh, perc_exoot, EQR) %>%
+  st_as_sf(coords = c("VispuntX", "VispuntY"), crs = st_crs(mi_data)) %>%
+  rename(meetplaats = WaarnemingVispuntID,
+         monsternamedatum = Datum) %>%
+  mutate(monsternamedatum = as.Date(monsternamedatum),
+         meetplaats = as.factor(meetplaats)) %>%
+  filter(!is.na(VHAS))
+
 # Voorbeeld aanroep:
 # MI koppelen aan Macrofyten (MP)
 # - Zelfde jaar (year_window = 0)
@@ -366,35 +378,13 @@ mi_met_mafy_2km_2jaar <- match_nearby(
 print(paste("Aantal matches:", sum(!is.na(mi_met_mafy_2km_2jaar$mp_meetplaats))))
 save(mi_met_mafy_2km_2jaar, file = here("data", "verwerkt" , "koppeling", "koppeling_mi_mafy_2km_2jaar.rdata"))
 
-
-mi_met_mafy_1km_2jaar %>% filter(!is.na(mp_meetplaats)) %>% select(meetplaats, monsternamedatum)
-
-#### koppelen op jaar en OWL ####
-
-mi_data <- st_read(here("data", "ruw", "macroinvertebraten", "mi_meetpunten_datum.gpkg"), quiet = T) %>%
-  filter(monsternamedatum > '2009-12-31') %>%
-  left_join(meetnetten %>%
-              select(owl_code, vhas, nummer),
-            by = c("meetplaats" = "nummer"))
-load(file = here("data", "verwerkt", "mafy_data.rdata"))
-
-mafy_data <- mafy_data %>%
-  filter(monsternamedatum > '2009-12-31') %>%
-  select(meetplaats, monsternamedatum, owl)
-
-# 1. Voeg een 'jaar' kolom toe aan mi_data
-mi_data <- mi_data %>%
-  mutate(jaar = lubridate::year(monsternamedatum)) %>%
-  st_drop_geometry() %>%
-  as_tibble()
-
-# 2. Voeg een 'jaar' kolom toe aan mafy_data
-mafy_data <- mafy_data %>%
-  mutate(jaar = lubridate::year(monsternamedatum)) %>%
-  st_drop_geometry()
-
-# 3. Koppel de dataframes
-gekoppelde_data <- mi_data %>%
-  inner_join(mafy_data,
-             by = c("owl_code" = "owl", "jaar" = "jaar"),
-             suffix = c("_mi", "_mafy"))
+mi_met_vis_2km_2jaar <- match_nearby(
+  target_sf = mi_data,
+  source_sf = vis_data,
+  network_list = river_network_fine,
+  max_dist_m = 2000,       # 2000 meter radius
+  year_window = 1,         # Zelfde kalenderjaar
+  selection_mode = "closest_distance"
+)
+print(paste("Aantal matches:", sum(!is.na(mi_met_vis_2km_2jaar$mp_meetplaats))))
+save(mi_met_vis_2km_2jaar, file = here("data", "verwerkt" , "koppeling", "koppeling_mi_vis_2km_2jaar.rdata"))
