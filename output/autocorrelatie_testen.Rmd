@@ -1,0 +1,393 @@
+---
+title: "Autocorrelatie testen"
+author: "Emiel De Lombaerde"
+date: "2026-05-11"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(here)
+library(tidyverse)
+library(glmmTMB)
+library(mgcv)
+library(DHARMa)
+library(sf)
+```
+
+Ik test hier twee modellen op ruimtelijke autocorrelatie (SAC): een glmmtmb model met ordbeta distributie en "hetzelfde" model als gam (met mgcv) met gaussiaanse distributie. Oorspronkelijk was er een random effect voor Bekken. Beide modellen hadden toen significante SAC volgens de Moran I test. Vervolgens verving ik het RE Bekken voor RE waterlichaam (owl).
+
+Dit resulteert in nog steeds SAC voor het glmmtmb model, maar het gam vertoont geen significante sac meer...
+
+```{r}
+load(file = here("source", "analyse", "sem", "mi_nat_sv_kempen", "dredge_data_kempen.rdata"))
+load(file = here("data", "verwerkt", "mi_subsets", "mi_nat_sv_kempen.rdata"))
+data_model <-
+  dredge_data_kempen %>%
+  left_join(mi_nat_sv_kempen %>%
+              select(meetplaats, monsternamedatum, geom),
+            by = c("meetplaats", "monsternamedatum")) %>%
+  st_as_sf() %>%
+  mutate(
+    x = st_coordinates(.)[,1],
+    y = st_coordinates(.)[,2]
+  ) %>%
+  st_drop_geometry %>%
+  mutate(meetplaats = as.factor(meetplaats),
+                             bekken = as.factor(bekken),
+                             owl = as.factor(owl))
+
+model <- glmmTMB(mmif ~ ec_20_log + overstorten_blootstelling_index_log + p_h_s +
+                   jaar_s + (1 | meetplaats) + (1 | owl) + p_t_log + o2_s +      spei6_s,
+                 data_model,
+                 family = ordbeta)
+
+model_gaussian <- glmmTMB(mmif ~ ec_20_log + overstorten_blootstelling_index_log + p_h_s +
+                   jaar_s + (1 | meetplaats) + (1 | owl) + p_t_log + o2_s +      spei6_s,
+                 data_model,
+                 family = gaussian)
+
+# model_xy <- glmmTMB(mmif ~ ec_20_log + overstorten_blootstelling_index_log + p_h_s +
+#                    jaar_s + scale(x) * scale(y) + (1 | meetplaats) + (1 | owl) + p_t_log + o2_s +      spei6_s,
+#                  data_model,
+#                  family = ordbeta)
+
+res <- simulateResiduals(fittedModel = model, plot = TRUE, n = 1000)
+
+
+# 2. Maak een overzicht van UNIEKE locaties in de juiste volgorde
+# We groeperen op meetplaats zodat de volgorde matcht met recalculateResiduals
+locaties_match <- data_model %>%
+  group_by(meetplaats) %>%
+  summarize(x = dplyr::first(x), y = dplyr::first(y), .groups = "drop") %>%
+  arrange(meetplaats) # DHARMa sorteert groepen standaard op naam/factor level
+
+# 3. Aggregeer residuen
+res_grouped <- recalculateResiduals(res, group = data_model$meetplaats)
+
+# 4. De test
+testSpatialAutocorrelation(res_grouped,
+                           x = locaties_match$x,
+                           y = locaties_match$y)
+
+
+# res_xy <- simulateResiduals(fittedModel = model_xy, plot = TRUE)
+# 
+# 
+# # 2. Maak een overzicht van UNIEKE locaties in de juiste volgorde
+# # We groeperen op meetplaats zodat de volgorde matcht met recalculateResiduals
+# locaties_match <- data_model %>%
+#   group_by(meetplaats) %>%
+#   summarize(x = dplyr::first(x), y = dplyr::first(y), .groups = "drop") %>%
+#   arrange(meetplaats) # DHARMa sorteert groepen standaard op naam/factor level
+# 
+# # 3. Aggregeer residuen
+# res_grouped <- recalculateResiduals(res_xy, group = data_model$meetplaats)
+# 
+# # 4. De test
+# testSpatialAutocorrelation(res_grouped,
+#                            x = locaties_match$x,
+#                            y = locaties_match$y)
+
+
+model_gam_kempen <- gam(
+  mmif ~ ec_20_log + overstorten_blootstelling_index_log + p_h_s +
+    jaar_s + p_t_log + o2_s + spei6_s +
+    s(meetplaats, bs = "re") +
+    s(owl, bs = "re"),
+    # s(bekken, bs = "re"), # Random effect voor bekken
+    # s(x, y, bs = "gp", k = 100),     # Ruimtelijke smoother (Gaussian Process)
+  data = data_model,
+  family = gaussian()
+)
+
+res2 <- simulateResiduals(fittedModel = model_gam_kempen)
+
+# 2. Maak een overzicht van UNIEKE locaties in de juiste volgorde
+# We groeperen op meetplaats zodat de volgorde matcht met recalculateResiduals
+locaties_match <- data_model %>%
+  group_by(meetplaats) %>%
+  summarize(x = dplyr::first(x), y = dplyr::first(y), .groups = "drop") %>%
+  arrange(meetplaats) # DHARMa sorteert groepen standaard op naam/factor level
+
+# 3. Aggregeer residuen
+res_grouped <- recalculateResiduals(res2, group = data_model$meetplaats)
+
+# 4. De test
+testSpatialAutocorrelation(res_grouped,
+                           x = locaties_match$x,
+                           y = locaties_match$y)
+
+model_gam_kempen_xy <- gam(
+  mmif ~ ec_20_log + overstorten_blootstelling_index_log + p_h_s +
+    jaar_s + p_t_log + o2_s + spei6_s +
+    s(meetplaats, bs = "re") +
+    # s(owl, bs = "re") +
+    s(x, y, bs = "gp", k = 100),     # Ruimtelijke smoother (Gaussian Process)
+  data = data_model,
+  family = gaussian()
+)
+
+res2 <- simulateResiduals(fittedModel = model_gam_kempen_xy)
+
+# 2. Maak een overzicht van UNIEKE locaties in de juiste volgorde
+# We groeperen op meetplaats zodat de volgorde matcht met recalculateResiduals
+locaties_match <- data_model %>%
+  group_by(meetplaats) %>%
+  summarize(x = dplyr::first(x), y = dplyr::first(y), .groups = "drop") %>%
+  arrange(meetplaats) # DHARMa sorteert groepen standaard op naam/factor level
+
+# 3. Aggregeer residuen
+res_grouped <- recalculateResiduals(res2, group = data_model$meetplaats)
+
+# 4. De test
+testSpatialAutocorrelation(res_grouped,
+                           x = locaties_match$x,
+                           y = locaties_match$y)
+
+```
+
+Vervolgens plot ik de effecten van de verschillende fixed effects voor beide modellen (glmm en gam). Dit door telkens de re variantie weg te laten.
+
+De figuur toont dat voor beide modellen predicted conditional effects zo goed als identiek zijn.
+
+```{r}
+fixed_vars <- c("ec_20_log", "o2_s", "spei6_s", "jaar_s",
+                "p_t_log", "p_h_s", "overstorten_blootstelling_index_log") # kempen
+
+model_gam <- model_gam_kempen
+
+all_comparisons <- list()
+
+for (v in fixed_vars) {
+  # 1. Grid maken
+  grid <- data.frame(val = seq(min(data_model[[v]], na.rm = TRUE),
+                               max(data_model[[v]], na.rm = TRUE),
+                               length.out = 100))
+
+  # Maak een kopie met de echte naam voor de predictie-functies
+  grid[[v]] <- grid$val
+
+  # Vul andere variabelen aan
+  for (ov in setdiff(fixed_vars, v)) {
+    grid[[ov]] <- ifelse(grepl("_s$", ov), 0, mean(data_model[[ov]], na.rm = TRUE))
+  }
+
+  # Dummy data voor de modellen
+  grid$meetplaats <- data_model$meetplaats[1]
+  grid$bekken     <- data_model$bekken[1]
+  grid$owl     <- data_model$owl[1]
+  grid$x <- data_model$x[1]; grid$y <- data_model$y[1]; grid$ID <- factor(1)
+
+  # 2. GAM Predicties
+  preds_gam <- predict(model_gam, newdata = grid,
+                       exclude = c("s(meetplaats)", "s(x,y)", "s(owl)", "s(bekken)"),
+                       type = "response", se.fit = TRUE)
+  grid$gam_fit <- as.numeric(preds_gam$fit)
+  grid$gam_lwr <- as.numeric(preds_gam$fit - (1.96 * preds_gam$se.fit))
+  grid$gam_upr <- as.numeric(preds_gam$fit + (1.96 * preds_gam$se.fit))
+
+  # 3. Ordbeta Predicties (via link schaal voor betere CI)
+  preds_ob <- predict(model, newdata = grid,
+                      re.form = NA, type = "link", se.fit = TRUE)
+  grid$ob_fit <- plogis(preds_ob$fit)
+  grid$ob_lwr <- plogis(preds_ob$fit - (1.96 * preds_ob$se.fit))
+  grid$ob_upr <- plogis(preds_ob$fit + (1.96 * preds_ob$se.fit))
+
+  # 4. Opslaan: We houden nu 'val' als vaste naam voor de x-as
+  all_comparisons[[v]] <- grid %>%
+    mutate(variable = v) %>%
+    select(val, variable, starts_with("gam_"), starts_with("ob_"))
+}
+
+# 5. Samenvoegen en Plotten
+df_long <- bind_rows(all_comparisons) %>%
+  pivot_longer(cols = -c(val, variable),
+               names_to = c("Model", ".value"),
+               names_sep = "_")
+
+ggplot(df_long, aes(x = val, y = fit, color = Model, fill = Model)) +
+  geom_ribbon(aes(ymin = lwr, ymax = upr), alpha = 0.2, color = NA) +
+  geom_line(linewidth = 1) +
+  facet_wrap(~variable, scales = "free_x") +
+  scale_color_manual(values = c("gam" = "steelblue", "ob" = "firebrick"),
+                     labels = c("GAM", "Ordbeta")) +
+  scale_fill_manual(values = c("gam" = "steelblue", "ob" = "firebrick"),
+                    labels = c("GAM", "Ordbeta")) +
+  theme_minimal() +
+  labs(title = "Vergelijking Model-effecten (95% CI)",
+       subtitle = "Rood = Ordbeta (SEM aanname), Blauw = GAM (Flexibel)",
+       x = "Waarde van de predictor",
+       y = "Voorspelde MMIF (0-1)")
+
+```
+
+Hier plot ik de residuen van beide modellen per jaar over Vlaanderen. Op het zicht kan je zien dat er variatie is in de richting en grootte van de residuen tussen de jaren en ook de ruimtelijke "clustering" bvb heel sterk in 2021. De plots voor het glmm en gam lijken sterk op elkaar. Maar de residuen wijken minder sterk af bij het gam.
+
+```{r}
+vlaanderen <- st_read(here("data", "ruw", "vlaanderen", "vlaanderen_wgs84.shp")) %>%
+  st_transform(31370)
+
+plot_spatial_residuals <- function(model_obj, data, sf_context, label = "Model") {
+  # 1. Residuals berekenen en toevoegen aan data
+  # We gebruiken Pearson residuals voor standaardisatie tussen verschillende families
+  data_res <- data %>%
+    mutate(
+      res = residuals(model_obj, type = "pearson"),
+      res_teken = if_else(res >= 0, "Onderschatting (Positief)", "Overschatting (Negatief)"),
+      res_abs = abs(res)
+    )
+
+  # 2. Geometrie koppelen
+  # We gaan ervan uit dat 'sf_context' de geom en koppelvelden bevat
+  plot_data <- data_res %>%
+    left_join(sf_context %>% select(meetplaats, monsternamedatum, geom),
+              by = c("meetplaats", "monsternamedatum")) %>%
+    st_as_sf()
+
+  # 3. De Plot genereren
+  p <- ggplot() +
+    # Achtergrond (zorg dat 'vlaanderen' globaal beschikbaar is of voeg toe als argument)
+    geom_sf(data = vlaanderen, fill = "grey96", color = "grey85", size = 0.2) +
+
+    # De residuals
+    geom_sf(data = plot_data,
+            aes(size = res_abs, color = res_teken, geometry = geom),
+            alpha = 0.6) +
+
+    # Faceting
+    facet_wrap(~jaar, drop = TRUE) +
+
+    # Kleuren en schalen
+    scale_color_manual(values = c("Onderschatting (Positief)" = "#2c7bb6",
+                                  "Overschatting (Negatief)" = "#d7191c"),
+                       name = "Teken Residual") +
+    scale_size_continuous(name = "Grootte afwijking (abs. res)",
+                          range = c(0.5, 4)) +
+
+    # Layout en Labels
+    theme_minimal() +
+    labs(
+      title = paste("Spatiale distributie van Residuals:", label),
+      subtitle = "Blauw: Onderschatting | Rood: Overschatting",
+      x = NULL, y = NULL
+    ) +
+    theme(
+      legend.position = "bottom",
+      legend.box = "vertical",
+      strip.text = element_text(face = "bold"),
+      panel.grid = element_blank(),
+      axis.text = element_blank()
+    )
+
+  return(p)
+}
+
+# Voorbeeld voor het MMIF model
+p1 <- plot_spatial_residuals(model, dredge_data_kempen, mi_nat_sv_kempen, "MMIF")
+print(p1)
+
+p1 <- plot_spatial_residuals(model_gam_kempen, dredge_data_kempen, mi_nat_sv_kempen, "MMIF")
+print(p1)
+
+p1 <- plot_spatial_residuals(model_gam_kempen_xy, dredge_data_kempen, mi_nat_sv_kempen, "MMIF")
+print(p1)
+```
+
+Voor het glmm model testen verschillende jaren significant voor autocorrelatie bij opsplitsen per jaar.
+
+```{r}
+
+# 1. Genereer de residuelen voor het volledige model
+res <- simulateResiduals(fittedModel = model)
+
+jaren <- sort(unique(data_model$jaar))
+
+for (j in jaren) {
+  # 1. Filter de data voor dit specifieke jaar
+  idx <- which(data_model$jaar == j)
+  data_jaar <- data_model[idx, ]
+
+  # 2. Maak een DHARMa subset object
+  res_subset <- createDHARMa(
+    simulatedResponse = res$simulatedResponse[idx, ],
+    observedResponse = res$observedResponse[idx],
+    fittedPredictedResponse = res$fittedPredictedResponse[idx],
+    integerResponse = res$integerResponse
+  )
+
+  # 3. Aggregeer de residuelen per meetplaats (voor het geval er >1 meting per jaar is)
+  # We groeperen op de unieke ID van de locatie
+  res_grouped_jaar <- recalculateResiduals(res_subset, group = data_jaar$meetplaats)
+
+  # 4. Zorg dat de coördinaten uniek zijn en in de juiste volgorde staan
+  locaties_jaar <- data_jaar %>%
+    group_by(meetplaats) %>%
+    summarize(x = dplyr::first(x), y = dplyr::first(y), .groups = "drop") %>%
+    arrange(meetplaats)
+
+  cat("\n--- Ruimtelijke Autocorrelatie Test voor jaar:", j, "---\n")
+
+  # 5. Voer de test uit
+  test_result <- testSpatialAutocorrelation(
+    res_grouped_jaar,
+    x = locaties_jaar$x,
+    y = locaties_jaar$y,
+    plot = FALSE
+  )
+
+  # Print een korte samenvatting van het resultaat
+  print(test_result)
+}
+
+```
+
+Bij het GAM model -> slechts 2 significante jaren.
+
+```{r}
+# 1. Genereer de residuelen voor het volledige model
+res <- simulateResiduals(fittedModel = model_gam_kempen)
+
+jaren <- sort(unique(data_model$jaar))
+
+for (j in jaren) {
+  # 1. Filter de data voor dit specifieke jaar
+  idx <- which(data_model$jaar == j)
+  data_jaar <- data_model[idx, ]
+
+  # 2. Maak een DHARMa subset object
+  res_subset <- createDHARMa(
+    simulatedResponse = res$simulatedResponse[idx, ],
+    observedResponse = res$observedResponse[idx],
+    fittedPredictedResponse = res$fittedPredictedResponse[idx],
+    integerResponse = res$integerResponse
+  )
+
+  # 3. Aggregeer de residuelen per meetplaats (voor het geval er >1 meting per jaar is)
+  # We groeperen op de unieke ID van de locatie
+  res_grouped_jaar <- recalculateResiduals(res_subset, group = data_jaar$meetplaats)
+
+  # 4. Zorg dat de coördinaten uniek zijn en in de juiste volgorde staan
+  locaties_jaar <- data_jaar %>%
+    group_by(meetplaats) %>%
+    summarize(x = dplyr::first(x), y = dplyr::first(y), .groups = "drop") %>%
+    arrange(meetplaats)
+
+  cat("\n--- Ruimtelijke Autocorrelatie Test voor jaar:", j, "---\n")
+
+  # 5. Voer de test uit
+  test_result <- testSpatialAutocorrelation(
+    res_grouped_jaar,
+    x = locaties_jaar$x,
+    y = locaties_jaar$y,
+    plot = FALSE
+  )
+
+  # Print een korte samenvatting van het resultaat
+  print(test_result)
+}
+```
+

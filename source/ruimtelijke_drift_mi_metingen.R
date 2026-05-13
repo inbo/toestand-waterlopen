@@ -210,7 +210,7 @@ mmif_model_kempen <- glmmTMB(
 
 
 mmif_model_rivier <- glmmTMB(
-  formula = mmif ~ ec_20_log + ekc2_waterlichaam_s + p_h_s + jaar_s + (1 |      meetplaats) + (1 | bekken) + (1|owl) + spei6_s,
+  formula = mmif ~ ec_20_log + ekc2_waterlichaam_s + p_h_s + jaar_s + (1 |      meetplaats) + (1 | bekken) + spei6_s,
   data = dredge_data_rivier,
   family = ordbeta() # Gebaseerd op de "ordbeta family" in je output
 )
@@ -344,9 +344,14 @@ print(p1)
 p1 <- plot_spatial_residuals(mmif_model_beek, dredge_data_beek, mi_nat_sv_beek, "MMIF")
 print(p1)
 
+p1 <- plot_spatial_residuals(model_gam_beek, data_model, mi_nat_sv_beek, "MMIF")
+print(p1)
+
 p1 <- plot_spatial_residuals(mmif_model_rivier, dredge_data_rivier, mi_nat_sv_rivier, "MMIF")
 print(p1)
 
+p1 <- plot_spatial_residuals(mmif_model_polder, dredge_data_polder, mi_nat_sv_polder, "MMIF")
+print(p1)
 
 # Voorbeeld voor het Totaal Fosfor model
 p2 <- plot_spatial_residuals(ptot_best_model_updated, dredge_data, mi_nat_sv_kempen, "P-totaal")

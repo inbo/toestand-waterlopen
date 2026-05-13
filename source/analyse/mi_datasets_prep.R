@@ -247,11 +247,13 @@ data4 <- data3 %>%
 mi_nat_sv_beek <- data4 %>%
   filter(statuut %in% c("Natuurlijk", "Sterk Veranderd")) %>%
   filter(groep == "beek")
+save(mi_nat_sv_beek, file = here("data", "verwerkt", "mi_subsets", "mi_nat_sv_beek.rdata"))
 
 # 1.2 kempen
 mi_nat_sv_kempen <- data4 %>%
   filter(statuut %in% c("Natuurlijk", "Sterk Veranderd")) %>%
   filter(groep == "kempen")
+save(mi_nat_sv_kempen, file = here("data", "verwerkt", "mi_subsets", "mi_nat_sv_kempen.rdata"))
 
 # 1.3 polder
 mi_nat_sv_polder <- data4 %>%

@@ -3,9 +3,11 @@ library(tidyr)
 library(ggplot2)
 # 1. Definieer de variabelen die je wilt vergelijken
 fixed_vars <- c("ec_20_log", "o2_s", "spei6_s", "jaar_s",
-                "p_t_log", "p_h_s", "overstorten_blootstelling_index_log")
+                "p_t_log", "p_h_s", "overstorten_blootstelling_index_log") # kempen
 
 fixed_vars <- c("ec_20_log", "o2_s", "spei6_s", "jaar_s", "intensiteit_combo_afstr_s", "t_s", "n_t_log", "p_t_log", "verharding_afstr_s")
+model_gam <- model_gam_beek
+model_gam <- model_gam_kempen
 
 all_comparisons <- list()
 
@@ -72,13 +74,22 @@ ggplot(df_long, aes(x = val, y = fit, color = Model, fill = Model)) +
 
 ##########gam psem kempen ##########"
 
-
+library(piecewiseSEM)
 # Gebruik een interactie in plaats van een 2D spline voor de SEM
 model_gam <- gam(
   mmif ~ ec_20_log + overstorten_blootstelling_index_log + p_h_s +
     jaar_s + p_t_log + o2_s + spei6_s +
     s(meetplaats, bs = "re") +
-    s(x, bs = "tp") + s(y, bs = "tp"), # Splits de coördinaten in twee 1D splines
+    s(owl, bs = "re"), # Splits de coördinaten in twee 1D splines
+  data = data_model,
+  family = gaussian() # Let op: mmif is 0-1, gaussian is gewaagd, maar voor psem vaker stabieler
+)
+
+model_gam <- gam(
+  mmif ~ ec_20_log + overstorten_blootstelling_index_log + p_h_s +
+    jaar_s + p_t_log + o2_s + spei6_s +
+    s(meetplaats, bs = "re") +
+    s(x, y, bs = "gp", k = 100), # Splits de coördinaten in twee 1D splines
   data = data_model,
   family = gaussian() # Let op: mmif is 0-1, gaussian is gewaagd, maar voor psem vaker stabieler
 )
@@ -87,10 +98,10 @@ ptot <- mmif_sem_nat_sv_kempen[[2]]
 ptot_glmm <- glmmTMB(p_t_log ~ intensiteit_combo_afstr_s + verharding_afstr_s + verharding_oever_s +
   jaar_s + (1 | meetplaats) + (1 | bekken) + t_s,
   data = data_model)
-summary(ptot)
+summary(ptot_glmm)
 ptot_gam <- gam(p_t_log ~ intensiteit_combo_afstr_s + verharding_afstr_s + verharding_oever_s +
                        jaar_s + t_s + s(meetplaats, bs = "re") +
-                  s(x, y, bs = "gp", k = 100),
+                  s(owl, bs = "re"),
                      data = data_model)
 psem_mix <- psem(model_gam, ptot_gam, data = data_model)
 summary(psem_mix)

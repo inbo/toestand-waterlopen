@@ -74,12 +74,14 @@ source(here("source", "analyse", "sem", "figuur_sem_zonder_corrfout.R")) #zonder
 
 
 #beek mmif
+load(file = here("source", "analyse", "sem", "mi_nat_sv_beek", "mmif_sem_nat_sv_beek.rdata"))
 
 model <- mmif_sem_nat_sv_beek[[1]]
 summary(model)
-
+load("source/analyse/sem/mi_nat_sv_beek/dredge_data_beek.rdata")
+load("data/verwerkt/mi_subsets/mi_nat_sv_beek.rdata")
 data_model <-
-  dredge_data %>%
+  dredge_data_beek %>%
   left_join(mi_nat_sv_beek %>%
               select(meetplaats, monsternamedatum, geom),
             by = c("meetplaats", "monsternamedatum")) %>%
@@ -89,53 +91,83 @@ data_model <-
     y = st_coordinates(.)[,2]
   ) %>%
   st_drop_geometry %>%
-  mutate(meetplaats = as.factor(meetplaats))
+  mutate(meetplaats = as.factor(meetplaats),
+         bekken = as.factor(bekken),
+         owl = as.factor(owl))
+
+model <- glmmTMB(mmif ~ ec_20_log + o2_s + spei6_s + jaar_s + (1 | meetplaats) + intensiteit_combo_afstr_s + t_s + n_t_log +      p_t_log + verharding_afstr_s + (1 | owl),
+  data_model,
+  family = ordbeta)
+summary(model)
 
 res <- simulateResiduals(fittedModel = model, plot = TRUE )
 
-testSpatialAutocorrelation(res,
-                           x = data_model$x,
-                           y = data_model$y)
-
-# 1. Groepeer de residuen per locatie (X en Y gecombineerd)
-# We maken een tijdelijke groepsvariabele aan
-res_grouped <- recalculateResiduals(res, group = interaction(data_model$x, data_model$y))
+# res_grouped <- recalculateResiduals(res, group = interaction(data_model$x, data_model$y))
 res_grouped <- recalculateResiduals(res, group = data_model$meetplaats)
 
-res_grouped <- recalculateResiduals(res, group = dredge_data$bekken)
+# res_grouped <- recalculateResiduals(res, group = dredge_data$bekken)
 
 # 2. Haal de unieke locaties op voor de geaggregeerde residuen
 # Belangrijk: de volgorde van de locaties moet matchen met de groepen
-group_coords <- data_model %>%
-  group_by(x, y) %>%
-  summarize(.groups = "drop")
+locaties_match <- data_model %>%
+  group_by(meetplaats) %>%
+  summarize(x = dplyr::first(x), y = dplyr::first(y), .groups = "drop") %>%
+  arrange(meetplaats) # DHARMa sorteert groepen standaard op naam/factor level
 
-group_coords <- aggregate(cbind(x, y) ~ bekken, data = data_model, mean)
+# 3. Aggregeer residuen
+res_grouped <- recalculateResiduals(res, group = data_model$meetplaats)
 
-
-# 3. Voer de test uit op de geaggregeerde residuen
+# 4. De test
 testSpatialAutocorrelation(res_grouped,
-                           x = group_coords$x,
-                           y = group_coords$y)
+                           x = locaties_match$x,
+                           y = locaties_match$y)
 
+### correcte sac test
 
+glmmTMB::set_simcodes(model$obj, val = "fix")
+# 2. Run DHARMa as usual
+res <- simulateResiduals(fittedModel = model)
+
+locaties_match <- data_model %>%
+  group_by(meetplaats) %>%
+  summarize(x = dplyr::first(x), y = dplyr::first(y), .groups = "drop") %>%
+  arrange(meetplaats) # DHARMa sorteert groepen standaard op naam/factor level
+
+# 3. Aggregeer residuen
+res_grouped <- recalculateResiduals(res, group = data_model$meetplaats)
+
+# 4. De test
+testSpatialAutocorrelation(res_grouped,
+                           x = locaties_match$x,
+                           y = locaties_match$y)
+
+# 3. CRITICAL: Reset the option back to default (unconditional) for other analyses
+glmmTMB::set_simcodes(model$obj, val = "random")
+
+###gam beek
 model_gam_beek <- gam(
   mmif ~ ec_20_log + o2_s + spei6_s + jaar_s + intensiteit_combo_afstr_s + t_s + n_t_log +      p_t_log + verharding_afstr_s +
     s(meetplaats, bs = "re") +
-    # s(bekken, bs = "re") +          # Random effect voor bekken
-    s(x, y, bs = "gp", k = 100),     # Ruimtelijke smoother (Gaussian Process)
+    s(owl, bs = "re"),
+  # +          # Random effect voor bekken
+  #   s(x, y, bs = "gp", k = 100),     # Ruimtelijke smoother (Gaussian Process)
   data = data_model,
   family = gaussian()
 )
 summary(model_gam_beek)
+
 res <- simulateResiduals(fittedModel = model_gam_beek, plot = TRUE )
 res_grouped <- recalculateResiduals(res, group = data_model$meetplaats)
-group_coords <- data_model %>%
-  group_by(x, y) %>%
-  summarize(.groups = "drop")
+locaties_match <- data_model %>%
+  group_by(meetplaats) %>%
+  summarize(x = dplyr::first(x), y = dplyr::first(y), .groups = "drop") %>%
+  arrange(meetplaats) # DHARMa sorteert groepen standaard op naam/factor level
 testSpatialAutocorrelation(res_grouped,
-                           x = group_coords$x,
-                           y = group_coords$y)
+                           x = locaties_match$x,
+                           y = locaties_match$y)
+
+
+
 
 #### kempen mmif####
 
@@ -144,16 +176,15 @@ load(file = here("source", "analyse", "sem", "mi_nat_sv_kempen", "mmif_sem_nat_s
 
 model <- mmif_sem_nat_sv_kempen[[1]]
 summary(model)
-plot_model(model, type = "pred")$o2_s
+plot_model(model, type = "pred", bias_correction = TRUE)$o2_s
 
 r.squaredGLMM(model)
 model <- update(model, . ~ . + (1 | owl))
 summary(model)
 
-
-
+load(file = here("source", "analyse", "sem", "mi_nat_sv_kempen", "dredge_data_kempen.rdata"))
 data_model <-
-  dredge_data %>%
+  dredge_data_kempen %>%
   left_join(mi_nat_sv_kempen %>%
               select(meetplaats, monsternamedatum, geom),
             by = c("meetplaats", "monsternamedatum")) %>%
@@ -163,7 +194,14 @@ data_model <-
     y = st_coordinates(.)[,2]
   ) %>%
   st_drop_geometry %>%
-  mutate(meetplaats = as.factor(meetplaats))
+  mutate(meetplaats = as.factor(meetplaats),
+                             bekken = as.factor(bekken),
+                             owl = as.factor(owl))
+
+model <- glmmTMB(mmif ~ ec_20_log + overstorten_blootstelling_index_log + p_h_s +
+                   jaar_s + (1 | meetplaats) + (1 | owl) + p_t_log + o2_s +      spei6_s,
+                 data_model,
+                 family = ordbeta)
 
 res <- simulateResiduals(fittedModel = model, plot = TRUE)
 
@@ -197,7 +235,7 @@ data_model$ID <- factor(data_model$meetplaats)
 # 3. Update het model met exp() of mat() structuur
 model_sac_corr <- glmmTMB(
   mmif ~ ec_20_log + overstorten_blootstelling_index_log + p_h_s +
-    jaar_s + p_t_log + o2_s +      spei6_s +               # Behoud bekken als random intercept
+    jaar_s + p_t_log + o2_s + spei6_s +   # Behoud bekken als random intercept
     exp(pos + 0 | ID),           # Voeg spatiële correlatie toe op basis van X,Y
   data = data_model,
   family = gaussian,
@@ -210,25 +248,22 @@ res2 <- simulateResiduals(fittedModel = model_sac_corr, plot = TRUE)
 
 library(mgcv)
 
-model_gam <- gam(
+model_gam_kempen <- gam(
   mmif ~ ec_20_log + overstorten_blootstelling_index_log + p_h_s +
     jaar_s + p_t_log + o2_s + spei6_s +
     s(meetplaats, bs = "re") +
     s(owl, bs = "re"),
     # s(bekken, bs = "re"), # Random effect voor bekken
     # s(x, y, bs = "gp", k = 100),     # Ruimtelijke smoother (Gaussian Process)
-  data = data_model %>%
-    mutate(meetplaats = as.factor(meetplaats),
-           owl = as.factor(owl),
-           bekken = as.factor(bekken)),
+  data = data_model,
   family = gaussian()
 )
-summary(model_gam)
+summary(model_gam_kempen)
 
 gam.check(model_gam)
 
 # 1. Simuleer residuen
-res2 <- simulateResiduals(fittedModel = model_gam)
+res2 <- simulateResiduals(fittedModel = model_gam_kempen)
 
 # 2. Maak een overzicht van UNIEKE locaties in de juiste volgorde
 # We groeperen op meetplaats zodat de volgorde matcht met recalculateResiduals

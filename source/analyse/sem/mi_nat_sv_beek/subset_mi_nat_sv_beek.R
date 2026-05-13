@@ -125,6 +125,9 @@ dredge_data <- data_subset %>%
   na.omit
 dredge_data_beek <- dredge_data
 
+save(dredge_data_beek, file = here("source", "analyse", "sem", "mi_nat_sv_beek", "dredge_data_beek.rdata"))
+
+
 dredge_data_fd <- data_subset %>%
   select(
     meetplaats, monsternamedatum, jaar_s, bekken,

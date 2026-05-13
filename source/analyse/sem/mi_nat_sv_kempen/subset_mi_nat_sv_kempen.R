@@ -95,6 +95,8 @@ data_subset2 <- data_subset %>%
 dredge_data <- data_subset2
 dredge_data_kempen <- dredge_data
 
+save(dredge_data_kempen, file = here("source", "analyse", "sem", "mi_nat_sv_kempen", "dredge_data_kempen.rdata"))
+
 ################################################################################
 # model fitten MMIF
 ################################################################################
@@ -524,6 +526,8 @@ summary(ept_sem_nat_sv_kempen)
 
 
 save(ept_sem_nat_sv_kempen, file = here("source", "analyse", "sem", "mi_nat_sv_kempen", "ept_sem_nat_sv_kempen.rdata"))
+
+load(file = here("source", "analyse", "sem", "mi_nat_sv_kempen", "ept_sem_nat_sv_kempen.rdata"))
 
 r.squaredGLMM(ept_best_model_updated)
 sem_resultaat <- ept_sem_nat_sv_kempen
