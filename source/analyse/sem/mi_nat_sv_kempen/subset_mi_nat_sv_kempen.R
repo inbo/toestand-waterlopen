@@ -12,7 +12,7 @@ source(here::here("source", "functies.R"))
 # -----------------------------------------------------------
 data_subset <- mi_nat_sv_kempen %>%
   drop_na(meetplaats, jaar) %>%
-  select(meetplaats, monsternamedatum, jaar, bekken, deelbekken, owl,
+  select(meetplaats, monsternamedatum, jaar, bekken, deelbekken, owl, vhag,
          mmif, ta_xw, ep_tw, sw_dw, ns_tw, mt_sw,
          t, p_h, o2, o2_verz, ec_20,
          czv, n_t, no2, no3, nh4, p_t, zs,
@@ -81,7 +81,7 @@ clean_all <- filter_collinear_vars(data_subset, raw_all)
 
 data_subset2 <- data_subset %>%
   select(
-    meetplaats, monsternamedatum, jaar_s, bekken, jaar, deelbekken, owl,
+    meetplaats, monsternamedatum, jaar_s, bekken, jaar, deelbekken, owl, vhag,
     mmif, ept_prop, ta_xw, sw_dw, mt_sw_prop, nst_prop, stress_prop,
     n_t_log, p_t_log, czv_log,
     ekc2_waterlichaam_s,
@@ -485,6 +485,70 @@ save(mmif_sem_nat_sv_kempen, file = here("source", "analyse", "sem", "mi_nat_sv_
 # summary(model_test_mmif)
 # plot_model_vif(model_test_mmif)
 load(file = here("source", "analyse", "sem", "mi_nat_sv_kempen", "mmif_sem_nat_sv_kempen.rdata"))
+
+
+psem_obj <- mmif_sem_nat_sv_beek
+
+standardize_psem <- function(psem_obj) {
+  # 1. Haal de coëfficiënten op (ongestandaardiseerd + gestandaardiseerd waar mogelijk)
+  coef_table <- piecewiseSEM::coefs(psem_obj, standardize = "scale")
+
+  # 2. Identificeer welke rijen de Std.Estimate missen
+  # We checken op NA of op het "-" teken dat piecewiseSEM vaak gebruikt
+  missing_idx <- which(is.na(coef_table$Std.Estimate) | coef_table$Std.Estimate == "-")
+
+  if (length(missing_idx) == 0) {
+    message("✅ Alle Std.Estimates zijn al aanwezig.")
+    return(coef_table)
+  }
+
+  # 3. Haal unieke responses op die reparatie nodig hebben
+  responses_to_fix <- unique(coef_table$Response[missing_idx])
+
+  for (resp_name in responses_to_fix) {
+    # Zoek het specifieke model in de psem lijst
+    # We zoeken op basis van de naam van de afhankelijke variabele
+    model_obj <- psem_obj[[which(sapply(psem_obj, function(x)
+      tryCatch(insight::find_response(x) == resp_name, error = function(e) FALSE)))]]
+
+    if (is.null(model_obj)) next
+
+    message("🔧 Berekenen gestandaardiseerde waarden voor: ", resp_name)
+
+    # --- De 'insight/performance' magie ---
+    # Haal de varianties op (Nakagawa methode)
+    vars <- insight::get_variance(model_obj)
+
+    # Bereken totale latente SD: sqrt(Var_fixed + Var_random + Var_distribution)
+    # De 'var.distribution' is cruciaal voor non-gaussian modellen (Varm)
+    total_latent_sd <- sqrt(sum(unlist(vars[c("var.fixed", "var.random", "var.distribution")]), na.rm = TRUE))
+
+    # Haal de data op om SD van de predictors te berekenen
+    model_data <- insight::get_data(model_obj)
+
+    # Update de specifieke rijen in de tabel
+    curr_rows <- which(coef_table$Response == resp_name & (is.na(coef_table$Std.Estimate) | coef_table$Std.Estimate == "-"))
+
+    for (idx in curr_rows) {
+      pred_name <- coef_table$Predictor[idx]
+      beta_unstd <- coef_table$Estimate[idx]
+
+      if (pred_name %in% names(model_data)) {
+        sd_x <- sd(model_data[[pred_name]], na.rm = TRUE)
+        # De formule: beta * (SD_x / SD_y_totaal)
+        coef_table$Std.Estimate[idx] <- as.numeric(beta_unstd * (sd_x / total_latent_sd))
+      }
+    }
+  }
+
+  # Dwing de kolom naar numeriek voor verdere analyse
+  coef_table$Std.Estimate <- as.numeric(coef_table$Std.Estimate)
+
+  return(coef_table)
+}
+
+coefs_filled <- standardize_psem(mmif_sem_nat_sv_beek)[,-9]
+
 
 sem_resultaat <- mmif_sem_nat_sv_kempen
 coefs_missing <- coefs(sem_resultaat)[,-9]

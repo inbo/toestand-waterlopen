@@ -38,7 +38,8 @@ data_model <-
   st_drop_geometry %>%
   mutate(meetplaats = as.factor(meetplaats),
                              bekken = as.factor(bekken),
-                             owl = as.factor(owl))
+                             owl = as.factor(owl),
+         vhag = as.factor(vhag))
 
 model <- glmmTMB(mmif ~ ec_20_log + overstorten_blootstelling_index_log + p_h_s +
                    jaar_s + (1 | meetplaats) + (1 | owl) + p_t_log + o2_s +      spei6_s,
@@ -302,7 +303,9 @@ Voor het glmm model testen verschillende jaren significant voor autocorrelatie b
 ```{r}
 
 # 1. Genereer de residuelen voor het volledige model
+glmmTMB::set_simcodes(model$obj, val = "fix")
 res <- simulateResiduals(fittedModel = model)
+glmmTMB::set_simcodes(model$obj, val = "random")
 
 jaren <- sort(unique(data_model$jaar))
 
@@ -336,7 +339,7 @@ for (j in jaren) {
     res_grouped_jaar,
     x = locaties_jaar$x,
     y = locaties_jaar$y,
-    plot = FALSE
+    plot = TRUE
   )
 
   # Print een korte samenvatting van het resultaat
