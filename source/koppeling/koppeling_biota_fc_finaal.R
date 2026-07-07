@@ -454,14 +454,15 @@ match_upstream_strahler <- function(biota_sf, # meetpunten biota
         }
       }
 
-      # Filter op tijd
+      # Filter op tijd EN sorteer op kleinste tijdsverschil
       if (nrow(subset_quality) > 0) {
         subset_quality <- subset_quality %>%
           mutate(
             temp_diff_days = as.numeric(difftime(b_date, .[[col_date_quality]], units = "days")),
             abs_time_diff  = abs(temp_diff_days)
           ) %>%
-          filter(temp_diff_days >= -days_after & temp_diff_days <= days_before)
+          filter(temp_diff_days >= -days_after & temp_diff_days <= days_before) %>%
+          arrange(abs_time_diff) # Zorgt ervoor dat bij gelijke afstand de beste datum wint
       }
 
       if (nrow(subset_quality) > 0) {
