@@ -278,7 +278,7 @@ match_upstream_strahler <- function(biota_sf, # meetpunten biota
                                     use_strahler = FALSE, # als TRUE mag tussen biota en fc/quality punt maar 1 orde verschillen
                                     strahler_col = "ORDE",
                                     max_dist_m = 5000,
-                                    max_downstream_m = 200,   # NIEUW: Max afstand vogelvlucht (ook downstream)
+                                    max_downstream_m = 200,   # Max afstand vogelvlucht (ook downstream)
                                     snap_tolerance = 25,
                                     days_before = 30,
                                     days_after = 10,
@@ -454,59 +454,50 @@ match_upstream_strahler <- function(biota_sf, # meetpunten biota
         }
       }
 
-      # Filter op tijd EN sorteer op kleinste tijdsverschil
+      # Filter op tijd en bereken het absolute tijdsverschil
       if (nrow(subset_quality) > 0) {
         subset_quality <- subset_quality %>%
           mutate(
             temp_diff_days = as.numeric(difftime(b_date, .[[col_date_quality]], units = "days")),
             abs_time_diff  = abs(temp_diff_days)
           ) %>%
-          filter(temp_diff_days >= -days_after & temp_diff_days <= days_before) %>%
-          arrange(abs_time_diff) # Zorgt ervoor dat bij gelijke afstand de beste datum wint
+          filter(temp_diff_days >= -days_after & temp_diff_days <= days_before)
       }
 
       if (nrow(subset_quality) > 0) {
 
         # STAP 2: Bereken afstanden (Graaf EN Euclidisch)
 
-        # A. Graaf Afstand (alleen upstream werkt hier, downstream geeft Inf)
+        # A. Graaf Afstand via veilige Lookup (voorkomt iGraph duplicate vertex errors)
         upstream_nodes <- names(subcomponent(g, v = b_node, mode = "in"))
         subset_quality$is_upstream <- subset_quality$node_id %in% upstream_nodes
 
-        # Bereken graafafstand (alleen zinvol voor upstream, maar we runnen voor subset)
-        d_matrix <- distances(g, v = subset_quality$node_id, to = b_node, mode = "out")
-        subset_quality$graph_dist <- as.numeric(d_matrix)
+        unique_nodes_step2 <- unique(subset_quality$node_id)
+        d_matrix <- distances(g, v = unique_nodes_step2, to = b_node, mode = "out")
+
+        lookup_graph_dist <- setNames(as.numeric(d_matrix), unique_nodes_step2)
+        subset_quality$graph_dist <- lookup_graph_dist[subset_quality$node_id]
 
         # B. Euclidische Afstand (Vogelvlucht)
-        # We moeten de geometry ophalen uit de originele quality_sf
-        # Dit doen we via de index die we eerder hebben opgeslagen
         target_geoms <- quality_sf[subset_quality$orig_index_geo, ]
         euclid_dists <- st_distance(b_pt, target_geoms)
         subset_quality$euclid_dist <- as.numeric(euclid_dists)
 
         # STAP 3: De 'OR' Filter
-        # Kandidaat is geldig als:
-        # (Is Upstream EN GraphDist <= 5000) OF (EuclidDist <= 200)
-
         candidates <- subset_quality %>%
           filter(
             (is_upstream & graph_dist <= max_dist_m) |
               (euclid_dist <= max_downstream_m)
           )
 
-        # STAP 4: Bepaal de 'definitive' afstand voor sortering
-        # Als het upstream is -> Graph dist
-        # Als het downstream is (graph=Inf) -> Euclid dist
-        # Als het beide is (kortbij upstream) -> Graph dist (consistentie)
+        # STAP 4: Bepaal de 'definitive' afstand en pas de TIE-BREAKER toe
         if (nrow(candidates) > 0) {
           candidates$river_dist_m <- ifelse(is.finite(candidates$graph_dist),
                                             candidates$graph_dist,
                                             candidates$euclid_dist)
 
-          # Topology check (Lozingen) - enkel relevant voor upstream paden!
-          # Als een punt downstream ligt, heeft een lozing stroomopwaarts (tussen biota en qual) geen invloed op qual.
+          # Topology check (Lozingen)
           if (length(discharge_nodes) > 0) {
-            # We checken alleen de kandidaten die 'upstream' zijn volgens de graaf
             to_check_idx <- which(candidates$is_upstream & candidates$river_dist_m > 0)
 
             if(length(to_check_idx) > 0) {
@@ -524,14 +515,20 @@ match_upstream_strahler <- function(biota_sf, # meetpunten biota
             }
           }
 
-          candidates_within <- candidates # Naamgeving consistent houden
+          candidates_within <- candidates
 
           if (nrow(candidates_within) > 0) {
-            # ... (Selectie logica blijft hetzelfde) ...
+            # --- HIER ZIT JOUW KLASSIEKE TIE-BREAKER MECHANISME ---
             if (selection_mode == "closest_distance") {
-              match <- candidates_within[which.min(candidates_within$river_dist_m), ]; n_matches_found <- 1
+              # Sorteer eerst op afstand, en bij gelijke afstand op het KLEINSTE tijdsverschil
+              candidates_within <- candidates_within %>% arrange(river_dist_m, abs_time_diff)
+              match <- candidates_within[1, ] # De bovenste is nu gegarandeerd de beste match qua afstand én tijd!
+              n_matches_found <- 1
             } else if (selection_mode == "closest_time") {
-              match <- candidates_within[which.min(candidates_within$abs_time_diff), ]; n_matches_found <- 1
+              # Sorteer eerst op kleinste tijdsverschil, en bij gelijke tijd op afstand
+              candidates_within <- candidates_within %>% arrange(abs_time_diff, river_dist_m)
+              match <- candidates_within[1, ]
+              n_matches_found <- 1
             } else if (selection_mode == "all") {
               match <- candidates_within; n_matches_found <- nrow(candidates_within)
             } else if (selection_mode == "aggregate") {
@@ -586,7 +583,7 @@ koppeling_mi_nutrient <- match_upstream_strahler(
   max_downstream_m = 200,
   max_dist_m = 5000,       # Max 5km stroomopwaarts
   days_before = 180,       # Kwaliteit mag tot 180 dagen VOOR de biota meting zijn
-  days_after = 30,         # Kwaliteit mag tot 30dagen NA de biota meting zijn
+  days_after = 14,         # Kwaliteit mag tot 30dagen NA de biota meting zijn
   col_date_biota = "monsternamedatum",
   col_date_quality = "monsternamedatum",
   selection_mode = "closest_distance", # neemt dichtste punt
