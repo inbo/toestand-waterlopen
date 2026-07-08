@@ -3,6 +3,7 @@ if (!exists("packages_geladen")) {
   source(here::here("source", "inladen_packages.R"))
 }
 source(here::here("source", "functies.R"))
+source(here::here("source", "analyse", "mi_datasets_prep.R"))
 
 # ==============================================================================
 # STAP 3: TOEPASSING OP JOUW DATA (Workflow)
@@ -12,10 +13,10 @@ source(here::here("source", "functies.R"))
 # -----------------------------------------------------------
 data_subset <- mi_nat_sv_rivier %>%
   drop_na(meetplaats, jaar) %>%
-  select(meetplaats, monsternamedatum, jaar, bekken, owl,
+  select(meetplaats, monsternamedatum, jaar, bekken, owl, geom,
          mmif, ta_xw, ep_tw, sw_dw, ns_tw, mt_sw,
          t, p_h, o2, o2_verz, ec_20,
-         czv, n_t, no2, no3, nh4, p_t, zs,
+         czv, n_t, no2, no3, nh4, p_t, zs, cl, ec_20_fc, spear_pesticides, spear_tu_estimated,
          breedte_diepte_ratio, sinuositeit, bodemsub, doodhout, profiel, ekc2_waterlichaam, ekc2_traject, stroomsnelheid, # verstuwing weglaten want te veel NA
          verharding_afstr, natuur_afstr, intensiteit_combo_afstr, verharding_oever, natuur_oever, intensiteit_combo_oeverzone,
          spei6, n_extreme_3m, p_sum_7d,
@@ -29,6 +30,7 @@ data_subset <- mi_nat_sv_rivier %>%
                 ns_tw = as.integer(ns_tw),
                 mt_sw_prop = mt_sw / 10,
                 bekken = as.factor(bekken),
+                maand = as.factor(lubridate::month(monsternamedatum)),
                 nst_prop = ns_tw / ta_xw,
                 stress_prop = (ep_tw + ns_tw)/ta_xw,
                 ept_prop = ep_tw / ta_xw,
@@ -39,16 +41,19 @@ data_subset <- mi_nat_sv_rivier %>%
                 czv_log = log(czv),
                 nh4_log = log(nh4),
                 ec_20_log = log(ec_20),
+                zs_log = log(zs),
                 overstorten_index_log = log(overstorten_index + 1),
                 overstorten_blootstelling_index_log = log(overstorten_blootstelling_index + 1),
                 lozingen_rwzi_ie_log = log(lozingen_rwzi_ie + 1),
                 lozingen_rwzi_p_t_log = log(lozingen_rwzi_p_t + 1),
                 lozingen_industrie_ie_log = log(lozingen_industrie_ie + 1),
                 lozingen_riool_ie_log = log(lozingen_riool_ie + 1))
+# %>%
+#   filter(ec_20 < 2000)
 
 # 1. Definieer je ruwe lijsten met variabelen (nog niet gefilterd)
 # -----------------------------------------------------------
-raw_fysico        <- c("t_s", "p_h_s", "o2_s", "ec_20_log", "zs_s") # o2_verz_s weg en keuze o2
+raw_fysico        <- c("t_s", "o2_s", "ec_20_log", "zs_log") # o2_verz_s weg en keuze o2"p_h_s"
 raw_nutrients     <- c("czv_log", "n_t_log", "no2_log", "no3_log", "nh4_log", "p_t_log")
 raw_hydmo         <- c("breedte_diepte_ratio_s", "sinuositeit_s", "bodemsub_s", "doodhout_s", "profiel_s", "ekc2_waterlichaam_s", "ekc2_traject_s", "stroomsnelheid_s")
 raw_landuse <- c("verharding_afstr_s", "natuur_afstr_s", "intensiteit_combo_afstr_s", "verharding_oever_s", "natuur_oever_s", "intensiteit_combo_oeverzone_s")
@@ -83,7 +88,7 @@ data_subset %>%
   select(
     meetplaats, monsternamedatum, jaar_s, bekken, owl,
     mmif, ept_prop, ta_xw, sw_dw, mt_sw_prop, nst_prop, stress_prop,
-    n_t_log, p_t_log, czv_log,
+    n_t_log, p_t_log, czv_log, cl, czv,
     ekc2_waterlichaam_s,
     all_of(clean_klimaat),
     all_of(clean_lozingen),
@@ -94,16 +99,20 @@ data_subset %>%
 
 data_subset2 <- data_subset %>%
   select(
-    meetplaats, monsternamedatum, jaar_s, bekken, jaar, owl,
-    mmif, ept_prop, ta_xw, sw_dw, mt_sw_prop, nst_prop, stress_prop,
-    n_t_log, p_t_log, czv_log,
+    meetplaats, monsternamedatum, jaar_s, bekken, jaar, owl, geom, maand,
+    mmif, ept_prop, ta_xw, sw_dw, mt_sw_prop, nst_prop, stress_prop, ec_20,
+    n_t_log, p_t_log, czv_log, cl, czv, ec_20_fc, spear_pesticides_s, spear_pesticides, spear_tu_estimated_s, spear_tu_estimated,
     ekc2_waterlichaam_s,
     all_of(clean_klimaat),
     all_of(clean_lozingen),
     all_of(clean_landuse),
     all_of(clean_fysico),
   ) %>%
-  na.omit
+  na.omit %>%
+  mutate(
+    x = st_coordinates(geom)[, 1],
+    y = st_coordinates(geom)[, 2]
+  )
 
 dredge_data <- data_subset2
 dredge_data_rivier <- dredge_data
@@ -121,6 +130,8 @@ model <- glmmTMB(data = dredge_data, formula = formula_obj,
                  REML = FALSE,
                  family = ordbeta)
 
+performance::check_singularity(model)
+
 source(here("source" , "analyse", "sem", "dredge.R"))
 
 mmif_dredge <- dredge_model
@@ -132,6 +143,7 @@ mmif_best_model_rivier <- update(best_model_ML, REML = TRUE)
 summary(mmif_best_model_rivier)
 
 plot_model_vif(mmif_best_model_rivier, "VIF Check") # "intensiteit_combo_oeverzone_s" weggelaten
+sw(mmif_dredge)
 
 ################################################################################
 # model fitten EPT
@@ -146,6 +158,18 @@ model <- glmmTMB(data = dredge_data, formula = formula_obj,
                  REML = FALSE,
                  family = binomial(link = "logit"),
                  weights = dredge_data$ta_xw)
+
+performance::check_singularity(model)
+
+formula_obj <- update(formula_obj, . ~ . - (1|meetplaats))
+
+options(na.action = "na.fail") # Verplicht voor dredge
+model <- glmmTMB(data = dredge_data, formula = formula_obj,
+                 REML = FALSE,
+                 family = binomial(link = "logit"),
+                 weights = dredge_data$ta_xw)
+
+performance::check_singularity(model)
 
 source(here("source" , "analyse", "sem", "dredge.R"))
 
@@ -162,114 +186,114 @@ plot_model_vif(ept_best_model_rivier, "VIF Check") # "intensiteit_combo_oeverzon
 ################################################################################
 # model fitten tax
 ################################################################################
-y_var <- "ta_xw"
-predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s", "overstorten_blootstelling_index_log")
-
-source(here("source", "analyse", "sem", "dredge_formula.R"))
-
-options(na.action = "na.fail") # Verplicht voor dredge
-model <- glmmTMB(data = dredge_data, formula = formula_obj,
-                 REML = FALSE,
-                 family = poisson)
-
-source(here("source" , "analyse", "sem", "dredge.R"))
-
-tax_dredge <- dredge_model
-
-best_model_ML <- get.models(tax_dredge, subset = 1)[[1]]
-
-tax_best_model_rivier <- update(best_model_ML, REML = TRUE)
-
-summary(tax_best_model_rivier)
-
-plot_model_vif(tax_best_model_rivier, "VIF Check") # "intensiteit_combo_oeverzone_s" weggelaten
+# y_var <- "ta_xw"
+# predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s", "overstorten_blootstelling_index_log")
+#
+# source(here("source", "analyse", "sem", "dredge_formula.R"))
+#
+# options(na.action = "na.fail") # Verplicht voor dredge
+# model <- glmmTMB(data = dredge_data, formula = formula_obj,
+#                  REML = FALSE,
+#                  family = poisson)
+#
+# source(here("source" , "analyse", "sem", "dredge.R"))
+#
+# tax_dredge <- dredge_model
+#
+# best_model_ML <- get.models(tax_dredge, subset = 1)[[1]]
+#
+# tax_best_model_rivier <- update(best_model_ML, REML = TRUE)
+#
+# summary(tax_best_model_rivier)
+#
+# plot_model_vif(tax_best_model_rivier, "VIF Check") # "intensiteit_combo_oeverzone_s" weggelaten
 
 ################################################################################
 # model fitten nst
 ################################################################################
-
-y_var <- "nst_prop"
-predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s", "overstorten_blootstelling_index_log")
-
-source(here("source", "analyse", "sem", "dredge_formula.R"))
-
-options(na.action = "na.fail") # Verplicht voor dredge
-model <- glmmTMB(data = dredge_data, formula = formula_obj,
-                 REML = FALSE,
-                 family = binomial(link = "logit"),
-                 weights = dredge_data$ta_xw)
-
-source(here("source" , "analyse", "sem", "dredge.R"))
-
-nst_dredge <- dredge_model
-
-best_model_ML <- get.models(nst_dredge, subset = 1)[[1]]
-
-nst_best_model_rivier <- update(best_model_ML, REML = TRUE)
-
-summary(nst_best_model_rivier)
-
-plot_model_vif(nst_best_model_rivier, "VIF Check") # "intensiteit_combo_oeverzone_s" weggelaten
+#
+# y_var <- "nst_prop"
+# predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s", "overstorten_blootstelling_index_log")
+#
+# source(here("source", "analyse", "sem", "dredge_formula.R"))
+#
+# options(na.action = "na.fail") # Verplicht voor dredge
+# model <- glmmTMB(data = dredge_data, formula = formula_obj,
+#                  REML = FALSE,
+#                  family = binomial(link = "logit"),
+#                  weights = dredge_data$ta_xw)
+#
+# source(here("source" , "analyse", "sem", "dredge.R"))
+#
+# nst_dredge <- dredge_model
+#
+# best_model_ML <- get.models(nst_dredge, subset = 1)[[1]]
+#
+# nst_best_model_rivier <- update(best_model_ML, REML = TRUE)
+#
+# summary(nst_best_model_rivier)
+#
+# plot_model_vif(nst_best_model_rivier, "VIF Check") # "intensiteit_combo_oeverzone_s" weggelaten
 
 ################################################################################
 # model fitten stress
 ################################################################################
-y_var <- "stress_prop"
-predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s", "overstorten_blootstelling_index_log")
-
-source(here("source", "analyse", "sem", "dredge_formula.R"))
-
-options(na.action = "na.fail") # Verplicht voor dredge
-model <- glmmTMB(data = dredge_data, formula = formula_obj,
-                 REML = FALSE,
-                 family = binomial(link = "logit"),
-                 weights = dredge_data$ta_xw)
-
-source(here("source" , "analyse", "sem", "dredge.R"))
-
-stress_dredge <- dredge_model
-
-best_model_ML <- get.models(stress_dredge, subset = 1)[[1]]
-
-stress_best_model_rivier <- update(best_model_ML, REML = TRUE)
-
-summary(stress_best_model_rivier)
-
-plot_model_vif(stress_best_model_rivier, "VIF Check") # "intensiteit_combo_oeverzone_s" weggelaten
+# y_var <- "stress_prop"
+# predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s", "overstorten_blootstelling_index_log")
+#
+# source(here("source", "analyse", "sem", "dredge_formula.R"))
+#
+# options(na.action = "na.fail") # Verplicht voor dredge
+# model <- glmmTMB(data = dredge_data, formula = formula_obj,
+#                  REML = FALSE,
+#                  family = binomial(link = "logit"),
+#                  weights = dredge_data$ta_xw)
+#
+# source(here("source" , "analyse", "sem", "dredge.R"))
+#
+# stress_dredge <- dredge_model
+#
+# best_model_ML <- get.models(stress_dredge, subset = 1)[[1]]
+#
+# stress_best_model_rivier <- update(best_model_ML, REML = TRUE)
+#
+# summary(stress_best_model_rivier)
+#
+# plot_model_vif(stress_best_model_rivier, "VIF Check") # "intensiteit_combo_oeverzone_s" weggelaten
 
 ################################################################################
 # model fitten mts
 ################################################################################
-y_var <- "mt_sw_prop"
-predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s", "overstorten_blootstelling_index_log")
-
-source(here("source", "analyse", "sem", "dredge_formula.R"))
-
-options(na.action = "na.fail") # Verplicht voor dredge
-model <- glmmTMB(data = dredge_data, formula = formula_obj,
-                 REML = FALSE,
-                 family = ordbeta)
-
-source(here("source" , "analyse", "sem", "dredge.R"))
-
-mts_dredge <- dredge_model
-
-# 1. Haal het absolute topmodel (nummer 1) uit je dredge object
-# subset = 1 pakt de bovenste rij (laagste AICc)
-best_model_ML <- get.models(mts_dredge, subset = 1)[[1]]
-
-# 2. Update het model naar REML = TRUE
-# De update() functie neemt je ML-model, behoudt de winnende formule,
-# maar herberekent de wiskunde onder de motorkap via REML.
-mts_best_model_rivier <- update(best_model_ML, REML = TRUE)
-
-# 3. Bekijk je definitieve, publiceerbare sub-model
-summary(mts_best_model_rivier)
-
-# 4. Check (optioneel) of je residuals nu mooi verdeeld zijn
-# DHARMa::simulateResiduals(best_model_rivier, plot = TRUE)
-
-plot_model_vif(mts_best_model_rivier, "VIF Check") # "intensiteit_combo_oeverzone_s" weggelaten
+# y_var <- "mt_sw_prop"
+# predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s", "overstorten_blootstelling_index_log")
+#
+# source(here("source", "analyse", "sem", "dredge_formula.R"))
+#
+# options(na.action = "na.fail") # Verplicht voor dredge
+# model <- glmmTMB(data = dredge_data, formula = formula_obj,
+#                  REML = FALSE,
+#                  family = ordbeta)
+#
+# source(here("source" , "analyse", "sem", "dredge.R"))
+#
+# mts_dredge <- dredge_model
+#
+# # 1. Haal het absolute topmodel (nummer 1) uit je dredge object
+# # subset = 1 pakt de bovenste rij (laagste AICc)
+# best_model_ML <- get.models(mts_dredge, subset = 1)[[1]]
+#
+# # 2. Update het model naar REML = TRUE
+# # De update() functie neemt je ML-model, behoudt de winnende formule,
+# # maar herberekent de wiskunde onder de motorkap via REML.
+# mts_best_model_rivier <- update(best_model_ML, REML = TRUE)
+#
+# # 3. Bekijk je definitieve, publiceerbare sub-model
+# summary(mts_best_model_rivier)
+#
+# # 4. Check (optioneel) of je residuals nu mooi verdeeld zijn
+# # DHARMa::simulateResiduals(best_model_rivier, plot = TRUE)
+#
+# plot_model_vif(mts_best_model_rivier, "VIF Check") # "intensiteit_combo_oeverzone_s" weggelaten
 
 ################################################################################
 # model fitten swd
@@ -284,6 +308,16 @@ model <- glmmTMB(data = dredge_data, formula = formula_obj,
                  REML = FALSE,
                  family = gaussian)
 
+performance::check_singularity(model)
+
+formula_obj <- update(formula_obj, . ~ . - (1|bekken))
+
+options(na.action = "na.fail") # Verplicht voor dredge
+model <- glmmTMB(data = dredge_data, formula = formula_obj,
+                 REML = FALSE,
+                 family = gaussian)
+
+performance::check_singularity(model)
 source(here("source" , "analyse", "sem", "dredge.R"))
 
 swd_dredge <- dredge_model
@@ -301,7 +335,7 @@ plot_model_vif(swd_best_model_rivier, "VIF Check")
 ################################################################################
 
 y_var <- "n_t_log"
-predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen)
+predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen, "zs_log")
 
 source(here("source", "analyse", "sem", "dredge_formula.R"))
 
@@ -309,6 +343,8 @@ options(na.action = "na.fail") # Verplicht voor dredge
 model <- glmmTMB(data = dredge_data, formula = formula_obj,
                  REML = FALSE,
                  family = gaussian)
+
+performance::check_singularity(model)
 
 source(here("source" , "analyse", "sem", "dredge.R"))
 
@@ -326,7 +362,7 @@ plot_model_vif(ntot_best_model_rivier, "VIF Check")
 # model fitten fosfor
 ################################################################################
 y_var <- "p_t_log"
-predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen)
+predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen, "zs_log")
 
 source(here("source", "analyse", "sem", "dredge_formula.R"))
 
@@ -334,6 +370,17 @@ options(na.action = "na.fail") # Verplicht voor dredge
 model <- glmmTMB(data = dredge_data, formula = formula_obj,
                  REML = FALSE,
                  family = gaussian)
+
+performance::check_singularity(model)
+
+formula_obj <- update(formula_obj, . ~ . - (1|bekken) - (1|meetplaats))
+
+options(na.action = "na.fail") # Verplicht voor dredge
+model <- glmmTMB(data = dredge_data, formula = formula_obj,
+                 REML = FALSE,
+                 family = gaussian)
+
+performance::check_singularity(model)
 
 source(here("source" , "analyse", "sem", "dredge.R"))
 
@@ -351,7 +398,7 @@ plot_model_vif(ptot_best_model_rivier, "VIF Check")
 # model fitten o2
 ################################################################################
 y_var <- "o2_s"
-predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen, "n_t_log", "p_t_log", "czv_log", "t_s", "ec_20_log")
+predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen, "n_t_log", "p_t_log", "t_s", "ec_20_log", "zs_log")
 
 source(here("source", "analyse", "sem", "dredge_formula.R"))
 
@@ -359,6 +406,17 @@ options(na.action = "na.fail") # Verplicht voor dredge
 model <- glmmTMB(data = dredge_data, formula = formula_obj,
                  REML = FALSE,
                  family = gaussian)
+
+performance::check_singularity(model)
+
+formula_obj <- update(formula_obj, . ~ . - (1|bekken) - (1|meetplaats))
+
+options(na.action = "na.fail") # Verplicht voor dredge
+model <- glmmTMB(data = dredge_data, formula = formula_obj,
+                 REML = FALSE,
+                 family = gaussian)
+
+performance::check_singularity(model)
 
 source(here("source" , "analyse", "sem", "dredge.R"))
 
@@ -375,35 +433,35 @@ plot_model_vif(o2_best_model_rivier, "VIF Check")
 ################################################################################
 # model fitten czv
 ################################################################################
-
-y_var <- "czv_log"
-predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen, "n_t_log", "p_t_log")
-
-source(here("source", "analyse", "sem", "dredge_formula.R"))
-
-options(na.action = "na.fail") # Verplicht voor dredge
-model <- glmmTMB(data = dredge_data, formula = formula_obj,
-                 REML = FALSE,
-                 family = gaussian)
-
-source(here("source" , "analyse", "sem", "dredge.R"))
-
-czv_dredge <- dredge_model
-
-best_model_ML <- get.models(czv_dredge, subset = 1)[[1]]
-
-czv_best_model_rivier <- update(best_model_ML, REML = TRUE)
-
-summary(czv_best_model_rivier)
-
-plot_model_vif(czv_best_model_rivier, "VIF Check")
+#
+# y_var <- "czv_log"
+# predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen, "n_t_log", "p_t_log")
+#
+# source(here("source", "analyse", "sem", "dredge_formula.R"))
+#
+# options(na.action = "na.fail") # Verplicht voor dredge
+# model <- glmmTMB(data = dredge_data, formula = formula_obj,
+#                  REML = FALSE,
+#                  family = gaussian)
+#
+# source(here("source" , "analyse", "sem", "dredge.R"))
+#
+# czv_dredge <- dredge_model
+#
+# best_model_ML <- get.models(czv_dredge, subset = 1)[[1]]
+#
+# czv_best_model_rivier <- update(best_model_ML, REML = TRUE)
+#
+# summary(czv_best_model_rivier)
+#
+# plot_model_vif(czv_best_model_rivier, "VIF Check")
 
 ################################################################################
 # model fitten ec20
 ################################################################################
 
 y_var <- "ec_20_log"
-predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen, "n_t_log", "p_t_log")
+predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen)
 
 source(here("source", "analyse", "sem", "dredge_formula.R"))
 
@@ -411,6 +469,17 @@ options(na.action = "na.fail") # Verplicht voor dredge
 model <- glmmTMB(data = dredge_data, formula = formula_obj,
                  REML = FALSE,
                  family = gaussian)
+
+performance::check_singularity(model)
+
+formula_obj <- update(formula_obj, . ~ . - (1|bekken) - (1|meetplaats))
+
+options(na.action = "na.fail") # Verplicht voor dredge
+model <- glmmTMB(data = dredge_data, formula = formula_obj,
+                 REML = FALSE,
+                 family = gaussian)
+
+performance::check_singularity(model)
 
 source(here("source" , "analyse", "sem", "dredge.R"))
 
@@ -427,9 +496,35 @@ plot_model_vif(ec20_best_model_rivier, "VIF Check")
 ################################################################################
 # model fitten ph
 ################################################################################
+#
+# y_var <- "p_h_s"
+# predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen, "n_t_log", "p_t_log", "czv_log", "t_s", "ec_20_log")
+#
+# source(here("source", "analyse", "sem", "dredge_formula.R"))
+#
+# options(na.action = "na.fail") # Verplicht voor dredge
+# model <- glmmTMB(data = dredge_data, formula = formula_obj,
+#                  REML = FALSE,
+#                  family = gaussian)
+#
+# source(here("source" , "analyse", "sem", "dredge.R"))
+#
+# ph_dredge <- dredge_model
+#
+# best_model_ML <- get.models(ph_dredge, subset = 1)[[1]]
+#
+# ph_best_model_rivier <- update(best_model_ML, REML = TRUE)
+#
+# summary(ph_best_model_rivier)
+#
+# plot_model_vif(ph_best_model_rivier, "VIF Check")
 
-y_var <- "p_h_s"
-predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen, "n_t_log", "p_t_log", "czv_log", "t_s", "ec_20_log")
+################################################################################
+# model fitten zs
+################################################################################
+
+y_var <- "zs_log"
+predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen)
 
 source(here("source", "analyse", "sem", "dredge_formula.R"))
 
@@ -438,17 +533,28 @@ model <- glmmTMB(data = dredge_data, formula = formula_obj,
                  REML = FALSE,
                  family = gaussian)
 
+performance::check_singularity(model)
+
+formula_obj <- update(formula_obj, . ~ .  - (1|meetplaats))
+
+options(na.action = "na.fail") # Verplicht voor dredge
+model <- glmmTMB(data = dredge_data, formula = formula_obj,
+                 REML = FALSE,
+                 family = gaussian)
+
+performance::check_singularity(model)
+
 source(here("source" , "analyse", "sem", "dredge.R"))
 
-ph_dredge <- dredge_model
+zs_dredge <- dredge_model
 
-best_model_ML <- get.models(ph_dredge, subset = 1)[[1]]
+best_model_ML <- get.models(zs_dredge, subset = 1)[[1]]
 
-ph_best_model_rivier <- update(best_model_ML, REML = TRUE)
+zs_best_model_rivier <- update(best_model_ML, REML = TRUE)
 
-summary(ph_best_model_rivier)
+summary(zs_best_model_rivier)
 
-plot_model_vif(ph_best_model_rivier, "VIF Check")
+plot_model_vif(zs_best_model_rivier, "VIF Check")
 
 ################################################################################
 # sem models fitten
@@ -460,107 +566,101 @@ sem_mmif_rivier <- psem(
   mmif_best_model_rivier,
   ntot_best_model_rivier,
   ptot_best_model_rivier,
-  czv_best_model_rivier,
+  # czv_best_model_rivier,
   o2_best_model_rivier,
-  ec20_best_model_rivier
+  ec20_best_model_rivier,
+  # ph_best_model_rivier,
+  zs_best_model_rivier
 )
 
-summary(sem_mmif_rivier)
+summary(sem_mmif_rivier) # onmiddelijk de RE met lage variantie wegdoen -> singularity
 
 # model updaten op basis van dSepS
-mmif_best_model_updated <- update(mmif_best_model_rivier, . ~ . + spei6_s)
-ntot_best_model_updated <- update(ntot_best_model_rivier, . ~ . + t_s)
-ptot_best_model_updated <- update(ptot_best_model_rivier, . ~ . - (1 | meetplaats))
-czv_best_model_updated <- czv_best_model_rivier
+mmif_best_model_updated <- update(mmif_best_model_rivier, . ~ . )
+ntot_best_model_updated <- update(ntot_best_model_rivier, . ~ . - (1|meetplaats))
+ptot_best_model_updated <- update(ptot_best_model_rivier, . ~ . )
 ec20_best_model_updated <- update(ec20_best_model_rivier, . ~ . )
 o2_best_model_updated <- update(o2_best_model_rivier, . ~ . )
+zs_best_model_updated <- update(zs_best_model_rivier, . ~ . )
+
 
 mmif_sem_nat_sv_rivier <- psem(mmif_best_model_updated,
                                ntot_best_model_updated,
                                ptot_best_model_updated,
-                               czv_best_model_updated,
                                o2_best_model_updated,
                                ec20_best_model_updated,
-                               ec_20_log %~~% p_h_s,
-                               o2_s %~~% p_h_s,
-                               n_t_log %~~% p_t_log
-                               )
-
-,
-                               n_t_log %~~% p_t_log,
-                               n_t_log %~~% ec_20_log)
+                               zs_best_model_updated,
+                               n_t_log %~~% t_s,
+                               zs_log %~~% t_s,
+                               p_t_log %~~% t_s)
+n_t_log %~~% ec_20_log
 summary(mmif_sem_nat_sv_rivier)
 
-save(mmif_sem_nat_sv_rivier, file = here("source", "analyse", "sem", "mi_nat_sv_rivier", "mmif_sem_nat_sv_rivier.rdata"))
-load(file = here("source", "analyse", "sem", "mi_nat_sv_rivier", "mmif_sem_nat_sv_rivier.rdata"))
+# het optimale model clean maken!
+f_mmif  <- formula(mmif_best_model_updated)
+f_ntot  <- formula(ntot_best_model_updated)
+f_ptot  <- formula(ptot_best_model_updated)
+f_o2    <- formula(o2_best_model_updated)
+f_ec20  <- formula(ec20_best_model_updated)
+f_zs     <- formula(zs_best_model_updated)
 
-sem_resultaat <- sem_mmif_rivier
-coefs_missing <- coefs(sem_resultaat)[,-9]
-source("source/analyse/sem/sem_standardised_coef_flexible.R")
-coefs_filled <- coefs_missing
-source(here("source", "analyse", "sem", "figuur_sem.R"))
+mmif_clean <- glmmTMB(
+  formula     = f_mmif,
+  data        = dredge_data,
+  family      = ordbeta()
+)
+
+ntot_clean  <- glmmTMB(f_ntot,  data = dredge_data, family = gaussian())
+ptot_clean  <- glmmTMB(f_ptot,  data = dredge_data, family = gaussian())
+o2_clean    <- glmmTMB(f_o2,    data = dredge_data, family = gaussian())
+ec20_clean  <- glmmTMB(f_ec20,  data = dredge_data, family = gaussian())
+zs_clean     <- glmmTMB(f_zs,     data = dredge_data, family = gaussian())
 
 
-standardize_psem <- function(psem_obj) {
-  # 1. Haal de coëfficiënten op (ongestandaardiseerd + gestandaardiseerd waar mogelijk)
-  coef_table <- piecewiseSEM::coefs(psem_obj, standardize = "scale")
+mmif_sem_nat_sv_rivier_clean <- psem(
+  mmif_clean,
+  ntot_clean,
+  ptot_clean,
+  o2_clean,
+  ec20_clean,
+  zs_clean,
+  n_t_log %~~% t_s,
+  zs_log %~~% t_s,
+  p_t_log %~~% t_s
+)
+n_t_log %~~% ec_20_log
+mmif_sem_nat_sv_rivier_clean %>% summary
 
-  # 2. Identificeer welke rijen de Std.Estimate missen
-  # We checken op NA of op het "-" teken dat piecewiseSEM vaak gebruikt
-  missing_idx <- which(is.na(coef_table$Std.Estimate) | coef_table$Std.Estimate == "-")
+save(mmif_sem_nat_sv_rivier_clean, file = here("source", "analyse", "sem", "mi_nat_sv_rivier", "mmif_sem_nat_sv_rivier_clean.rdata"))
 
-  if (length(missing_idx) == 0) {
-    message("✅ Alle Std.Estimates zijn al aanwezig.")
-    return(coef_table)
-  }
+# SAC test
+model <- mmif_clean
+# 1. Set glmmTMB to simulate conditionally on fitted REs
+glmmTMB::set_simcodes(model$obj, val = "fix")
+# 2. Run DHARMa as usual
+res <- simulateResiduals(fittedModel = model)
+glmmTMB::set_simcodes(model$obj, val = "random")
 
-  # 3. Haal unieke responses op die reparatie nodig hebben
-  responses_to_fix <- unique(coef_table$Response[missing_idx])
+locaties_match <- dredge_data %>%
+  group_by(meetplaats) %>%
+  summarize(x = dplyr::first(x), y = dplyr::first(y), .groups = "drop") %>%
+  arrange(meetplaats) # DHARMa sorteert groepen standaard op naam/factor level
 
-  for (resp_name in responses_to_fix) {
-    # Zoek het specifieke model in de psem lijst
-    # We zoeken op basis van de naam van de afhankelijke variabele
-    model_obj <- psem_obj[[which(sapply(psem_obj, function(x)
-      tryCatch(insight::find_response(x) == resp_name, error = function(e) FALSE)))]]
+# 3. Aggregeer residuen
+res_grouped <- recalculateResiduals(res, group = dredge_data$meetplaats)
 
-    if (is.null(model_obj)) next
+# 4. De test
+testSpatialAutocorrelation(res_grouped,
+                           x = locaties_match$x,
+                           y = locaties_match$y)
 
-    message("🔧 Berekenen gestandaardiseerde waarden voor: ", resp_name)
 
-    # --- De 'insight/performance' magie ---
-    # Haal de varianties op (Nakagawa methode)
-    vars <- insight::get_variance(model_obj)
+load(file = here("source", "analyse", "sem", "mi_nat_sv_rivier", "mmif_sem_nat_sv_rivier_clean.rdata"))
 
-    # Bereken totale latente SD: sqrt(Var_fixed + Var_random + Var_distribution)
-    # De 'var.distribution' is cruciaal voor non-gaussian modellen (Varm)
-    total_latent_sd <- sqrt(sum(unlist(vars[c("var.fixed", "var.random", "var.distribution")]), na.rm = TRUE))
+coefs_filled <- standardize_psem(mmif_sem_nat_sv_rivier_clean)[,-9]
 
-    # Haal de data op om SD van de predictors te berekenen
-    model_data <- insight::get_data(model_obj)
-
-    # Update de specifieke rijen in de tabel
-    curr_rows <- which(coef_table$Response == resp_name & (is.na(coef_table$Std.Estimate) | coef_table$Std.Estimate == "-"))
-
-    for (idx in curr_rows) {
-      pred_name <- coef_table$Predictor[idx]
-      beta_unstd <- coef_table$Estimate[idx]
-
-      if (pred_name %in% names(model_data)) {
-        sd_x <- sd(model_data[[pred_name]], na.rm = TRUE)
-        # De formule: beta * (SD_x / SD_y_totaal)
-        coef_table$Std.Estimate[idx] <- as.numeric(beta_unstd * (sd_x / total_latent_sd))
-      }
-    }
-  }
-
-  # Dwing de kolom naar numeriek voor verdere analyse
-  coef_table$Std.Estimate <- as.numeric(coef_table$Std.Estimate)
-
-  return(coef_table)
-}
-coefs_filled <- standardize_psem(mmif_sem_nat_sv_rivier)[,-9]
-source(here("source", "analyse", "sem", "figuur_sem_zonder_corrfout.R")) #zonder cluster gecorreleerde fouten
-
+source(here("source", "analyse", "sem", "figuur_sem_interactive.R")) #zonder cluster gecorreleerde fouten
+saveWidget(network, file = here("output", "figuren", "psem_inter_netw_mi_nat_sv_mmif_rivier.html"), selfcontained = TRUE)
 
 
 # EPT
@@ -569,39 +669,105 @@ sem_ept_rivier <- psem(
   ept_best_model_rivier,
   ntot_best_model_rivier,
   ptot_best_model_rivier,
-  czv_best_model_rivier,
   o2_best_model_rivier,
-  ec20_best_model_rivier
+  ec20_best_model_rivier,
+  zs_best_model_rivier
 )
 
 summary(sem_ept_rivier)
-# updaten
 
-ept_best_model_updated <- update(ept_best_model_rivier, . ~ . + czv_log)
-ntot_best_model_updated <- update(ntot_best_model_rivier, . ~ . + intensiteit_combo_afstr_s + n_extreme_3m_s)
-ptot_best_model_updated <- update(ptot_best_model_rivier, . ~ . + intensiteit_combo_afstr_s)
-czv_best_model_updated <- czv_best_model_rivier
+# model updaten op basis van dSepS
+ept_best_model_updated <- update(ept_best_model_rivier, . ~ . + p_t_log)
+ntot_best_model_updated <- update(ntot_best_model_rivier, . ~ . - (1 | meetplaats))
+ptot_best_model_updated <- update(ptot_best_model_rivier, . ~ . )
 ec20_best_model_updated <- update(ec20_best_model_rivier, . ~ . )
-o2_best_model_updated <- update(o2_best_model_rivier, . ~ . + n_extreme_3m_s + spei6_s)
+o2_best_model_updated <- update(o2_best_model_rivier, . ~ . )
+zs_best_model_updated <- update(zs_best_model_rivier, . ~ . )
+
 
 ept_sem_nat_sv_rivier <- psem(ept_best_model_updated,
-                              ntot_best_model_updated,
-                              ptot_best_model_updated,
-                              czv_best_model_updated,
-                              o2_best_model_updated,
-                              ec20_best_model_updated,
-                              n_t_log %~~% p_t_log,
-                              n_t_log %~~% ec_20_log)
+                               ntot_best_model_updated,
+                               ptot_best_model_updated,
+                               o2_best_model_updated,
+                               ec20_best_model_updated,
+                               zs_best_model_updated,
+                               n_t_log %~~% t_s,
+                               zs_log %~~% t_s,
+                               p_t_log %~~% t_s)
+,
+                               n_t_log %~~% ec_20_log)
+
 summary(ept_sem_nat_sv_rivier)
 
-save(ept_sem_nat_sv_rivier, file = here("source", "analyse", "sem", "mi_nat_sv_rivier", "ept_sem_nat_sv_rivier.rdata"))
-load(file = here("source", "analyse", "sem", "mi_nat_sv_rivier", "ept_sem_nat_sv_rivier.rdata"))
+# het optimale model clean maken!
+f_ept  <- formula(ept_best_model_updated)
+f_ntot  <- formula(ntot_best_model_updated)
+f_ptot  <- formula(ptot_best_model_updated)
+f_o2    <- formula(o2_best_model_updated)
+f_ec20  <- formula(ec20_best_model_updated)
+f_zs     <- formula(zs_best_model_updated)
 
-sem_resultaat <- ept_sem_nat_sv_rivier
-coefs_missing <- coefs(sem_resultaat)[,-9]
-source("source/analyse/sem/sem_standardised_coef_flexible.R")
-coefs_filled <- coefs_missing
-source(here("source", "analyse", "sem", "figuur_sem.R"))
+ept_clean <- glmmTMB(
+  formula     = f_ept,
+  data        = dredge_data,
+  family      = binomial(link = "logit"),
+  weights = dredge_data$ta_xw
+)
+
+ntot_clean  <- glmmTMB(f_ntot,  data = dredge_data, family = gaussian())
+ptot_clean  <- glmmTMB(f_ptot,  data = dredge_data, family = gaussian())
+o2_clean    <- glmmTMB(f_o2,    data = dredge_data, family = gaussian())
+ec20_clean  <- glmmTMB(f_ec20,  data = dredge_data, family = gaussian())
+zs_clean     <- glmmTMB(f_zs,     data = dredge_data, family = gaussian())
+
+
+ept_sem_nat_sv_rivier_clean <- psem(
+  ept_clean,
+  ntot_clean,
+  ptot_clean,
+  o2_clean,
+  ec20_clean,
+  zs_clean,
+  n_t_log %~~% t_s,
+  zs_log %~~% t_s,
+  p_t_log %~~% t_s,
+  n_t_log %~~% ec_20_log
+)
+
+ept_sem_nat_sv_rivier_clean %>% summary
+r.squaredGLMM(ept_clean)
+
+save(ept_sem_nat_sv_rivier_clean, file = here("source", "analyse", "sem", "mi_nat_sv_rivier", "ept_sem_nat_sv_rivier_clean.rdata"))
+
+# SAC test
+model <- ept_clean
+# 1. Set glmmTMB to simulate conditionally on fitted REs
+glmmTMB::set_simcodes(model$obj, val = "fix")
+# 2. Run DHARMa as usual
+res <- simulateResiduals(fittedModel = model)
+glmmTMB::set_simcodes(model$obj, val = "random")
+
+locaties_match <- dredge_data %>%
+  group_by(meetplaats) %>%
+  summarize(x = dplyr::first(x), y = dplyr::first(y), .groups = "drop") %>%
+  arrange(meetplaats) # DHARMa sorteert groepen standaard op naam/factor level
+
+# 3. Aggregeer residuen
+res_grouped <- recalculateResiduals(res, group = dredge_data$meetplaats)
+
+# 4. De test
+testSpatialAutocorrelation(res_grouped,
+                           x = locaties_match$x,
+                           y = locaties_match$y)
+
+
+load(file = here("source", "analyse", "sem", "mi_nat_sv_rivier", "ept_sem_nat_sv_rivier_clean.rdata"))
+
+coefs_filled <- standardize_psem(ept_sem_nat_sv_rivier_clean)[,-9]
+
+source(here("source", "analyse", "sem", "figuur_sem_interactive.R")) #zonder cluster gecorreleerde fouten
+saveWidget(network, file = here("output", "figuren", "psem_inter_netw_mi_nat_sv_ept_rivier.html"), selfcontained = TRUE)
+
 
 ## swd
 
@@ -609,37 +775,99 @@ sem_swd_rivier <- psem(
   swd_best_model_rivier,
   ntot_best_model_rivier,
   ptot_best_model_rivier,
-  czv_best_model_rivier,
+  zs_best_model_rivier,
   o2_best_model_rivier,
   ec20_best_model_rivier
 )
 
 summary(sem_swd_rivier)
 
-# updaten
+# model updaten op basis van dSepS
+swd_best_model_updated <- update(swd_best_model_rivier, . ~ . + intensiteit_combo_afstr_s + ec_20_log)
+ntot_best_model_updated <- update(ntot_best_model_rivier, . ~ . - (1 | meetplaats))
+ptot_best_model_updated <- update(ptot_best_model_rivier, . ~ . )
+ec20_best_model_updated <- update(ec20_best_model_rivier, . ~ . )
+o2_best_model_updated <- update(o2_best_model_rivier, . ~ . )
+zs_best_model_updated <- update(zs_best_model_rivier, . ~ . )
 
-swd_best_model_updated <- update(swd_best_model_rivier, . ~ . + o2_s + p_t_log)
-ntot_best_model_updated <- update(ntot_best_model_rivier, . ~ . +  ekc2_waterlichaam_s + n_extreme_3m_s + intensiteit_combo_afstr_s +  verharding_afstr_s)
-ptot_best_model_updated <- update(ptot_best_model_rivier, . ~ . + lozingen_riool_ie_log)
-czv_best_model_updated <- update(czv_best_model_rivier, . ~ . + spei6_s + t_s)
-ec20_best_model_updated <- update(ec20_best_model_rivier, . ~ . + spei6_s)
-o2_best_model_updated <- update(o2_best_model_rivier, . ~ . +  spei6_s + p_t_log + czv_log + n_extreme_3m_s + overstorten_blootstelling_index_log)
 
 swd_sem_nat_sv_rivier <- psem(swd_best_model_updated,
                               ntot_best_model_updated,
                               ptot_best_model_updated,
-                              czv_best_model_updated,
                               o2_best_model_updated,
-                              ec_20_best_model_updated,
-                              n_t_log %~~% p_t_log,
-                              czv_log %~~% n_t_log)
+                              ec20_best_model_updated,
+                              zs_best_model_updated,
+                              n_t_log %~~% t_s,
+                              zs_log %~~% t_s,
+                              p_t_log %~~% t_s,
+                              n_t_log %~~% ec_20_log)
+
 summary(swd_sem_nat_sv_rivier)
 
-save(swd_sem_nat_sv_rivier, file = here("source", "analyse", "sem", "mi_nat_sv_rivier", "swd_sem_nat_sv_rivier.rdata"))
+# het optimale model clean maken!
+f_swd  <- formula(swd_best_model_updated)
+f_ntot  <- formula(ntot_best_model_updated)
+f_ptot  <- formula(ptot_best_model_updated)
+f_o2    <- formula(o2_best_model_updated)
+f_ec20  <- formula(ec20_best_model_updated)
+f_zs     <- formula(zs_best_model_updated)
 
-sem_resultaat <- swd_sem_nat_sv_rivier
-coefs_missing <- coefs(sem_resultaat)[,-9]
-source("source/analyse/sem/sem_standardised_coef_flexible.R")
-coefs_filled <- coefs_missing
-source(here("source", "analyse", "sem", "figuur_sem.R"))
+swd_clean <- glmmTMB(
+  formula     = f_swd,
+  data        = dredge_data,
+  family      = gaussian
+)
 
+ntot_clean  <- glmmTMB(f_ntot,  data = dredge_data, family = gaussian())
+ptot_clean  <- glmmTMB(f_ptot,  data = dredge_data, family = gaussian())
+o2_clean    <- glmmTMB(f_o2,    data = dredge_data, family = gaussian())
+ec20_clean  <- glmmTMB(f_ec20,  data = dredge_data, family = gaussian())
+zs_clean     <- glmmTMB(f_zs,     data = dredge_data, family = gaussian())
+
+
+swd_sem_nat_sv_rivier_clean <- psem(
+  swd_clean,
+  ntot_clean,
+  ptot_clean,
+  o2_clean,
+  ec20_clean,
+  zs_clean,
+  n_t_log %~~% t_s,
+  zs_log %~~% t_s,
+  p_t_log %~~% t_s,
+  n_t_log %~~% ec_20_log
+)
+
+swd_sem_nat_sv_rivier_clean %>% summary
+r.squaredGLMM(swd_clean)
+
+save(swd_sem_nat_sv_rivier_clean, file = here("source", "analyse", "sem", "mi_nat_sv_rivier", "swd_sem_nat_sv_rivier_clean.rdata"))
+
+# SAC test
+model <- swd_clean
+# 1. Set glmmTMB to simulate conditionally on fitted REs
+glmmTMB::set_simcodes(model$obj, val = "fix")
+# 2. Run DHARMa as usual
+res <- simulateResiduals(fittedModel = model)
+glmmTMB::set_simcodes(model$obj, val = "random")
+
+locaties_match <- dredge_data %>%
+  group_by(meetplaats) %>%
+  summarize(x = dplyr::first(x), y = dplyr::first(y), .groups = "drop") %>%
+  arrange(meetplaats) # DHARMa sorteert groepen standaard op naam/factor level
+
+# 3. Aggregeer residuen
+res_grouped <- recalculateResiduals(res, group = dredge_data$meetplaats)
+
+# 4. De test
+testSpatialAutocorrelation(res_grouped,
+                           x = locaties_match$x,
+                           y = locaties_match$y)
+
+
+load(file = here("source", "analyse", "sem", "mi_nat_sv_rivier", "swd_sem_nat_sv_rivier_clean.rdata"))
+
+coefs_filled <- standardize_psem(swd_sem_nat_sv_rivier_clean)[,-9]
+
+source(here("source", "analyse", "sem", "figuur_sem_interactive.R")) #zonder cluster gecorreleerde fouten
+saveWidget(network, file = here("output", "figuren", "psem_inter_netw_mi_nat_sv_swd_rivier.html"), selfcontained = TRUE)

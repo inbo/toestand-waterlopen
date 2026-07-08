@@ -3,6 +3,7 @@ if (!exists("packages_geladen")) {
   source(here::here("source", "inladen_packages.R"))
 }
 source(here::here("source", "functies.R"))
+source(here::here("source", "analyse", "mi_datasets_prep.R"))
 
 # ==============================================================================
 # STAP 3: TOEPASSING OP JOUW DATA (Workflow)
@@ -12,12 +13,12 @@ source(here::here("source", "functies.R"))
 # -----------------------------------------------------------
 data_subset <- mi_nat_sv_kempen %>%
   drop_na(meetplaats, jaar) %>%
-  select(meetplaats, monsternamedatum, jaar, bekken, deelbekken, owl, vhag,
+  select(meetplaats, monsternamedatum, jaar, bekken, deelbekken, owl, vhag, geom,
          mmif, ta_xw, ep_tw, sw_dw, ns_tw, mt_sw,
          t, p_h, o2, o2_verz, ec_20,
-         czv, n_t, no2, no3, nh4, p_t, zs,
+         czv, n_t, no2, no3, nh4, p_t, zs, cl,
          breedte_diepte_ratio, sinuositeit, bodemsub, doodhout, profiel, ekc2_waterlichaam, ekc2_traject, stroomsnelheid, # verstuwing weglaten want te veel NA
-         verharding_afstr, natuur_afstr, intensiteit_combo_afstr, verharding_oever, natuur_oever, intensiteit_combo_oeverzone,
+         verharding_afstr, natuur_afstr, intensiteit_combo_afstr, verharding_oever, natuur_oever, intensiteit_combo_oeverzone, spear_pesticides, spear_tu_estimated,
          spei6, n_extreme_3m, p_sum_7d,
          lozingen_industrie_ie, lozingen_rwzi_ie, lozingen_rwzi_p_t, lozingen_riool_ie, overstorten_index, overstorten_blootstelling_index, aantal_overstorten_weighted
   ) %>%
@@ -29,6 +30,8 @@ data_subset <- mi_nat_sv_kempen %>%
                 ns_tw = as.integer(ns_tw),
                 mt_sw_prop = mt_sw / 10,
                 bekken = as.factor(bekken),
+                vhag = as.factor(vhag),
+                maand = as.factor(lubridate::month(monsternamedatum)),
                 nst_prop = ns_tw / ta_xw,
                 stress_prop = (ep_tw + ns_tw)/ta_xw,
                 ept_prop = ep_tw / ta_xw,
@@ -39,16 +42,27 @@ data_subset <- mi_nat_sv_kempen %>%
                 czv_log = log(czv),
                 nh4_log = log(nh4),
                 ec_20_log = log(ec_20),
+                zs_log = log(zs),
                 overstorten_index_log = log(overstorten_index + 1),
                 overstorten_blootstelling_index_log = log(overstorten_blootstelling_index + 1),
                 lozingen_rwzi_ie_log = log(lozingen_rwzi_ie + 1),
                 lozingen_rwzi_p_t_log = log(lozingen_rwzi_p_t + 1),
                 lozingen_industrie_ie_log = log(lozingen_industrie_ie + 1),
-                lozingen_riool_ie_log = log(lozingen_riool_ie + 1))
+                lozingen_riool_ie_log = log(lozingen_riool_ie + 1)) %>%
+    group_by(jaar) %>%
+    mutate(
+      t_gemiddeld_jaar = mean(t, na.rm = TRUE),    # Het klimaateffect
+      t_anomalie = t - t_gemiddeld_jaar            # Het seizoenseffect
+    ) %>%
+    ungroup() %>%
+    mutate(
+      t_gemiddeld_jaar_s = scale(t_gemiddeld_jaar),
+      t_anomalie_s = scale(t_anomalie)
+    )
 
 # 1. Definieer je ruwe lijsten met variabelen (nog niet gefilterd)
 # -----------------------------------------------------------
-raw_fysico        <- c("t_s", "p_h_s", "o2_s", "ec_20_log", "zs_s") # o2_verz_s weg en keuze o2
+raw_fysico        <- c("t_s", "o2_s", "ec_20_log", "zs_log") # o2_verz_s weg en keuze o2 en "p_h_s" weg
 raw_nutrients     <- c("czv_log", "n_t_log", "no2_log", "no3_log", "nh4_log", "p_t_log")
 raw_hydmo         <- c("breedte_diepte_ratio_s", "sinuositeit_s", "bodemsub_s", "doodhout_s", "profiel_s", "ekc2_waterlichaam_s", "ekc2_traject_s", "stroomsnelheid_s")
 raw_landuse <- c("verharding_afstr_s", "natuur_afstr_s", "intensiteit_combo_afstr_s", "verharding_oever_s", "natuur_oever_s", "intensiteit_combo_oeverzone_s")
@@ -81,16 +95,22 @@ clean_all <- filter_collinear_vars(data_subset, raw_all)
 
 data_subset2 <- data_subset %>%
   select(
-    meetplaats, monsternamedatum, jaar_s, bekken, jaar, deelbekken, owl, vhag,
+    meetplaats, monsternamedatum, jaar_s, bekken, jaar, maand, deelbekken, owl, vhag, geom,
     mmif, ept_prop, ta_xw, sw_dw, mt_sw_prop, nst_prop, stress_prop,
-    n_t_log, p_t_log, czv_log,
+    n_t_log, p_t_log, czv_log, o2_verz_s, cl, spear_pesticides_s, spear_pesticides, spear_tu_estimated_s, spear_tu_estimated,
     ekc2_waterlichaam_s,
     all_of(clean_klimaat),
     all_of(clean_lozingen),
     all_of(clean_landuse),
     all_of(clean_fysico),
+    t_gemiddeld_jaar_s,
+    t_anomalie_s
   ) %>%
-  na.omit
+  na.omit %>%
+  mutate(
+    x = st_coordinates(geom)[, 1],
+    y = st_coordinates(geom)[, 2]
+  )
 
 dredge_data <- data_subset2
 dredge_data_kempen <- dredge_data
@@ -107,7 +127,7 @@ source(here("source", "analyse", "sem", "dredge_formula.R"))
 
 options(na.action = "na.fail") # Verplicht voor dredge
 model <- glmmTMB(data = dredge_data, formula = formula_obj,
-                 REML = FALSE,
+                 REML = TRUE,
                  family = ordbeta)
 
 source(here("source" , "analyse", "sem", "dredge.R"))
@@ -267,6 +287,17 @@ model <- glmmTMB(data = dredge_data, formula = formula_obj,
                  REML = FALSE,
                  family = gaussian)
 
+performance::check_singularity(model)
+
+formula_obj <- update(formula_obj, . ~ . - (1|bekken))
+
+options(na.action = "na.fail") # Verplicht voor dredge
+model <- glmmTMB(data = dredge_data, formula = formula_obj,
+                 REML = FALSE,
+                 family = gaussian)
+
+performance::check_singularity(model)
+
 source(here("source" , "analyse", "sem", "dredge.R"))
 
 swd_dredge <- dredge_model
@@ -284,7 +315,7 @@ plot_model_vif(swd_best_model_kempen, "VIF Check")
 ################################################################################
 
 y_var <- "n_t_log"
-predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen)
+predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen, "zs_log")
 
 source(here("source", "analyse", "sem", "dredge_formula.R"))
 
@@ -309,7 +340,7 @@ plot_model_vif(ntot_best_model_kempen, "VIF Check")
 # model fitten fosfor
 ################################################################################
 y_var <- "p_t_log"
-predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen)
+predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen, "zs_log")
 
 source(here("source", "analyse", "sem", "dredge_formula.R"))
 
@@ -334,7 +365,7 @@ plot_model_vif(ptot_best_model_kempen, "VIF Check")
 # model fitten o2
 ################################################################################
 y_var <- "o2_s"
-predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen, "n_t_log", "p_t_log", "czv_log", "t_s", "ec_20_log")
+predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen, "n_t_log", "p_t_log", "t_s", "ec_20_log")
 
 source(here("source", "analyse", "sem", "dredge_formula.R"))
 
@@ -356,11 +387,12 @@ summary(o2_best_model_kempen)
 plot_model_vif(o2_best_model_kempen, "VIF Check")
 
 ################################################################################
-# model fitten czv
+# model fitten zs
 ################################################################################
 
-y_var <- "czv_log"
-predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen, "n_t_log", "p_t_log")
+y_var <- "zs_log"
+predictors <- c(clean_klimaat, clean_landuse, clean_lozingen, "ekc2_waterlichaam_s")
+
 
 source(here("source", "analyse", "sem", "dredge_formula.R"))
 
@@ -371,22 +403,22 @@ model <- glmmTMB(data = dredge_data, formula = formula_obj,
 
 source(here("source" , "analyse", "sem", "dredge.R"))
 
-czv_dredge <- dredge_model
+zs_dredge <- dredge_model
 
-best_model_ML <- get.models(czv_dredge, subset = 1)[[1]]
+best_model_ML <- get.models(zs_dredge, subset = 1)[[1]]
 
-czv_best_model_kempen <- update(best_model_ML, REML = TRUE)
+zs_best_model_kempen <- update(best_model_ML, REML = TRUE)
 
-summary(czv_best_model_kempen)
+summary(zs_best_model_kempen)
 
-plot_model_vif(czv_best_model_kempen, "VIF Check")
+plot_model_vif(zs_best_model_kempen, "VIF Check")
 
 ################################################################################
 # model fitten ec20
 ################################################################################
 
 y_var <- "ec_20_log"
-predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen, "n_t_log", "p_t_log")
+predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen)
 
 source(here("source", "analyse", "sem", "dredge_formula.R"))
 
@@ -394,6 +426,17 @@ options(na.action = "na.fail") # Verplicht voor dredge
 model <- glmmTMB(data = dredge_data, formula = formula_obj,
                  REML = FALSE,
                  family = gaussian)
+
+# performance::check_singularity(model)
+#
+# formula_obj <- update(formula_obj, . ~ . - (1|bekken))
+#
+# options(na.action = "na.fail") # Verplicht voor dredge
+# model <- glmmTMB(data = dredge_data, formula = formula_obj,
+#                  REML = FALSE,
+#                  family = gaussian)
+#
+# performance::check_singularity(model)
 
 source(here("source" , "analyse", "sem", "dredge.R"))
 
@@ -412,7 +455,7 @@ plot_model_vif(ec20_best_model_kempen, "VIF Check")
 ################################################################################
 
 y_var <- "p_h_s"
-predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen, "n_t_log", "p_t_log", "czv_log", "t_s", "ec_20_log")
+predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen, "t_s")
 
 source(here("source", "analyse", "sem", "dredge_formula.R"))
 
@@ -434,6 +477,31 @@ summary(ph_best_model_kempen)
 plot_model_vif(ph_best_model_kempen, "VIF Check")
 
 ################################################################################
+# model fitten T
+################################################################################
+
+y_var <- "t_s"
+predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen)
+
+source(here("source", "analyse", "sem", "dredge_formula.R"))
+
+options(na.action = "na.fail") # Verplicht voor dredge
+model <- glmmTMB(data = dredge_data, formula = formula_obj,
+                 REML = FALSE,
+                 family = gaussian)
+
+source(here("source" , "analyse", "sem", "dredge.R"))
+
+t_dredge <- dredge_model
+
+best_model_ML <- get.models(t_dredge, subset = 1)[[1]]
+
+t_best_model_kempen <- update(best_model_ML, REML = TRUE)
+
+summary(t_best_model_kempen)
+
+plot_model_vif(t_best_model_kempen, "VIF Check")
+################################################################################
 # sem models fitten
 ################################################################################
 
@@ -443,118 +511,162 @@ sem_mmif_kempen <- psem(
   mmif_best_model_kempen,
   ntot_best_model_kempen,
   ptot_best_model_kempen,
-  czv_best_model_kempen,
   o2_best_model_kempen,
   ec20_best_model_kempen,
-  ph_best_model_kempen
+  # ph_best_model_kempen,
+  zs_best_model_kempen
+  # t_best_model_kempen
 )
 
 summary(sem_mmif_kempen)
 
 # model updaten op basis van dSepS
-mmif_best_model_updated <- update(mmif_best_model_kempen, . ~ . + p_t_log + o2_s + spei6_s)
-ntot_best_model_updated <- update(ntot_best_model_kempen, . ~ . + t_s + spei6_s) # loop dood dus uit model
-ptot_best_model_updated <- update(ptot_best_model_kempen, . ~ . + t_s)
-czv_best_model_updated <- update(czv_best_model_kempen, . ~ . ) # loop dood dus laten we uit het model!
-ec20_best_model_updated <- update(ec20_best_model_kempen, . ~ . + t_s - n_t_log + verharding_afstr_s)
-o2_best_model_updated <- update(o2_best_model_kempen, . ~ . + ec_20_log + overstorten_blootstelling_index_log)
-ph_best_model_updated <- update(ph_best_model_kempen, . ~ . )
+mmif_best_model_updated <- update(mmif_best_model_kempen, . ~ . + n_t_log + p_t_log + o2_s)
+ntot_best_model_updated <- update(ntot_best_model_kempen, . ~ . ) # loop dood dus uit model
+ptot_best_model_updated <- update(ptot_best_model_kempen, . ~ . )
+# czv_best_model_updated <- update(czv_best_model_kempen, . ~ . ) # loop dood dus laten we uit het model!
+ec20_best_model_updated <- update(ec20_best_model_kempen, . ~ . + ekc2_waterlichaam_s - (1 | bekken))
+                                   - n_t_log + verharding_afstr_s
+o2_best_model_updated <- update(o2_best_model_kempen, . ~ . + zs_log)
+# ph_best_model_updated <- update(ph_best_model_kempen, . ~ . )
+zs_best_model_updated <- update(zs_best_model_kempen, . ~ . )
+# t_best_model_updated <- update(t_best_model_kempen, . ~ . )
 
 mmif_sem_nat_sv_kempen <- psem(mmif_best_model_updated,
-                             # ntot_best_model_updated,
+                             ntot_best_model_updated,
                              ptot_best_model_updated,
                              # czv_best_model_updated,
                              o2_best_model_updated,
                              ec20_best_model_updated,
-                             ph_best_model_updated,
-                             # n_t_log %~~% p_t_log,
-                             o2_s %~~% p_h_s,
-                             ec_20_log %~~% p_t_log
-                             # czv_log %~~% p_h_s
+                             zs_best_model_updated,
+                             zs_log %~~% t_s,
+                             ec_20_log %~~% t_s,
+                             n_t_log %~~% t_s,
+                             p_t_log %~~% ec_20_log,
+                             n_t_log %~~% ec_20_log,
+                             p_t_log %~~% n_t_log
                              )
 summary(mmif_sem_nat_sv_kempen)
 
-#Ntotaal en CZV uit het model want doodlopend
+# het optimale model clean maken!
+f_mmif  <- formula(mmif_best_model_updated)
+f_ntot  <- formula(ntot_best_model_updated)
+f_ptot  <- formula(ptot_best_model_updated)
+# f_ph   <- formula(ph_best_model_updated)
+f_o2    <- formula(o2_best_model_updated)
+f_ec20  <- formula(ec20_best_model_updated)
+# f_t     <- formula(t_best_model_updated)
+f_zs     <- formula(zs_best_model_updated)
 
-save(mmif_sem_nat_sv_kempen, file = here("source", "analyse", "sem", "mi_nat_sv_kempen", "mmif_sem_nat_sv_kempen.rdata"))
-#
-# model_test_mmif <- glmmTMB(data = dredge_data, formula = mmif ~ ec_20_log + p_h_s + spei6_s + p_t_log + intensiteit_combo_afstr_s + n_t_log + o2_s + t_s + verharding_afstr_s +  n_extreme_3m_s + lozingen_riool_ie_log + jaar_s + (1|meetplaats),
-#                  REML = TRUE,
-#                  family = ordbeta, na.action = "na.omit")
-#
-# summary(model_test_mmif)
-# plot_model_vif(model_test_mmif)
-load(file = here("source", "analyse", "sem", "mi_nat_sv_kempen", "mmif_sem_nat_sv_kempen.rdata"))
+mmif_clean <- glmmTMB(
+  formula     = f_mmif,
+  data        = dredge_data,
+  family      = ordbeta()
+)
+
+ntot_clean  <- glmmTMB(f_ntot,  data = dredge_data, family = gaussian())
+ptot_clean  <- glmmTMB(f_ptot,  data = dredge_data, family = gaussian())
+# ph_clean   <- glmmTMB(f_ph,   data = dredge_data, family = gaussian())
+o2_clean    <- glmmTMB(f_o2,    data = dredge_data, family = gaussian())
+ec20_clean  <- glmmTMB(f_ec20,  data = dredge_data, family = gaussian())
+# t_clean     <- glmmTMB(f_t,     data = dredge_data, family = gaussian())
+zs_clean     <- glmmTMB(f_zs,     data = dredge_data, family = gaussian())
 
 
-psem_obj <- mmif_sem_nat_sv_beek
+mmif_sem_nat_sv_kempen_clean <- psem(
+  mmif_clean,
+  ntot_clean,
+  ptot_clean,
+  # czv_clean,
+  o2_clean,
+  ec20_clean,
+  # t_clean,
+  zs_clean,
+  # ph_clean,
+  zs_log %~~% t_s,
+  ec_20_log %~~% t_s,
+  n_t_log %~~% t_s,
+  p_t_log %~~% ec_20_log,
+  n_t_log %~~% ec_20_log,
+  o2_s %~~% zs_log,
+  p_t_log %~~% n_t_log
+)
 
-standardize_psem <- function(psem_obj) {
-  # 1. Haal de coëfficiënten op (ongestandaardiseerd + gestandaardiseerd waar mogelijk)
-  coef_table <- piecewiseSEM::coefs(psem_obj, standardize = "scale")
+mmif_sem_nat_sv_kempen_clean %>% summary
 
-  # 2. Identificeer welke rijen de Std.Estimate missen
-  # We checken op NA of op het "-" teken dat piecewiseSEM vaak gebruikt
-  missing_idx <- which(is.na(coef_table$Std.Estimate) | coef_table$Std.Estimate == "-")
+save(mmif_sem_nat_sv_kempen_clean, file = here("source", "analyse", "sem", "mi_nat_sv_kempen", "mmif_sem_nat_sv_kempen_clean.rdata"))
 
-  if (length(missing_idx) == 0) {
-    message("✅ Alle Std.Estimates zijn al aanwezig.")
-    return(coef_table)
-  }
+# SAC test
+model <- mmif_clean
+# 1. Set glmmTMB to simulate conditionally on fitted REs
+glmmTMB::set_simcodes(model$obj, val = "fix")
+# 2. Run DHARMa as usual
+res <- simulateResiduals(fittedModel = model)
+glmmTMB::set_simcodes(model$obj, val = "random")
 
-  # 3. Haal unieke responses op die reparatie nodig hebben
-  responses_to_fix <- unique(coef_table$Response[missing_idx])
+locaties_match <- dredge_data %>%
+  group_by(meetplaats) %>%
+  summarize(x = dplyr::first(x), y = dplyr::first(y), .groups = "drop") %>%
+  arrange(meetplaats) # DHARMa sorteert groepen standaard op naam/factor level
 
-  for (resp_name in responses_to_fix) {
-    # Zoek het specifieke model in de psem lijst
-    # We zoeken op basis van de naam van de afhankelijke variabele
-    model_obj <- psem_obj[[which(sapply(psem_obj, function(x)
-      tryCatch(insight::find_response(x) == resp_name, error = function(e) FALSE)))]]
+# 3. Aggregeer residuen
+res_grouped <- recalculateResiduals(res, group = dredge_data$meetplaats)
 
-    if (is.null(model_obj)) next
+# 4. De test
+testSpatialAutocorrelation(res_grouped,
+                           x = locaties_match$x,
+                           y = locaties_match$y)
 
-    message("🔧 Berekenen gestandaardiseerde waarden voor: ", resp_name)
+library(DHARMa)
+library(ggplot2)
 
-    # --- De 'insight/performance' magie ---
-    # Haal de varianties op (Nakagawa methode)
-    vars <- insight::get_variance(model_obj)
+# Zet je modellen in een lijst
+model_list <- list(
+  mmif = mmif_clean,
+  ntot = ntot_clean,
+  ptot = ptot_clean,
+  # czv  = czv_clean,
+  ec20 = ec20_clean,
+  o2   = o2_clean,
+  t = t_clean,
+  zs = zs_clean
+)
 
-    # Bereken totale latente SD: sqrt(Var_fixed + Var_random + Var_distribution)
-    # De 'var.distribution' is cruciaal voor non-gaussian modellen (Varm)
-    total_latent_sd <- sqrt(sum(unlist(vars[c("var.fixed", "var.random", "var.distribution")]), na.rm = TRUE))
 
-    # Haal de data op om SD van de predictors te berekenen
-    model_data <- insight::get_data(model_obj)
 
-    # Update de specifieke rijen in de tabel
-    curr_rows <- which(coef_table$Response == resp_name & (is.na(coef_table$Std.Estimate) | coef_table$Std.Estimate == "-"))
+# Loop voor validatie
+for (name in names(model_list)) {
+  cat("\n--- Diagnostiek voor model:", name, "---\n")
 
-    for (idx in curr_rows) {
-      pred_name <- coef_table$Predictor[idx]
-      beta_unstd <- coef_table$Estimate[idx]
+  # 1. Bereken residuen (simulatie-gebaseerd)
+  res <- simulateResiduals(fittedModel = model_list[[name]], n = 1000)
 
-      if (pred_name %in% names(model_data)) {
-        sd_x <- sd(model_data[[pred_name]], na.rm = TRUE)
-        # De formule: beta * (SD_x / SD_y_totaal)
-        coef_table$Std.Estimate[idx] <- as.numeric(beta_unstd * (sd_x / total_latent_sd))
-      }
-    }
-  }
+  # 2. Plot residuen (QQ-plot en Residual vs Predicted)
+  plot(res)
+  title(main = paste("DHARMa residuals:", name), line = 2)
 
-  # Dwing de kolom naar numeriek voor verdere analyse
-  coef_table$Std.Estimate <- as.numeric(coef_table$Std.Estimate)
-
-  return(coef_table)
+  # 3. Test specifiek op overdispersie en outliers
+  print(testDispersion(res))
+  print(testOutliers(res))
 }
 
-coefs_filled <- standardize_psem(mmif_sem_nat_sv_beek)[,-9]
+load(file = here("source", "analyse", "sem", "mi_nat_sv_kempen", "mmif_sem_nat_sv_kempen_clean.rdata"))
 
+coefs_filled <- standardize_psem(mmif_sem_nat_sv_kempen_clean)[,-9]
+# source(here("source", "analyse", "sem", "figuur_sem_zonder_corrfout.R")) #zonder cluster gecorreleerde fouten
 
-sem_resultaat <- mmif_sem_nat_sv_kempen
-coefs_missing <- coefs(sem_resultaat)[,-9]
-source("source/analyse/sem/sem_standardised_coef_flexible.R")
-coefs_filled <- coefs_missing
-source(here("source", "analyse", "sem", "figuur_sem.R"))
+# ggsave(
+#   filename =  here("output", "figuren", "SEM_mi_nat_sv_kempen_mmif.png"),
+#   plot = last_plot(), # Expliciet de laatste plot kiezen
+#   width = 40,
+#   height = 20,
+#   units = "cm",
+#   dpi = 300,
+#   bg = "white"
+# )
+source(here("source", "analyse", "sem", "figuur_sem_interactive.R")) #zonder cluster gecorreleerde fouten
+saveWidget(network, file = here("output", "figuren", "psem_inter_netw_mi_nat_sv_mmif_kempen.html"), selfcontained = TRUE)
+
 
 # EPT
 
@@ -562,43 +674,122 @@ sem_ept_kempen <- psem(
   ept_best_model_kempen,
   ntot_best_model_kempen,
   ptot_best_model_kempen,
-  czv_best_model_kempen,
+  # czv_best_model_kempen,
   o2_best_model_kempen,
-  ec20_best_model_kempen
+  ec20_best_model_kempen,
+  zs_best_model_kempen
 )
 
 summary(sem_ept_kempen)
 # updaten
 
 ept_best_model_updated <- update(ept_best_model_kempen, . ~ . )
-ntot_best_model_updated <- update(ntot_best_model_kempen, . ~ . + t_s)
-ptot_best_model_updated <- update(ptot_best_model_kempen, . ~ . + t_s )
-czv_best_model_updated <- update(czv_best_model_kempen, . ~ . )
-ec20_best_model_updated <- update(ec20_best_model_kempen, . ~ . + t_s - n_t_log)
-o2_best_model_updated <- update(o2_best_model_kempen, . ~ . + overstorten_blootstelling_index_log + verharding_oever_s + ec_20_log)
+ntot_best_model_updated <- update(ntot_best_model_kempen, . ~ . )
+ptot_best_model_updated <- update(ptot_best_model_kempen, . ~ . )
+# czv_best_model_updated <- update(czv_best_model_kempen, . ~ . )
+ec20_best_model_updated <- update(ec20_best_model_kempen, . ~ . + ekc2_waterlichaam_s - (1 | bekken))
+o2_best_model_updated <- update(o2_best_model_kempen, . ~ . + zs_log)
+zs_best_model_updated <- update(zs_best_model_kempen, . ~ . )
 
 ept_sem_nat_sv_kempen <- psem(ept_best_model_updated,
-                            # ntot_best_model_updated,
+                            ntot_best_model_updated,
                             ptot_best_model_updated,
                             # czv_best_model_updated,
                             o2_best_model_updated,
-                            ec20_best_model_updated)
-                            # n_t_log %~~% p_t_log)
+                            ec20_best_model_updated,
+                            zs_best_model_updated,
+                            ec_20_log %~~% t_s,
+                            zs_log %~~% t_s,
+                            n_t_log %~~% t_s,
+                            n_t_log %~~% ec_20_log,
+                            p_t_log %~~% ec_20_log,
+                            n_t_log %~~% p_t_log)
 summary(ept_sem_nat_sv_kempen)
-
-#Ntotaal en CZV uit het model want doodlopend
-
-
-save(ept_sem_nat_sv_kempen, file = here("source", "analyse", "sem", "mi_nat_sv_kempen", "ept_sem_nat_sv_kempen.rdata"))
-
-load(file = here("source", "analyse", "sem", "mi_nat_sv_kempen", "ept_sem_nat_sv_kempen.rdata"))
-
 r.squaredGLMM(ept_best_model_updated)
-sem_resultaat <- ept_sem_nat_sv_kempen
-coefs_missing <- coefs(sem_resultaat)[,-9]
-source("source/analyse/sem/sem_standardised_coef_flexible.R")
-coefs_filled <- coefs_missing
-source(here("source", "analyse", "sem", "figuur_sem.R"))
+
+# het optimale model clean maken!
+f_ept  <- formula(ept_best_model_updated)
+f_ntot  <- formula(ntot_best_model_updated)
+f_ptot  <- formula(ptot_best_model_updated)
+f_zs   <- formula(zs_best_model_updated)
+f_o2    <- formula(o2_best_model_updated)
+f_ec20  <- formula(ec20_best_model_updated)
+# f_t     <- formula(t_best_model_updated)
+
+
+ept_clean <- glmmTMB(
+  formula     = f_ept,
+  data        = dredge_data,
+  family = binomial(link = "logit"),
+  weights = dredge_data$ta_xw
+)
+
+ntot_clean  <- glmmTMB(f_ntot,  data = dredge_data, family = gaussian())
+ptot_clean  <- glmmTMB(f_ptot,  data = dredge_data, family = gaussian())
+# ph_clean   <- glmmTMB(f_ph,   data = dredge_data, family = gaussian())
+o2_clean    <- glmmTMB(f_o2,    data = dredge_data, family = gaussian())
+ec20_clean  <- glmmTMB(f_ec20,  data = dredge_data, family = gaussian())
+# t_clean     <- glmmTMB(f_t,     data = dredge_data, family = gaussian())
+zs_clean     <- glmmTMB(f_zs,     data = dredge_data, family = gaussian())
+
+
+ept_sem_nat_sv_kempen_clean <- psem(
+  ept_clean,
+  ntot_clean,
+  ptot_clean,
+  # czv_clean,
+  o2_clean,
+  ec20_clean,
+  # t_clean,
+  zs_clean,
+  # ph_clean,
+  ec_20_log %~~% t_s,
+  zs_log %~~% t_s,
+  n_t_log %~~% t_s,
+  n_t_log %~~% ec_20_log,
+  p_t_log %~~% ec_20_log,
+  n_t_log %~~% p_t_log
+)
+
+ept_sem_nat_sv_kempen_clean %>% summary
+
+save(ept_sem_nat_sv_kempen_clean, file = here("source", "analyse", "sem", "mi_nat_sv_kempen", "ept_sem_nat_sv_kempen_clean.rdata"))
+
+# SAC test
+model <- ept_clean
+# 1. Set glmmTMB to simulate conditionally on fitted REs
+glmmTMB::set_simcodes(model$obj, val = "fix")
+# 2. Run DHARMa as usual
+res <- simulateResiduals(fittedModel = model)
+glmmTMB::set_simcodes(model$obj, val = "random")
+
+locaties_match <- dredge_data %>%
+  group_by(meetplaats) %>%
+  summarize(x = dplyr::first(x), y = dplyr::first(y), .groups = "drop") %>%
+  arrange(meetplaats) # DHARMa sorteert groepen standaard op naam/factor level
+
+# 3. Aggregeer residuen
+res_grouped <- recalculateResiduals(res, group = dredge_data$meetplaats)
+
+# 4. De test
+testSpatialAutocorrelation(res_grouped,
+                           x = locaties_match$x,
+                           y = locaties_match$y)
+
+coefs_filled <- standardize_psem(ept_sem_nat_sv_kempen_clean)[,-9]
+# source(here("source", "analyse", "sem", "figuur_sem_zonder_corrfout.R")) #zonder cluster gecorreleerde fouten
+#
+# ggsave(
+#   filename =  here("output", "figuren", "SEM_mi_nat_sv_kempen_mmif.png"),
+#   plot = last_plot(), # Expliciet de laatste plot kiezen
+#   width = 40,
+#   height = 20,
+#   units = "cm",
+#   dpi = 300,
+#   bg = "white"
+# )
+source(here("source", "analyse", "sem", "figuur_sem_interactive.R")) #zonder cluster gecorreleerde fouten
+saveWidget(network, file = here("output", "figuren", "psem_inter_netw_mi_nat_sv_ept_kempen.html"), selfcontained = TRUE)
 
 ## swd
 
@@ -606,7 +797,7 @@ sem_swd_kempen <- psem(
   swd_best_model_kempen,
   ntot_best_model_kempen,
   ptot_best_model_kempen,
-  czv_best_model_kempen,
+  zs_best_model_kempen,
   o2_best_model_kempen,
   ec20_best_model_kempen
 )
@@ -615,28 +806,107 @@ summary(sem_swd_kempen)
 
 # updaten
 
-swd_best_model_updated <- update(swd_best_model_kempen, . ~ . + p_t_log)
-ntot_best_model_updated <- update(ntot_best_model_kempen, . ~ . + t_s)
-ptot_best_model_updated <- update(ptot_best_model_kempen, . ~ . + t_s)
-czv_best_model_updated <- update(czv_best_model_kempen, . ~ . )
-ec20_best_model_updated <- update(ec20_best_model_kempen, . ~ . + t_s - n_t_log)
-o2_best_model_updated <- update(o2_best_model_kempen, . ~ . + overstorten_blootstelling_index_log + verharding_oever_s + ec_20_log)
+swd_best_model_updated <- update(swd_best_model_kempen, . ~ . +  p_t_log - (1|bekken))
+ntot_best_model_updated <- update(ntot_best_model_kempen, . ~ . )
+ptot_best_model_updated <- update(ptot_best_model_kempen, . ~ . )
+zs_best_model_updated <- update(zs_best_model_kempen, . ~ . )
+ec20_best_model_updated <- update(ec20_best_model_kempen, . ~ . + ekc2_waterlichaam_s - (1|bekken))
+o2_best_model_updated <- update(o2_best_model_kempen, . ~ . + zs_log)
 
 swd_sem_nat_sv_kempen <- psem(swd_best_model_updated,
-                            # ntot_best_model_updated,
+                            ntot_best_model_updated,
                             ptot_best_model_updated,
-                            # czv_best_model_updated,
+                            zs_best_model_updated,
                             o2_best_model_updated,
-                            ec20_best_model_updated)
-                            # n_t_log %~~% p_t_log)
+                            ec20_best_model_updated,
+                            ec_20_log %~~% t_s,
+                            zs_log %~~% t_s,
+                            n_t_log %~~% t_s,
+                            n_t_log %~~% ec_20_log,
+                            p_t_log %~~% ec_20_log,
+                            n_t_log %~~% p_t_log)
 summary(swd_sem_nat_sv_kempen)
 
 #Ntotaal en CZV uit het model want doodlopend
+# het optimale model clean maken!
+f_swd  <- formula(swd_best_model_updated)
+f_ntot  <- formula(ntot_best_model_updated)
+f_ptot  <- formula(ptot_best_model_updated)
+f_zs   <- formula(zs_best_model_updated)
+f_o2    <- formula(o2_best_model_updated)
+f_ec20  <- formula(ec20_best_model_updated)
+# f_t     <- formula(t_best_model_updated)
 
-save(swd_sem_nat_sv_kempen, file = here("source", "analyse", "sem", "mi_nat_sv_kempen", "swd_sem_nat_sv_kempen.rdata"))
 
-sem_resultaat <- swd_sem_nat_sv_kempen
-coefs_missing <- coefs(sem_resultaat)[,-9]
-source("source/analyse/sem/sem_standardised_coef_flexible.R")
-coefs_filled <- coefs_missing
-source(here("source", "analyse", "sem", "figuur_sem.R"))
+swd_clean <- glmmTMB(
+  formula     = f_swd,
+  data        = dredge_data,
+  family = gaussian
+)
+
+ntot_clean  <- glmmTMB(f_ntot,  data = dredge_data, family = gaussian())
+ptot_clean  <- glmmTMB(f_ptot,  data = dredge_data, family = gaussian())
+# ph_clean   <- glmmTMB(f_ph,   data = dredge_data, family = gaussian())
+o2_clean    <- glmmTMB(f_o2,    data = dredge_data, family = gaussian())
+ec20_clean  <- glmmTMB(f_ec20,  data = dredge_data, family = gaussian())
+# t_clean     <- glmmTMB(f_t,     data = dredge_data, family = gaussian())
+zs_clean     <- glmmTMB(f_zs,     data = dredge_data, family = gaussian())
+
+
+swd_sem_nat_sv_kempen_clean <- psem(
+  swd_clean,
+  ntot_clean,
+  ptot_clean,
+  # czv_clean,
+  o2_clean,
+  ec20_clean,
+  # t_clean,
+  zs_clean,
+  # ph_clean,
+  ec_20_log %~~% t_s,
+  zs_log %~~% t_s,
+  n_t_log %~~% t_s,
+  n_t_log %~~% ec_20_log,
+  p_t_log %~~% ec_20_log,
+  n_t_log %~~% p_t_log
+)
+
+swd_sem_nat_sv_kempen_clean %>% summary
+
+save(swd_sem_nat_sv_kempen_clean, file = here("source", "analyse", "sem", "mi_nat_sv_kempen", "swd_sem_nat_sv_kempen_clean.rdata"))
+
+# SAC test
+model <- swd_clean
+# 1. Set glmmTMB to simulate conditionally on fitted REs
+glmmTMB::set_simcodes(model$obj, val = "fix")
+# 2. Run DHARMa as usual
+res <- simulateResiduals(fittedModel = model)
+glmmTMB::set_simcodes(model$obj, val = "random")
+
+locaties_match <- dredge_data %>%
+  group_by(meetplaats) %>%
+  summarize(x = dplyr::first(x), y = dplyr::first(y), .groups = "drop") %>%
+  arrange(meetplaats) # DHARMa sorteert groepen standaard op naam/factor level
+
+# 3. Aggregeer residuen
+res_grouped <- recalculateResiduals(res, group = dredge_data$meetplaats)
+
+# 4. De test
+testSpatialAutocorrelation(res_grouped,
+                           x = locaties_match$x,
+                           y = locaties_match$y)
+
+coefs_filled <- standardize_psem(swd_sem_nat_sv_kempen_clean)[,-9]
+# source(here("source", "analyse", "sem", "figuur_sem_zonder_corrfout.R")) #zonder cluster gecorreleerde fouten
+#
+# ggsave(
+#   filename =  here("output", "figuren", "SEM_mi_nat_sv_kempen_mmif.png"),
+#   plot = last_plot(), # Expliciet de laatste plot kiezen
+#   width = 40,
+#   height = 20,
+#   units = "cm",
+#   dpi = 300,
+#   bg = "white"
+# )
+source(here("source", "analyse", "sem", "figuur_sem_interactive.R")) #zonder cluster gecorreleerde fouten
+saveWidget(network, file = here("output", "figuren", "psem_inter_netw_mi_nat_sv_swd_kempen.html"), selfcontained = TRUE)
