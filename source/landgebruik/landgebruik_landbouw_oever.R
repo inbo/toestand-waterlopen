@@ -3,39 +3,63 @@ if (!exists("packages_geladen")) {
 }
 
 conflicted::conflicts_prefer(lubridate::year)
+
 # --- 1. Instellingen en Data Inladen ---
 
 # Parameters
 straal <- 100 # Straal in meters
 jaren <- 2008:2023
-
-# Inlezen meetpunten
-mi_meetpunten <- st_read(here("data", "ruw", "macroinvertebraten", "mi_meetpunten_datum.gpkg"), quiet = TRUE) %>%
-  filter(monsternamedatum > "2009-12-31") %>%
-  mutate(jaar = lubridate::year(monsternamedatum)) # Jaar kolom toevoegen voor de koppeling
+crs_referentie <- 31370
 
 # Inlezen scores
 lbg_intensiteit_scores <- read_xlsx(here("data", "ruw", "landgebruik", "landbouwgebruikspercelen", "landbouwgebruikspercelen_intensiteitsscores.xlsx")) %>%
   mutate(combo = (gewasbescherming + nitraatresidues)/2)
 
-
-# Zorg dat de meetpunten in het juiste CRS staan (Lambert 72) voor afstanden in meters
-# We nemen aan dat de percelenkaarten ook in 31370 staan (standaard voor Vlaanderen)
-crs_referentie <- 31370
+# --- 1A. Inlezen Macroinvertebraten (MI) ---
+mi_meetpunten <- st_read(here("data", "ruw", "macroinvertebraten", "mi_meetpunten_datum.gpkg"), quiet = TRUE) %>%
+  filter(monsternamedatum > "2009-12-31") %>%
+  mutate(
+    jaar = lubridate::year(monsternamedatum),
+    meetnet = "mi" # Label toevoegen
+  )
 mi_meetpunten_trans <- st_transform(mi_meetpunten, crs_referentie)
 
-
-# We berekenen ook meteen de oppervlakte van de oeverzone voor de fractie-berekening later
-
-oeverzones0 <- st_read(here("data", "ruw", "landgebruik", "oevers", "punten_buffer_mi.shp")) %>%
+oeverzones_mi <- st_read(here("data", "ruw", "landgebruik", "oevers", "punten_buffer_mi.shp"), quiet = TRUE) %>%
   select(meetplaats) %>%
-  mutate(oppervlakte_oeverzone = st_area(st_geometry(.)))
+  mutate(
+    oppervlakte_oeverzone = st_area(st_geometry(.)),
+    meetnet = "mi"
+  ) %>%
+  st_transform(crs_referentie)
 
-oeverzones <- st_transform(oeverzones0, crs_referentie)
-oeverzones_sf <- oeverzones %>%
-  # Koppel de data van de meetpunten aan de oeverzones
-  inner_join(mi_meetpunten_trans %>% st_drop_geometry(),
-             by = "meetplaats")
+# --- 1B. Inlezen Macrofyten (MAFY) ---
+mafy_meetpunten <- st_read(here("data", "ruw", "macrofyten", "mafy_meetpunten_datum.gpkg"), quiet = TRUE) %>%
+  filter(monsternamedatum > "2009-12-31") %>%
+  mutate(
+    jaar = lubridate::year(monsternamedatum),
+    meetnet = "mafy" # Label toevoegen
+  )
+mafy_meetpunten_trans <- st_transform(mafy_meetpunten, crs_referentie)
+
+oeverzones_mafy <- st_read(here("data", "ruw", "landgebruik", "oevers", "buffers_mafi_ok.shp"), quiet = TRUE) %>%
+  select(meetplaats) %>%
+  mutate(
+    oppervlakte_oeverzone = st_area(st_geometry(.)),
+    meetnet = "mafy"
+  ) %>%
+  st_transform(crs_referentie)
+
+# --- 2. Data Samenvoegen ---
+# Koppel datums aan oevers per meetnet
+oeverzones_mi_sf <- oeverzones_mi %>%
+  inner_join(mi_meetpunten_trans %>% st_drop_geometry(), by = c("meetplaats", "meetnet"))
+
+oeverzones_mafy_sf <- oeverzones_mafy %>%
+  inner_join(mafy_meetpunten_trans %>% st_drop_geometry(), by = c("meetplaats", "meetnet"))
+
+# Alles op één hoop gooien voor de loop (voor efficiëntie)
+alle_oeverzones_sf <- bind_rows(oeverzones_mi_sf, oeverzones_mafy_sf)
+
 
 # --- 3. Berekening per Jaar (Loop) ---
 
@@ -46,8 +70,7 @@ for (j in jaren) {
   message(paste0("Bezig met verwerken jaar: ", j))
 
   # A. Filter oeverzones voor dit specifieke jaar
-  # Dit versnelt de intersectie enorm omdat we niet zoeken naar punten uit andere jaren
-  oeverzones_jaar <- oeverzones_sf %>%
+  oeverzones_jaar <- alle_oeverzones_sf %>%
     filter(jaar == j)
 
   if (nrow(oeverzones_jaar) == 0) {
@@ -63,28 +86,19 @@ for (j in jaren) {
     next
   }
 
-  # Lees shapefile en transformeer direct naar CRS indien nodig
-  # We selecteren alleen de geometrie en GEWASGROEP om geheugen te sparen
   percelen_sf <- st_read(pad_shp, quiet = TRUE) %>%
     st_transform(crs_referentie) %>%
     select(GEWASGROEP)
 
-  # # oude code
-  # # We houden alleen percelen over die daadwerkelijk een buffer raken
-  # # Dit voorkomt dat we heel Vlaanderen intersecten met een paar puntjes
-  # percelen_sf_cropped <- percelen_sf[st_intersects(percelen_sf, st_union(oeverzones_jaar), sparse = FALSE)[,1], ]
-
-  # Bepaal welke percelen de oeverzones van dit jaar raken -> snellere code
+  # Bepaal welke percelen de oeverzones van dit jaar raken
   percelen_sf_cropped <- percelen_sf %>%
     st_filter(oeverzones_jaar, .predicate = st_intersects)
-
 
   # Koppel scores
   percelen_met_scores <- percelen_sf_cropped %>%
     inner_join(lbg_intensiteit_scores, by = "GEWASGROEP")
 
   # C. Ruimtelijke Intersectie
-  # Bereken de overlap tussen oeverzones en percelen
   intersectie <- st_intersection(oeverzones_jaar, percelen_met_scores)
 
   if (nrow(intersectie) == 0) {
@@ -96,18 +110,15 @@ for (j in jaren) {
   scores_jaar <- intersectie %>%
     mutate(
       oppervlakte_intersectie = st_area(st_geometry(.)),
-      # Fractie t.o.v. de BUFFER (niet t.o.v. het perceel of afstroomgebied)
       fractie_oppervlakte = as.numeric(oppervlakte_intersectie) / as.numeric(oppervlakte_oeverzone)
     ) %>%
     st_drop_geometry() %>%
-    group_by(meetplaats, monsternamedatum) %>%
+    # Let op: 'meetnet' toegevoegd aan de group_by!
+    group_by(meetnet, meetplaats, monsternamedatum) %>%
     summarise(
-      # Sommeer de scores gewogen naar oppervlakte binnen de buffer
       intensiteit_gewasbescherming = sum(fractie_oppervlakte * gewasbescherming, na.rm = TRUE),
       intensiteit_nitraatresidu = sum(fractie_oppervlakte * nitraatresidues, na.rm = TRUE),
       intensiteit_combo = sum(fractie_oppervlakte * combo, na.rm = TRUE),
-
-      # Optioneel: hoeveel % van de buffer is daadwerkelijk landbouw?
       percentage_landbouw_in_buffer = sum(fractie_oppervlakte) * 100,
       .groups = 'drop'
     )
@@ -119,19 +130,23 @@ for (j in jaren) {
 
 intensiteit_landbouw_oeverzones <- bind_rows(resultaten_lijst)
 
-# Omdat oeverzones die GEEN landbouw bevatten niet in de intersectie voorkomen,
-# missen die nu in de resultaten. We voegen die terug toe met waarde 0.
-intensiteit_landbouw_oeverzones_jaren <- oeverzones_sf %>%
+# Oeverzones zonder landbouw terug toevoegen met 0
+intensiteit_landbouw_alle_jaren <- alle_oeverzones_sf %>%
   st_drop_geometry() %>%
-  left_join(intensiteit_landbouw_oeverzones, by = c("meetplaats", "monsternamedatum")) %>%
+  # Let op: we joinen nu ook op 'meetnet' om verwarring tussen meetplaatsen met dezelfde naam te voorkomen
+  left_join(intensiteit_landbouw_oeverzones, by = c("meetnet", "meetplaats", "monsternamedatum")) %>%
   mutate(
     across(starts_with("intensiteit_"), ~replace_na(., 0)),
     percentage_landbouw_in_buffer = replace_na(percentage_landbouw_in_buffer, 0)
   )
 
-cat("\n✅ Scores Landbouwintensiteit voor oeverzones succesvol berekend.\n")
-print(head(intensiteit_landbouw_oeverzones_jaren))
+cat("\n✅ Scores Landbouwintensiteit voor oeverzones (MI en MAFY) succesvol berekend.\n")
 
-# Opslaan met dynamische naam o.b.v. straal
-bestandsnaam <- paste0("intensiteit_landbouw_scores_oeverzones.rdata")
-save(intensiteit_landbouw_oeverzones_jaren, file = here("data", "verwerkt", "landgebruik", bestandsnaam))
+# Optioneel: Je kan ze nu weer splitsen als je ze liever als losse objecten wegschrijft:
+intensiteit_landbouw_oeverzones_mi <- intensiteit_landbouw_alle_jaren %>% filter(meetnet == "mi")
+intensiteit_landbouw_oeverzones_mafy <- intensiteit_landbouw_alle_jaren %>% filter(meetnet == "mafy")
+
+# Opslaan
+save(intensiteit_landbouw_alle_jaren, file = here("data", "verwerkt", "landgebruik", "intensiteit_landbouw_scores_oeverzones_gecombineerd.rdata"))
+save(intensiteit_landbouw_oeverzones_mi, file = here("data", "verwerkt", "landgebruik", "intensiteit_landbouw_scores_oeverzones_mi.rdata"))
+save(intensiteit_landbouw_oeverzones_mafy, file = here("data", "verwerkt", "landgebruik", "intensiteit_landbouw_scores_oeverzones_mafy.rdata"))
