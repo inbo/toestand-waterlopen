@@ -75,7 +75,7 @@ message("✅ Oogsten voltooid! Bekijk master_df.")
 # 1. Definieer jouw biologische eindpunten.
 # Dit zijn de vars waarnaar we NU even niet willen kijken,
 # omdat deze per definitie uniek zijn per deelmaatlat-model.
-biologische_vars <- c("mmif", "ept_prop", "sw_dw", "ta_xw", "index_nieuw", "gv_zonder_gep", "v_zonder_gep", "vo_zonder_gep", "ts_zonder_gep")
+biologische_vars <- c("mmif", "ept_prop", "sw_dw", "ta_xw", "mt_sw_prop", "nst_prop", "index_nieuw", "gv_zonder_gep", "v_zonder_gep", "vo_zonder_gep", "ts_zonder_gep")
 
 # 2. Bouw de check
 check_verschillen <- master_df %>%
@@ -91,8 +91,8 @@ check_verschillen <- master_df %>%
     welke_maatlatten = paste(maatlat, collapse = ", "),
 
     # Zoek de maximale en minimale Estimate (effectgrootte) en P-waarde
-    min_est = min(Estimate, na.rm = TRUE),
-    max_est = max(Estimate, na.rm = TRUE),
+    min_est = min(Std.Estimate, na.rm = TRUE),
+    max_est = max(Std.Estimate, na.rm = TRUE),
     verschil_estimate = max_est - min_est,
 
     min_p = min(P.Value, na.rm = TRUE),
@@ -111,7 +111,7 @@ check_verschillen <- master_df %>%
   arrange(desc(verschil_estimate))
 
 # Bekijk het resultaat
-head(check_verschillen, 10)
+head(check_verschillen, 10) # verschillen in kempen door probleem met dsep test?
 
 
 
