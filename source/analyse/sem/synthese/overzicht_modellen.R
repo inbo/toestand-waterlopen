@@ -3,70 +3,57 @@ if (!exists("packages_geladen")) {
   source(here::here("source", "inladen_packages.R"))
 }
 source(here::here("source", "functies.R"))
+library(dplyr)
+library(stringr)
+library(purrr)
 
-model_overzicht <- read.csv("source/analyse/sem/synthese/model_overzicht.csv", sep = ";")
+# 1. Definieer de map (Let op: in R gebruik je forward slashes '/')
+map_pad <- "C:/Users/emiel_delombaerde/Documents/R/toestand-waterlopen/source/analyse/sem/synthese/sem_output"
 
-# Maak een lege lijst om alle gefilterde dataframes in op te slaan
-alle_significante_paden <- list()
+# 2. Zoek alle .rds bestanden in deze map
+bestanden <- list.files(path = map_pad, pattern = "\\.rds$", full.names = TRUE)
 
-# Loop over elke rij van je overzichtstabel
-for (i in 1:nrow(model_overzicht)) {
+if (length(bestanden) == 0) {
+  message("⚠️ Geen .rds bestanden gevonden in de opgegeven map.")
+} else {
+  message(sprintf("🔄 %d .rds bestanden gevonden. Bezig met samenvoegen...", length(bestanden)))
 
-  # 1. Haal de metadata en het pad op voor de huidige iteratie
-  huidige_groep <- model_overzicht$groep[i]
-  huidige_typo <- model_overzicht$typologie[i]
-  huidige_maatlat <- model_overzicht$maatlat[i]
-  huidig_pad <- model_overzicht$bestandspad[i]
+  # 3. Loop over elk bestand, lees in, extraheer naam-info, en bind alles samen
+  master_df <- purrr::map_dfr(bestanden, function(pad) {
 
-  message(sprintf("Bezig met inlezen model %d/%d: %s - %s - %s",
-                  i, nrow(model_overzicht), huidige_groep, huidige_typo, huidige_maatlat))
+    # Lees het .rds dataframe in
+    df <- readRDS(pad)
 
-  # 2. Laad het .rdata bestand veilig in een tijdelijke environment
-  # (zodat het geen andere objecten overschrijft en we de naam kunnen vangen)
-  temp_env <- new.env()
-  tryCatch({
-    load(huidig_pad, envir = temp_env)
-  }, error = function(e) {
-    message("⚠️ Fout bij inlezen van: ", huidig_pad)
-    return(NULL)
+    # Haal de pure bestandsnaam op (bijv. "mi_rivier_tax.rds")
+    bestandsnaam <- basename(pad)
+
+    # Verwijder de ".rds" extensie (bijv. "mi_rivier_tax")
+    naam_zonder_ext <- str_remove(bestandsnaam, "\\.rds$")
+
+    # Splits de string op de underscores
+    naam_delen <- str_split(naam_zonder_ext, "_")[[1]]
+
+    # Haal de onderdelen eruit (met een fallback voor als een naam afwijkt)
+    # Als 'maatlat' zelf underscores bevat, plakken we de rest weer netjes aan elkaar.
+    groep_val     <- ifelse(length(naam_delen) >= 1, naam_delen[1], NA)
+    typologie_val <- ifelse(length(naam_delen) >= 2, naam_delen[2], NA)
+    maatlat_val   <- ifelse(length(naam_delen) >= 3, paste(naam_delen[3:length(naam_delen)], collapse = "_"), NA)
+
+    # Voeg de kolommen vooraan toe aan het dataframe
+    df <- df %>%
+      mutate(
+        groep     = groep_val,
+        typologie = typologie_val,
+        maatlat   = maatlat_val,
+        .before   = 1
+      )
+
+    return(df)
   })
 
-  # 3. Pak het pSEM object (het eerste en hopelijk enige object in de .rdata)
-  obj_naam <- ls(temp_env)[1]
-  psem_obj <- temp_env[[obj_naam]]
-
-  # 4. Pas jouw standaardisatie functie toe
-  # TryCatch voorkomt dat de hele loop crasht als één model een foutmelding geeft
-  coefs_berekend <- tryCatch({
-    standardize_psem(psem_obj)[, -9] # Jouw aanroep, we laten kolom 9 vallen
-  }, error = function(e) {
-    message("⚠️ Fout bij standaardiseren van: ", huidig_pad)
-    return(NULL) # Skip dit model bij een error
-  })
-
-  # Ga door naar het volgende model als dit model leeg of mislukt is
-  if (is.null(coefs_berekend)) next
-
-  # 5. Filter op Significante paden (Meestal P.Value < 0.05 in piecewiseSEM)
-  # (Controleer even of de kolom exact "P.Value" heet in jouw output!)
-  significante_paden <- coefs_berekend %>%
-    filter(P.Value < 0.05) %>%
-    # Voeg de metadata kolommen toe aan het begin van het dataframe
-    mutate(
-      groep = huidige_groep,
-      typologie = huidige_typo,
-      maatlat = huidige_maatlat,
-      .before = 1
-    )
-
-  # 6. Sla het resultaat op in de lijst
-  alle_significante_paden[[i]] <- significante_paden
+  message("✅ master_df is succesvol aangemaakt!")
 }
 
-# 7. Plak alle individuele tabellen uit de lijst samen tot één Master Dataframe
-master_df <- bind_rows(alle_significante_paden)
-
-message("✅ Oogsten voltooid! Bekijk master_df.")
 
 ########
 # check de upstream paths voor verschillen #
