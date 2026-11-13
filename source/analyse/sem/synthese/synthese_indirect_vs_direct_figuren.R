@@ -1,67 +1,74 @@
-library(tidyverse)
-
+# masterdf uit overzicht_modellen
+library(ggh4x)
 # ==============================================================================
-# STAP 1: Haal de directe effecten op de biologie eruit
+# STAP 1: Basispaden isoleren
 # ==============================================================================
-directe_effecten <- master_df %>%
+alle_paden <- master_df %>%
   filter(!grepl("~~", Predictor) & !grepl("~~", Response)) %>%
-  filter(Response %in% biologische_vars) %>%
-  select(groep, typologie, Predictor, Response, Direct_Effect = Estimate)
+  select(groep, typologie, Predictor, Response, Estimate)
+
+# Directe pijlen naar de biologie (Lengte = 1)
+directe_effecten <- alle_paden %>%
+  filter(Response %in% biologische_vars)
+
+# Paden puur binnen het abiotische netwerk (voor de dominostenen)
+milieu_paden <- alle_paden %>%
+  filter(!Response %in% biologische_vars)
 
 # ==============================================================================
-# STAP 2: Bepaal de abiotische paden (Milieu ➔ Milieu)
+# STAP 2: De kettingreacties berekenen (Domino-effecten) - GEFIXED
 # ==============================================================================
-abiotische_paden <- master_df %>%
-  filter(!grepl("~~", Predictor) & !grepl("~~", Response)) %>%
-  filter(!Response %in% biologische_vars) %>%
-  select(groep, typologie, Bron_Predictor = Predictor, Intermediair = Response, Abio_Estimate = Estimate)
+# 1 Tussenstap (A ➔ B ➔ Bio)
+ind_1 <- milieu_paden %>%
+  # Gebruik relationship = "many-to-many" om de waarschuwing netjes te onderdrukken
+  inner_join(directe_effecten, by = c("groep", "typologie", "Response" = "Predictor"), relationship = "many-to-many") %>%
+  mutate(Deel_Effect = Estimate.x * Estimate.y) %>%
+  # Noem de startvariabele expliciet Bron_Predictor om .x/.y verwarring te voorkomen
+  select(groep, typologie, Bron_Predictor = Predictor, Eind_Response = Response.y, Deel_Effect)
+
+# 2 Tussenstappen (A ➔ B ➔ C ➔ Bio)
+ind_2 <- milieu_paden %>%
+  inner_join(ind_1, by = c("groep", "typologie", "Response" = "Bron_Predictor"), relationship = "many-to-many") %>%
+  mutate(Deel_Effect = Estimate * Deel_Effect) %>%
+  select(groep, typologie, Bron_Predictor = Predictor, Eind_Response, Deel_Effect)
+
+# 3 Tussenstappen (A ➔ B ➔ C ➔ D ➔ Bio)
+ind_3 <- milieu_paden %>%
+  inner_join(ind_2, by = c("groep", "typologie", "Response" = "Bron_Predictor"), relationship = "many-to-many") %>%
+  mutate(Deel_Effect = Estimate * Deel_Effect) %>%
+  select(groep, typologie, Bron_Predictor = Predictor, Eind_Response, Deel_Effect)
 
 # ==============================================================================
-# STAP 3: Koppel deze aan de paden die naar de biologie gaan (Intermediair ➔ Biologie)
+# STAP 3: Alle indirecte routes optellen
 # ==============================================================================
-bio_paden <- master_df %>%
-  filter(!grepl("~~", Predictor) & !grepl("~~", Response)) %>%
-  filter(Response %in% biologische_vars) %>%
-  select(groep, typologie, Intermediair = Predictor, Bio_Response = Response, Bio_Estimate = Estimate)
+indirecte_effecten <- bind_rows(ind_1, ind_2, ind_3) %>%
+  # Zorg dat de namen weer matchen met de directe_effecten tabel voor de join in Stap 4
+  group_by(groep, typologie, Predictor = Bron_Predictor, Response = Eind_Response) %>%
+  summarise(Indirect_Effect = sum(Deel_Effect, na.rm = TRUE), .groups = "drop")
 
 # ==============================================================================
-# STAP 4: Bereken en sommeer de indirecte effecten
-# ==============================================================================
-indirecte_effecten <- abiotische_paden %>%
-  # Zoek matches waar het abiotische eindpunt overlapt met het biologische startpunt
-  inner_join(bio_paden, by = c("groep", "typologie", "Intermediair")) %>%
-
-  # Het indirecte effect is de vermenigvuldiging van de twee pad-coëfficiënten
-  mutate(Indirect_Deel_Effect = Abio_Estimate * Bio_Estimate) %>%
-
-  # Soms loopt een bron via meerdere routes (bijv. via O2 én Nutriënten) naar dezelfde maatlat.
-  # We tellen deze op voor het totale indirecte effect van die bron.
-  group_by(groep, typologie, Predictor = Bron_Predictor, Response = Bio_Response) %>%
-  summarise(Indirect_Effect = sum(Indirect_Deel_Effect), .groups = "drop")
-
-# ==============================================================================
-# STAP 5: Combineer alles tot de definitieve df_effecten tabel
+# STAP 4: Combineer tot de definitieve df_effecten tabel
 # ==============================================================================
 df_effecten <- directe_effecten %>%
-  # Full join zorgt dat we paden behouden die ofwel alléén direct, ofwel alléén indirect zijn
+  rename(Direct_Effect = Estimate) %>%
+  # Koppel de directe en indirecte effecten samen
   full_join(indirecte_effecten, by = c("groep", "typologie", "Predictor", "Response")) %>%
 
-  # Vervang NA's door 0 (als een pad geen direct effect heeft, is dat wiskundig een 0)
+  # Vervang ontbrekende paden door 0
   mutate(
     Direct_Effect = replace_na(Direct_Effect, 0),
     Indirect_Effect = replace_na(Indirect_Effect, 0),
     Totaal_Effect = Direct_Effect + Indirect_Effect
   ) %>%
 
-  # Voeg je vertrouwde categorieën toe!
+  # Koppel jouw logische categorieën er weer aan
   mutate(Predictor_Cat = bepaal_groep(Predictor)) %>%
 
-  # Verwijder paden die helemaal geen effect blijken te hebben
+  # Houd alleen de daadwerkelijke relaties over
   filter(Direct_Effect != 0 | Indirect_Effect != 0)
 
-# Bekijk even of het gelukt is:
-head(df_effecten %>% arrange(desc(abs(Totaal_Effect))), 10)
-
+# Check of jouw landbouw -> ptot -> o2 -> ept cascade er nu wél in zit!
+head(df_effecten %>% filter(Predictor_Cat == "Landgebruik" & Response == "ept_prop"), 10)
 
 # ==============================================================================
 # 2. DATA PREPARATIE VOOR GGPLOT
@@ -142,7 +149,7 @@ print(plot_componenten)
 # 1. DATA FILTEREN EN OPSCHONEN
 # ==============================================================================
 # Bepaal je drempelwaarde. Effecten tussen -0.15 en 0.15 worden weggefilterd.
-drempelwaarde <- 0.05
+drempelwaarde <- 0.15
 
 plot_data_clean <- df_effecten %>%
   # Filter 1: Behoud alleen jouw geselecteerde top-categorieën

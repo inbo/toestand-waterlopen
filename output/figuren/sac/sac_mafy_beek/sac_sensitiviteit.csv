@@ -1,0 +1,2 @@
+"groep";"psem";"model";"strategie";"pdHess";"AIC_iid";"AIC_ruimtelijk";"dAIC";"sd_ruimtelijk";"n_sig_change";"n_sign_change";"n_marginaal";"wisselende_termen";"n_se_na";"max_se_ratio";"min_se_ratio";"max_shift_se";"post_I";"post_p";"post_fout";"oordeel";"waarschuwing";"schaal";"pre_I";"pre_p"
+"biologisch";"ts";"ts_zonder_gep";"toevoegen, eenheid 1 km";TRUE;453,888012045198;444,945621849454;-8,94239019574434;0,46309895401833;0;0;0;"";0;1,00842066893488;0,984648315591648;0,523297611287737;0,074069806520617;8,844036614164e-13;"";"robuust";"";"site";0,0722;3,02e-12

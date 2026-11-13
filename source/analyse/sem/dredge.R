@@ -25,7 +25,7 @@ dredge_model <- dredge(
   global.model = model,
   cluster = mijn_cluster,     # <--- Hier geven we het door
   rank = "AICc",
-  m.lim = c(1, 4),
+  m.lim = c(1, 5),
   fixed = "cond(jaar_s)",
   trace = 2
 )

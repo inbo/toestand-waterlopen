@@ -1,0 +1,12 @@
+"groep";"psem";"model";"type";"flag_site";"flag_owl";"flag_bekken";"dI_owl";"reden";"run_site";"run_owl"
+"biologisch";"ept";"ept_prop";"glmmTMB";TRUE;FALSE;FALSE;0,0101;"residuen_onvoorwaardelijk (I=0.106, p_bh=8.7e-13); residuen_conditioneel (I=0.036, p_bh=0.024)";TRUE;FALSE
+"biologisch";"mmif";"mmif";"glmmTMB";FALSE;FALSE;FALSE;0;"residuen_onvoorwaardelijk (I=0.057, p_bh=2e-04)";FALSE;FALSE
+"biologisch";"mts";"mt_sw_prop";"glmmTMB";FALSE;FALSE;FALSE;0;"residuen_onvoorwaardelijk (I=0.059, p_bh=0.00012)";FALSE;FALSE
+"biologisch";"nst";"nst_prop";"glmmTMB";FALSE;FALSE;FALSE;-5e-04;"";FALSE;FALSE
+"biologisch";"swd";"sw_dw";"glmmTMB";FALSE;FALSE;FALSE;-0,0052;"residuen_onvoorwaardelijk (I=0.038, p_bh=0.018)";FALSE;FALSE
+"biologisch";"tax";"ta_xw";"glmmTMB";FALSE;FALSE;FALSE;0,0036;"residuen_onvoorwaardelijk (I=0.097, p_bh=6.2e-11)";FALSE;FALSE
+"gedeeld";"mmif";"ec_20_log";"glmmTMB";FALSE;FALSE;FALSE;0,0039;"residuen_onvoorwaardelijk (I=0.184, p_bh=0)";FALSE;FALSE
+"gedeeld";"mmif";"n_t_log";"glmmTMB";FALSE;FALSE;FALSE;0,0229;"residuen_onvoorwaardelijk (I=0.11, p_bh=1e-13)";FALSE;FALSE
+"gedeeld";"mmif";"o2_s";"glmmTMB";TRUE;FALSE;FALSE;0,0018;"residuen_onvoorwaardelijk (I=0.064, p_bh=2.4e-05); residuen_conditioneel (I=0.034, p_bh=0.036)";TRUE;FALSE
+"gedeeld";"mmif";"p_t_log";"glmmTMB";TRUE;FALSE;TRUE;0,0243;"residuen_onvoorwaardelijk (I=0.178, p_bh=0); residuen_conditioneel (I=0.039, p_bh=0.017); RE_bekken (I=0.17, p_bh=0.02)";TRUE;FALSE
+"gedeeld";"mmif";"zs_log";"glmmTMB";FALSE;TRUE;FALSE;0,0306;"residuen_onvoorwaardelijk (I=0.066, p_bh=1.6e-05); RE_owl (I=0.025, p_bh=0.018)";FALSE;TRUE

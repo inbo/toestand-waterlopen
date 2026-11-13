@@ -3,7 +3,7 @@ master_df %>% filter(groep == "mi" & Predictor == "n_t_log" & Response %in% biol
 
 
 master_df %>% filter(groep == "mafy" & Predictor == "ekc2_waterlichaam_s" & Response %in% biologische_vars ) %>%View
-
+saveRDS(master_df, here("source", "analyse", "sem", "synthese", "sem_models_master_df.rds"))
 
 library(tidyverse)
 library(ggplot2)
@@ -19,12 +19,12 @@ heatmap_data_abiotisch <- master_df %>%
   distinct(groep, typologie, Predictor, Response, .keep_all = TRUE) %>%
   # Maak een mooie, leesbare label voor de Y-as
   mutate(Pathway = paste(Predictor, "➔", Response)) %>%
-  select(groep, typologie, Pathway, Estimate) %>%
+  select(groep, typologie, Pathway, Std.Estimate) %>%
   # HIER GEBEURT DE MAGIE: Vul alle ontbrekende combinaties aan met NA
   complete(Pathway, nesting(groep, typologie))
 
 # De plot maken
-plot_abiotisch <- ggplot(heatmap_data_abiotisch, aes(x = typologie, y = Pathway, fill = Estimate)) +
+plot_abiotisch <- ggplot(heatmap_data_abiotisch, aes(x = typologie, y = Pathway, fill = Std.Estimate)) +
   geom_tile(color = "grey80", size = 0.5) + # Tekent de blokjes met een grijs randje
   # Kleurenschaal: Rood (negatief), Wit (0 of NA), Blauw (positief)
   scale_fill_gradient2(
@@ -60,12 +60,12 @@ heatmap_data_biotisch <- master_df %>%
     Model_Naam = paste(typologie, Response, sep = " - "),
     Pathway = Predictor
   ) %>%
-  select(groep, Model_Naam, typologie, Pathway, Estimate) %>%
+  select(groep, Model_Naam, typologie, Pathway, Std.Estimate) %>%
   # Vul alle ontbrekende combinaties aan met NA
   complete(Pathway, nesting(groep, Model_Naam, typologie))
 
 # De plot maken
-plot_biotisch <- ggplot(heatmap_data_biotisch, aes(x = Model_Naam, y = Pathway, fill = Estimate)) +
+plot_biotisch <- ggplot(heatmap_data_biotisch, aes(x = Model_Naam, y = Pathway, fill = Std.Estimate)) +
   geom_tile(color = "grey80", size = 0.5) +
   scale_fill_gradient2(
     low = "#B2182B", mid = "white", high = "#2166AC",
@@ -102,11 +102,11 @@ heatmap_data_abiotisch <- master_df %>%
 
 distinct(groep, typologie, Predictor, Response, .keep_all = TRUE) %>%
   mutate(Pathway = paste(Predictor, "➔", Response)) %>%
-  select(groep, typologie, Pathway, Estimate) %>%
+  select(groep, typologie, Pathway, Std.Estimate) %>%
   complete(Pathway, nesting(groep, typologie))
 
 # En dan gewoon weer de plot maken!
-plot_abiotisch <- ggplot(heatmap_data_abiotisch, aes(x = typologie, y = Pathway, fill = Estimate)) +
+plot_abiotisch <- ggplot(heatmap_data_abiotisch, aes(x = typologie, y = Pathway, fill = Std.Estimate)) +
   geom_tile(color = "grey80", size = 0.5) +
   scale_fill_gradient2(
     low = "#B2182B", mid = "white", high = "#2166AC",
@@ -185,10 +185,10 @@ heatmap_data_abiotisch <- master_df %>%
     "Klimaat", "Landgebruik", "Lozingen en overstorten",
     "Hydromorfologie", "Nutriënten", "Fysico-chemie", "Overig"
   ))) %>%
-  select(groep, typologie, Pathway, Predictor_Cat, Estimate) %>%
+  select(groep, typologie, Pathway, Predictor_Cat, Std.Estimate) %>%
   complete(Pathway, nesting(groep, typologie, Predictor_Cat))
 
-plot_abiotisch <- ggplot(heatmap_data_abiotisch, aes(x = typologie, y = Pathway, fill = Estimate)) +
+plot_abiotisch <- ggplot(heatmap_data_abiotisch, aes(x = typologie, y = Pathway, fill = Std.Estimate)) +
   geom_tile(color = "grey90", size = 0.3) +
   scale_fill_gradient2(
     low = "#B2182B", mid = "white", high = "#2166AC",
@@ -233,14 +233,14 @@ heatmap_data_biotisch <- master_df %>%
     "Klimaat", "Landgebruik", "Lozingen en overstorten",
     "Hydromorfologie", "Nutriënten", "Fysico-chemie", "Overig"
   ))) %>%
-  select(groep, Model_Naam, typologie, Pathway, Predictor_Cat, Estimate) %>%
+  select(groep, Model_Naam, typologie, Pathway, Predictor_Cat, Std.Estimate) %>%
 
   # --- DE FIX ---
   # Door Pathway en Predictor_Cat samen te nesten, blijven de vars strikt in hun eigen categorie!
   complete(nesting(Pathway, Predictor_Cat), nesting(groep, Model_Naam, typologie))
 # --------------
 
-plot_biotisch <- ggplot(heatmap_data_biotisch, aes(x = Model_Naam, y = Pathway, fill = Estimate)) +
+plot_biotisch <- ggplot(heatmap_data_biotisch, aes(x = Model_Naam, y = Pathway, fill = Std.Estimate)) +
   geom_tile(color = "grey90", linewidth = 0.3) + # Let op: size is in nieuwere ggplot-versies linewidth geworden
   scale_fill_gradient2(
     low = "#B2182B", mid = "white", high = "#2166AC",
@@ -284,7 +284,7 @@ heatmap_data_biotisch <- master_df %>%
     "Klimaat", "Landgebruik", "Lozingen en overstorten",
     "Hydromorfologie", "Nutriënten", "Fysico-chemie", "Overig"
   ))) %>%
-  select(groep, Model_Naam, typologie, Pathway, Predictor_Cat, Estimate) %>%
+  select(groep, Model_Naam, typologie, Pathway, Predictor_Cat, Std.Estimate) %>%
   drop_na(groep, Model_Naam, typologie, Pathway, Predictor_Cat) %>%
 
   # --- DE OPLOSSING ---
@@ -294,7 +294,7 @@ heatmap_data_biotisch <- master_df %>%
   ungroup()
 # --------------------
 
-plot_biotisch <- ggplot(heatmap_data_biotisch, aes(x = Model_Naam, y = Pathway, fill = Estimate)) +
+plot_biotisch <- ggplot(heatmap_data_biotisch, aes(x = Model_Naam, y = Pathway, fill = Std.Estimate)) +
   geom_tile(color = "grey90", linewidth = 0.3) +
   scale_fill_gradient2(
     low = "#B2182B", mid = "white", high = "#2166AC",
@@ -336,7 +336,7 @@ heatmap_data_biotisch <- master_df %>%
     "Hydromorfologie", "Nutriënten", "Fysico-chemie", "Overig"
   ))) %>%
   # Let op: we gebruiken nu gewoon 'Response' voor de X-as, geen samengevoegde naam meer!
-  select(groep, typologie, Response, Pathway, Predictor_Cat, Estimate) %>%
+  select(groep, typologie, Response, Pathway, Predictor_Cat, Std.Estimate) %>%
   drop_na(groep, typologie, Response, Pathway, Predictor_Cat) %>%
 
   # groepeer per groep én typologie, zodat R per watersysteem exact de juiste deelmaatlatten invult
@@ -344,7 +344,7 @@ heatmap_data_biotisch <- master_df %>%
   complete(nesting(Pathway, Predictor_Cat), Response) %>%
   ungroup()
 
-plot_biotisch <- ggplot(heatmap_data_biotisch, aes(x = Response, y = Pathway, fill = Estimate)) +
+plot_biotisch <- ggplot(heatmap_data_biotisch, aes(x = Response, y = Pathway, fill = Std.Estimate)) +
   geom_tile(color = "grey90", linewidth = 0.3) +
   scale_fill_gradient2(
     low = "#B2182B", mid = "white", high = "#2166AC",
@@ -425,7 +425,7 @@ heatmap_data_biotisch <- master_df %>%
   # ZET VAST: nu maken we Model_Naam een factor op basis van deze exacte volgorde
   mutate(Model_Naam = factor(Model_Naam, levels = unique(Model_Naam))) %>%
 
-  select(groep, typologie, Model_Naam, Pathway, Predictor_Cat, Estimate) %>%
+  select(groep, typologie, Model_Naam, Pathway, Predictor_Cat, Std.Estimate) %>%
   drop_na(groep, typologie, Model_Naam, Pathway, Predictor_Cat) %>%
 
   group_by(groep) %>%
@@ -454,7 +454,7 @@ scheidingslijnen <- heatmap_data_biotisch %>%
 # ==============================================================================
 # 4. GRAFIEK 2: Plotten (Vorige Facet-stijl mét lijnen)
 # ==============================================================================
-plot_biotisch <- ggplot(heatmap_data_biotisch, aes(x = Model_Naam, y = Pathway, fill = Estimate)) +
+plot_biotisch <- ggplot(heatmap_data_biotisch, aes(x = Model_Naam, y = Pathway, fill = Std.Estimate)) +
   geom_tile(color = "grey90", linewidth = 0.3) +
   scale_fill_gradient2(
     low = "#B2182B", mid = "white", high = "#2166AC",
@@ -517,7 +517,7 @@ heatmap_data_biotisch <- master_df %>%
       "Hydromorfologie", "Nutriënten", "Fysico-chemie", "Overig"
     ))
   ) %>%
-  select(groep, typologie, Response, Pathway, Predictor_Cat, Estimate) %>%
+  select(groep, typologie, Response, Pathway, Predictor_Cat, Std.Estimate) %>%
   drop_na(groep, typologie, Response, Pathway, Predictor_Cat) %>%
 
   # Zorg dat het rooster wordt aangevuld, maar ENKEL met de maatlatten van die specifieke groep
@@ -532,7 +532,7 @@ heatmap_data_biotisch <- master_df %>%
 # ==============================================================================
 # 3. GRAFIEK 2: De Naadloze Facet Plot
 # ==============================================================================
-plot_biotisch <- ggplot(heatmap_data_biotisch, aes(x = Response, y = Pathway, fill = Estimate)) +
+plot_biotisch <- ggplot(heatmap_data_biotisch, aes(x = Response, y = Pathway, fill = Std.Estimate)) +
   geom_tile(color = "grey90", linewidth = 0.3) +
   scale_fill_gradient2(
     low = "#B2182B", mid = "white", high = "#2166AC",
@@ -580,7 +580,7 @@ library(ggh4x)
 # ==============================================================================
 # 3. GRAFIEK 2: De Naadloze Facet Plot met Gecentreerde Hoofdgroepen
 # ==============================================================================
-plot_biotisch <- ggplot(heatmap_data_biotisch, aes(x = Response, y = Pathway, fill = Estimate)) +
+plot_biotisch <- ggplot(heatmap_data_biotisch, aes(x = Response, y = Pathway, fill = Std.Estimate)) +
   geom_tile(color = "grey90", linewidth = 0.3) +
   scale_fill_gradient2(
     low = "#B2182B", mid = "white", high = "#2166AC",
@@ -645,7 +645,7 @@ heatmap_data_abiotisch <- master_df %>%
     "Hydromorfologie", "Nutriënten", "Fysico-chemie", "Overig"
   ))) %>%
 
-  select(groep, typologie, Pathway, Predictor_Cat, Estimate) %>%
+  select(groep, typologie, Pathway, Predictor_Cat, Std.Estimate) %>%
   drop_na(groep, typologie, Pathway, Predictor_Cat) %>%
 
   # Groepeer per 'groep' (mafy/mi) zodat R het raster netjes en onafhankelijk aanvult
@@ -656,7 +656,7 @@ heatmap_data_abiotisch <- master_df %>%
 # ==============================================================================
 # 2. GRAFIEK 1: De Abiotische Naadloze Facet Plot
 # ==============================================================================
-plot_abiotisch <- ggplot(heatmap_data_abiotisch, aes(x = typologie, y = Pathway, fill = Estimate)) +
+plot_abiotisch <- ggplot(heatmap_data_abiotisch, aes(x = typologie, y = Pathway, fill = Std.Estimate)) +
   geom_tile(color = "grey90", linewidth = 0.3) +
   scale_fill_gradient2(
     low = "#B2182B", mid = "white", high = "#2166AC",

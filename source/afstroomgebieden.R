@@ -16,8 +16,11 @@ fc_meetpunten <- st_read(here("data", "ruw", "fys_chem", "fc_meetpunten.gpkg"), 
   select(meetplaats)
 
 # Lees mafy meetpunten en behoud alleen de naam en de geometrie
-mafy_meetpunten <- st_read(here("data", "ruw", "macrofyten", "mafy_meetpunten_datum.gpkg"), quiet = T) %>%
+mafy_meetpunten <- st_read(here("data", "ruw", "macrofyten", "mafy_meetpunten.gpkg"), quiet = T) %>%
   select(meetplaats)
+
+# fybe_meetpunten <- st_read(here("data", "ruw", "fytobenthos", "fybe_meetpunten_datum.gpkg"), quiet = T) %>%
+#   select(meetplaats)
 
 if (st_crs(mi_meetpunten) != st_crs(fc_meetpunten)) {
   message("Coördinatensystemen verschillen. FC wordt getransformeerd naar MI CRS.")
@@ -40,10 +43,10 @@ st_write(ow_meetpunten, dsn = here("data", "verwerkt", "ow_meetpunten.gpkg"), de
 # --- Controle ---
 
 # Bekijk het resultaat
-print(unieke_meetpunten_met_coords)
+print(ow_meetpunten)
 
 # Controleer hoeveel punten je overhoudt
-nrow(unieke_meetpunten_met_coords)
+nrow(ow_meetpunten)
 
 # =====================================================================
 # 2. DEM inladen en voorbereiden
@@ -197,7 +200,7 @@ watersheds_nested <- st_read(here("data", "verwerkt", "hydrologisch",
 # =====================================================================
 # 12. Beperk afstroomgebieden met buffers (meerdere afstanden)
 # =====================================================================
-buffer_afstanden <- c(100, 250, 500, 1000, 2500, 5000)
+buffer_afstanden <- c(100, 250, 500, 1000, 2500, 5000, 50000)
 
 for (afstand in buffer_afstanden) {
 
@@ -241,5 +244,5 @@ for (afstand in buffer_afstanden) {
 # EINDE SCRIPT
 # =====================================================================
 
-afstroomgebied_buffered_100m <- st_read(here("data", "verwerkt", "hydrologisch","ow_meetpunten_watersheds_buffered_100m.gpkg"))
+afstroomgebied_buffered_50k <- st_read(here("data", "verwerkt", "hydrologisch","ow_meetpunten_watersheds_buffered_50000m.gpkg"))
 

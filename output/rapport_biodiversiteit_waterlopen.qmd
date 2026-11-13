@@ -178,6 +178,8 @@ We berekenden functionele dispersie, richness en eveness voor 3 subsets van trai
 
 Enkel metingen met een "trait-coverage" \> 80% werden behouden voor analyse.
 
+### 
+
 ## Analysemethode
 
 [Code Github voor macro-invertebraten in natuurlijke en sterk veranderde beken](https://github.com/inbo/toestand-waterlopen/blob/main/source/analyse/sem/mi_nat_sv_beek/subset_mi_nat_sv_beek.R)
@@ -187,6 +189,8 @@ Het doel van de analyse is om een ecologisch logisch en *parsimonious* model te 
 ### Stap 1: Voorbereiding en Variabelenselectie
 
 Om instabiliteit in de modellen te voorkomen, filteren we vooraf variabelen met een te hoge onderlinge correlatie ($r > 0.7$) of een hoge mate van multicollineariteit (op basis van de *Variance Inflation Factor*, VIF). Stikstofconcentratie, fosforconcentratie, lozingsvariabelen werden log-getransformeerd.
+
+TO DO: oplijsten weggelaten variabelen door correlatie
 
 ### Stap 2: Model-Dredging
 
@@ -225,6 +229,40 @@ Het initiële pSEM wordt getoetst aan de hand van *directed separation* (d-sep) 
 - **Pad-optimalisatie:** Ontbrekende maar ecologisch relevante paden die significant blijken, worden toegevoegd.
 
 - **Gecorreleerde fouten:** Relaties tussen nauw verwante stuurvariabelen (zoals stikstof en fosfor) worden expliciet als gecorreleerde fouten gemodelleerd.
+
+### R2-analyse
+
+### SAC: ruimtelijke autocorrelatie
+
+“Ruimtelijke autocorrelatie werd per deelmodel getoetst met Moran’s I op DHARMa-residuen en op de random-effect intercepts (BH-correctie over alle tests). Voor de vier deelmodellen met een significant restpatroon (nst_prop, n_t_log, ec_20_log) werd een ruimtelijk gecorreleerd random effect (exponentiële covariantie) op meetplaats- of owl-niveau gefit. Dit verbeterde de modelfit (dAIC −36 tot −51), maar veranderde de schattingen en standaardfouten van de fixed effects niet in die mate dat conclusies wijzigden. De modellen met iid random effects zijn daarom behouden.”
+
+De beperkingen in de methodesectie noemen: Euclidische afstand in plaats van stroomafstand. De bekkentest heeft met 11 groepen weinig power en is niet gemodelleerd. Het ruimtelijke model past telkens beter (dAIC -8 tot -79), maar wijzigde alleen marginale paden.
+
+### **Beschermde gebieden**
+
+Welke data? wlke analyse
+
+### Temporele trends
+
+Hoe tot de figuren gekomen + sensiviteit
+
+### Temporele analyses
+
+temporele change modellen
+
+### Polluenten
+
+#### Welke variabelen: paks, metalen, pesticiden
+
+#### TU waarden en berekening
+
+#### analyses subsets
+
+### Bovenstrooms effecten
+
+### Synthesefiguren
+
+opgelet hierbij moet de .RDATA nog verplaatst worden naar een sem_output map om die figuren te maken. (denk ik)
 
 ## Enkele resultaten
 
@@ -300,3 +338,5 @@ Deze trends zijn op basis van een gam model met gaussiaanse distributie. Problee
 Voorbeeld van een plot die de trend weergeeft van 1 van de traits gebruikt voor de berekening van FD. Hier stroomsnelheid. Echter voorzichtig te interpreteren, vnl voor de subsets voor rivieren, polders, rtnt (bovenlopen) en kunstmatig. Bij deze subsets is er wel wat jaarlijkse variatie in samplinglocatie; het samplingzwaartepunt verschuift sterk tussen jaren. Zie onderstaande figuur ter illustratie (legende nog aanpassen; grotere bolletjes is meer metingen in dat jaar):
 
 ![](figuren/ruimtelijke_drift_samples_per_jaar.png)
+
+### 

@@ -39,11 +39,15 @@ library(parallel)
 library(kableExtra)
 library(mgcv)
 library(insight)
+library(htmlwidgets)
 
 
 conflicted::conflict_prefer("select", "dplyr")
 conflicted::conflict_prefer("read_xlsx", "readxl")
 conflicted::conflicts_prefer(dplyr::filter)
 conflicted::conflicts_prefer(lmerTest::lmer)
+conflicted::conflicts_prefer(lubridate::year)
+conflicted::conflicts_prefer(base::intersect)
+
 
 packages_geladen <- TRUE

@@ -148,8 +148,10 @@ fc_selectie <- fc_data %>%
                                        "Biochemisch zuurstofverbruik na 5d.",
                                        "Sulfaat",
                                        "Orthofosfaat",
+                                       "Orthofosfaat, gefilterd",
                                        "Zwevende stoffen",
-                                       "Chlorofyl a"
+                                       "Chlorofyl a",
+                                       "Chloride"
                                        )) %>%
   mutate(parameter_symbool = clean_like_janitor(parameter_symbool)) %>%
   select(meetplaats, monsternamedatum, parameter_symbool, resultaat_ug_L) %>% # wide maken

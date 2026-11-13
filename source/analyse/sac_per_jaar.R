@@ -1,8 +1,9 @@
+#functie om per jaar de spatiale autocorrelatie te berekenen en testen
 library(dplyr)
 library(DHARMa)
-
+data_model <- dredge_data
 # 1. Genereer de residuelen voor het volledige model
-res <- simulateResiduals(fittedModel = model_gam_kempen)
+res <- simulateResiduals(fittedModel = mmif_clean)
 
 jaren <- sort(unique(data_model$jaar))
 

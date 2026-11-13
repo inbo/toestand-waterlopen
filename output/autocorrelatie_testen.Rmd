@@ -232,48 +232,59 @@ Hier plot ik de residuen van beide modellen per jaar over Vlaanderen. Op het zic
 vlaanderen <- st_read(here("data", "ruw", "vlaanderen", "vlaanderen_wgs84.shp")) %>%
   st_transform(31370)
 
-plot_spatial_residuals <- function(model_obj, data, sf_context, label = "Model") {
-  # 1. Residuals berekenen en toevoegen aan data
-  # We gebruiken Pearson residuals voor standaardisatie tussen verschillende families
+plot_spatial_conditionals <- function(model_obj, data, sf_context, label = "glmmTMB (Conditional)") {
+  
+  # 1. Activeer de glmmTMB fix voor conditionele simulatie
+  glmmTMB::set_simcodes(model_obj$obj, val = "fix")
+  
+  # 2. Genereer de DHARMa residuelen (nu conditioneel!)
+  res_sim <- simulateResiduals(fittedModel = model_obj)
+  
+  # 3. Herstel de modelstatus direct naar random (veiligheid voor je verdere code)
+  glmmTMB::set_simcodes(model_obj$obj, val = "random")
+  
+  # 4. Voeg DHARMa residuelen toe aan de data en transformeer t.o.v. de 0.5 mediaan
   data_res <- data %>%
     mutate(
-      res = residuals(model_obj, type = "pearson"),
-      res_teken = if_else(res >= 0, "Onderschatting (Positief)", "Overschatting (Negatief)"),
-      res_abs = abs(res)
+      res_dharma = res_sim$scaledResiduals,
+      # Bij DHARMa is > 0.5 een onderschatting en < 0.5 een overschatting
+      res_teken = if_else(res_dharma >= 0.5, "Onderschatting (Positief)", "Overschatting (Negatief)"),
+      # De absolute afwijking is de afstand tot het perfecte middelpunt (0.5)
+      res_abs = abs(res_dharma - 0.5)
     )
 
-  # 2. Geometrie koppelen
-  # We gaan ervan uit dat 'sf_context' de geom en koppelvelden bevat
+  # 5. Geometrie koppelen
   plot_data <- data_res %>%
     left_join(sf_context %>% select(meetplaats, monsternamedatum, geom),
               by = c("meetplaats", "monsternamedatum")) %>%
     st_as_sf()
 
-  # 3. De Plot genereren
+  # 6. De Plot genereren
   p <- ggplot() +
-    # Achtergrond (zorg dat 'vlaanderen' globaal beschikbaar is of voeg toe als argument)
+    # Achtergrond Vlaanderen
     geom_sf(data = vlaanderen, fill = "grey96", color = "grey85", size = 0.2) +
 
-    # De residuals
+    # De conditionele residuals
     geom_sf(data = plot_data,
             aes(size = res_abs, color = res_teken, geometry = geom),
             alpha = 0.6) +
 
-    # Faceting
+    # Faceting per jaar
     facet_wrap(~jaar, drop = TRUE) +
 
-    # Kleuren en schalen
+    # Kleuren en schalen (afgestemd op de 0.5 schaal)
     scale_color_manual(values = c("Onderschatting (Positief)" = "#2c7bb6",
                                   "Overschatting (Negatief)" = "#d7191c"),
-                       name = "Teken Residual") +
-    scale_size_continuous(name = "Grootte afwijking (abs. res)",
-                          range = c(0.5, 4)) +
+                       name = "Teken (t.o.v. 0.5)") +
+    scale_size_continuous(name = "Afwijking van Mediaan (abs. res)",
+                          range = c(0.5, 4),
+                          limits = c(0, 0.5)) + # Maximale afwijking van 0.5 naar 0 of 1 is 0.5
 
     # Layout en Labels
     theme_minimal() +
     labs(
-      title = paste("Spatiale distributie van Residuals:", label),
-      subtitle = "Blauw: Onderschatting | Rood: Overschatting",
+      title = paste("Spatiale distributie van Conditionele DHARMa Residuals:", label),
+      subtitle = "Blauw: Onderschatting (> 0.5) | Rood: Overschatting (< 0.5)",
       x = NULL, y = NULL
     ) +
     theme(
@@ -286,15 +297,14 @@ plot_spatial_residuals <- function(model_obj, data, sf_context, label = "Model")
 
   return(p)
 }
-
 # Voorbeeld voor het MMIF model
-p1 <- plot_spatial_residuals(model, dredge_data_kempen, mi_nat_sv_kempen, "MMIF")
+p1 <- plot_spatial_conditionals(model, dredge_data_kempen, mi_nat_sv_kempen, "MMIF")
 print(p1)
 
-p1 <- plot_spatial_residuals(model_gam_kempen, dredge_data_kempen, mi_nat_sv_kempen, "MMIF")
+p1 <- plot_spatial_conditionals(model_gam_kempen, dredge_data_kempen, mi_nat_sv_kempen, "MMIF")
 print(p1)
 
-p1 <- plot_spatial_residuals(model_gam_kempen_xy, dredge_data_kempen, mi_nat_sv_kempen, "MMIF")
+p1 <- plot_spatial_conditionals(model_gam_kempen_xy, dredge_data_kempen, mi_nat_sv_kempen, "MMIF")
 print(p1)
 ```
 

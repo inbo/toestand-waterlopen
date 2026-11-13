@@ -475,28 +475,28 @@ plot_cwm_subsets_jaar(
   data = cwm_mi_plot_data,
   category_prefix = "saprobity_",
   selected_subsets = c("nat_sv_beek", "nat_sv_kempen", "nat_sv_rivier", "nat_sv_polder", "kunstmatig", "rtnt"),
-  start_jaar = 2010
+  start_jaar = 1989
 )
 
 plot_cwm_subsets_jaar(
   data = cwm_mi_plot_data,
   category_prefix = "current_velocity_",
   selected_subsets = c("nat_sv_beek", "nat_sv_kempen", "nat_sv_rivier", "nat_sv_polder", "kunstmatig", "rtnt"),
-  start_jaar = 2010
+  start_jaar = 1989
 )
 
 plot_cwm_subsets_jaar(
   data = cwm_mi_plot_data,
   category_prefix = "respiration_",
   selected_subsets = c("nat_sv_beek", "nat_sv_kempen", "nat_sv_rivier", "nat_sv_polder", "kunstmatig", "rtnt"),
-  start_jaar = 2010
+  start_jaar = 1989
 )
 
 plot_cwm_subsets_jaar(
   data = cwm_mi_plot_data,
   category_prefix = "temperature_",
   selected_subsets = c("nat_sv_beek", "nat_sv_kempen", "nat_sv_rivier", "nat_sv_polder", "kunstmatig", "rtnt"),
-  start_jaar = 2010
+  start_jaar = 1989
 )
 
 plot_cwm_subsets_jaar(

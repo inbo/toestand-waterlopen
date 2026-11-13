@@ -3,6 +3,7 @@ data_EC50_final %>%
   distinct %>%
   print
 
+load(here("data", "verwerkt", "fc_data.rdata")) # fyschem
 
 
 # ==============================================================================
@@ -193,7 +194,7 @@ tu_specific_groups_mi <- tu_dataset_ruw_mi %>%
   )
 
 
-
+save(tu_specific_groups_mi, file = here("data", "verwerkt", "polluenten", "tu_specific_groups_ec50_macroinvertebrates.rdata"))
 
 #
 #

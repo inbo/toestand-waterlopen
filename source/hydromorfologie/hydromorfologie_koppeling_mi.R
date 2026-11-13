@@ -125,7 +125,13 @@ hm_data0 <- hm_gekoppeld_totaal %>%
     stroomsnelheid = stroomsnelheid_kmu,
     breedte = rec_width,
     diepte = bd_depth,
-    breedte_diepte_ratio = bd_wd_rat
+    breedte_diepte_ratio = bd_wd_rat,
+    dml_bedd = dml_b_owl_sgbp4,
+    dml_allu = dml_ap_owl_sgbp4,
+    dml_long = dml_loc_owl_sgbp4,
+    dml_late = dml_lac_owl_sgbp4,
+    dml_vert = dml_vec_owl_sgbp4
+
   )
 
 #---------------------------------------------------------------------------------------------------
@@ -135,7 +141,7 @@ hm_data0 <- hm_gekoppeld_totaal %>%
 hm_data <- hm_data0 %>%
   st_drop_geometry() %>%
   select(meetplaats, breedte_diepte_ratio, breedte, diepte, sinuositeit, doodhout, profiel, bodemsub,
-         ekc2_waterlichaam, ekc2_traject, verstuwing, stroomsnelheid)
+         ekc2_waterlichaam, ekc2_traject, verstuwing, stroomsnelheid, dml_allu, dml_bedd, dml_long, dml_late, dml_vert)
 
 save(hm_data, file = here("data", "verwerkt", "hm_data.rdata"))
 

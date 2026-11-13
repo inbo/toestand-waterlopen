@@ -143,7 +143,7 @@ vis_miss(data_subset %>%
 ################################################################################
 
 y_var <- "mmif"
-predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s", "overstorten_blootstelling_index_log")
+predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s", "overstorten_blootstelling_index_log", "czv_log")
 
 source(here("source", "analyse", "sem", "dredge_formula.R"))
 
@@ -151,6 +151,7 @@ options(na.action = "na.fail") # Verplicht voor dredge
 model <- glmmTMB(data = dredge_data, formula = formula_obj,
                  REML = FALSE,
                  family = ordbeta)
+performance::check_singularity(model)
 
 source(here("source" , "analyse", "sem", "dredge.R"))
 
@@ -172,7 +173,7 @@ importance_mmif <- sw(mmif_dredge)
 # model fitten EPT
 ################################################################################
 y_var <- "ept_prop"
-predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s", "overstorten_blootstelling_index_log")
+predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s", "overstorten_blootstelling_index_log", "czv_log")
 
 source(here("source", "analyse", "sem", "dredge_formula.R"))
 
@@ -181,6 +182,18 @@ model <- glmmTMB(data = dredge_data, formula = formula_obj,
                  REML = FALSE,
                  family = binomial(link = "logit"),
                  weights = dredge_data$ta_xw)
+
+performance::check_singularity(model)
+
+formula_obj <- update(formula_obj, . ~ . - (1|meetplaats))
+
+options(na.action = "na.fail") # Verplicht voor dredge
+model <- glmmTMB(data = dredge_data, formula = formula_obj,
+                 REML = FALSE,
+                 family = binomial(link = "logit"),
+                 weights = dredge_data$ta_xw)
+
+performance::check_singularity(model)
 
 source(here("source" , "analyse", "sem", "dredge.R"))
 
@@ -225,7 +238,7 @@ plot_model_vif(ept_best_model_beek, "VIF Check") # "intensiteit_combo_oeverzone_
 # model fitten tax
 ################################################################################
 y_var <- "ta_xw"
-predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s", "overstorten_blootstelling_index_log")
+predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s", "overstorten_blootstelling_index_log", "czv_log")
 
 source(here("source", "analyse", "sem", "dredge_formula.R"))
 
@@ -233,6 +246,7 @@ options(na.action = "na.fail") # Verplicht voor dredge
 model <- glmmTMB(data = dredge_data, formula = formula_obj,
                  REML = FALSE,
                  family = poisson)
+performance::check_singularity(model)
 
 source(here("source" , "analyse", "sem", "dredge.R"))
 
@@ -243,15 +257,15 @@ best_model_ML <- get.models(tax_dredge, subset = 1)[[1]]
 tax_best_model_beek <- update(best_model_ML, REML = TRUE)
 
 summary(tax_best_model_beek)
+save(tax_best_model_beek, file = here("source", "analyse", "sem", "dredge_output", "tax_best_model_beek.rdata"))
 
 plot_model_vif(tax_best_model_beek, "VIF Check") # "intensiteit_combo_oeverzone_s" weggelaten
 
 ################################################################################
 # model fitten nst
 ################################################################################
-
 y_var <- "nst_prop"
-predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s", "overstorten_blootstelling_index_log")
+predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s", "overstorten_blootstelling_index_log", "czv_log")
 
 source(here("source", "analyse", "sem", "dredge_formula.R"))
 
@@ -260,6 +274,8 @@ model <- glmmTMB(data = dredge_data, formula = formula_obj,
                  REML = FALSE,
                  family = binomial(link = "logit"),
                  weights = dredge_data$ta_xw)
+
+performance::check_singularity(model)
 
 source(here("source" , "analyse", "sem", "dredge.R"))
 
@@ -271,39 +287,40 @@ nst_best_model_beek <- update(best_model_ML, REML = TRUE)
 
 summary(nst_best_model_beek)
 
-plot_model_vif(nst_best_model_beek, "VIF Check") # "intensiteit_combo_oeverzone_s" weggelaten
+save(nst_best_model_beek, file = here("source", "analyse", "sem", "dredge_output", "nst_best_model_beek.rdata"))
 
+plot_model_vif(nst_best_model_beek, "VIF Check") # "intensiteit_combo_oeverzone_s" weggelaten
 ################################################################################
 # model fitten stress
 ################################################################################
-y_var <- "stress_prop"
-predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s", "overstorten_blootstelling_index_log")
-
-source(here("source", "analyse", "sem", "dredge_formula.R"))
-
-options(na.action = "na.fail") # Verplicht voor dredge
-model <- glmmTMB(data = dredge_data, formula = formula_obj,
-                 REML = FALSE,
-                 family = binomial(link = "logit"),
-                 weights = dredge_data$ta_xw)
-
-source(here("source" , "analyse", "sem", "dredge.R"))
-
-stress_dredge <- dredge_model
-
-best_model_ML <- get.models(stress_dredge, subset = 1)[[1]]
-
-stress_best_model_beek <- update(best_model_ML, REML = TRUE)
-
-summary(stress_best_model_beek)
-
-plot_model_vif(stress_best_model_beek, "VIF Check") # "intensiteit_combo_oeverzone_s" weggelaten
+# y_var <- "stress_prop"
+# predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s", "overstorten_blootstelling_index_log", "czv_log")
+#
+# source(here("source", "analyse", "sem", "dredge_formula.R"))
+#
+# options(na.action = "na.fail") # Verplicht voor dredge
+# model <- glmmTMB(data = dredge_data, formula = formula_obj,
+#                  REML = FALSE,
+#                  family = binomial(link = "logit"),
+#                  weights = dredge_data$ta_xw)
+#
+# source(here("source" , "analyse", "sem", "dredge.R"))
+#
+# stress_dredge <- dredge_model
+#
+# best_model_ML <- get.models(stress_dredge, subset = 1)[[1]]
+#
+# stress_best_model_beek <- update(best_model_ML, REML = TRUE)
+#
+# summary(stress_best_model_beek)
+#
+# plot_model_vif(stress_best_model_beek, "VIF Check") # "intensiteit_combo_oeverzone_s" weggelaten
 
 ################################################################################
 # model fitten mts
 ################################################################################
 y_var <- "mt_sw_prop"
-predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s", "overstorten_blootstelling_index_log")
+predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s", "overstorten_blootstelling_index_log", "czv_log")
 
 source(here("source", "analyse", "sem", "dredge_formula.R"))
 
@@ -311,6 +328,7 @@ options(na.action = "na.fail") # Verplicht voor dredge
 model <- glmmTMB(data = dredge_data, formula = formula_obj,
                  REML = FALSE,
                  family = ordbeta)
+performance::check_singularity(model)
 
 source(here("source" , "analyse", "sem", "dredge.R"))
 
@@ -321,14 +339,14 @@ best_model_ML <- get.models(mts_dredge, subset = 1)[[1]]
 mts_best_model_beek <- update(best_model_ML, REML = TRUE)
 
 summary(mts_best_model_beek)
-
+save(mts_best_model_beek, file = here("source", "analyse", "sem", "dredge_output", "mts_best_model_beek.rdata"))
 plot_model_vif(mts_best_model_beek, "VIF Check") # "intensiteit_combo_oeverzone_s" weggelaten
 
 ################################################################################
 # model fitten swd
 ################################################################################
 y_var <- "sw_dw"
-predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s", "overstorten_blootstelling_index_log")
+predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s", "overstorten_blootstelling_index_log", "czv_log")
 
 source(here("source", "analyse", "sem", "dredge_formula.R"))
 
@@ -336,6 +354,7 @@ options(na.action = "na.fail") # Verplicht voor dredge
 model <- glmmTMB(data = dredge_data, formula = formula_obj,
                  REML = FALSE,
                  family = gaussian)
+performance::check_singularity(model)
 
 source(here("source" , "analyse", "sem", "dredge.R"))
 
@@ -352,6 +371,43 @@ save(swd_best_model_beek, file = here("source", "analyse", "sem", "dredge_output
 plot_model_vif(swd_best_model_beek, "VIF Check")
 
 ################################################################################
+# model fitten spear pesticides
+################################################################################
+#
+# y_var <- "spear_pesticides"
+# predictors <- c(clean_klimaat, clean_fysico, "verharding_oever_s", "natuur_oever_s", "ekc2_waterlichaam_s", "overstorten_blootstelling_index_log")
+#
+# source(here("source", "analyse", "sem", "dredge_formula.R"))
+#
+# options(na.action = "na.fail") # Verplicht voor dredge
+# model <- glmmTMB(data = dredge_data, formula = formula_obj,
+#                  REML = FALSE,
+#                  family = ordbeta)
+#
+# performance::check_singularity(model)
+# formula_obj <- update(formula_obj, . ~ . - (1|bekken))
+#
+# options(na.action = "na.fail") # Verplicht voor dredge
+# model <- glmmTMB(data = dredge_data, formula = formula_obj,
+#                  REML = FALSE,
+#                  family = ordbeta)
+#
+# performance::check_singularity(model)
+# source(here("source" , "analyse", "sem", "dredge.R"))
+#
+# spear_dredge <- dredge_model
+#
+# best_model_ML <- get.models(spear_dredge, subset = 1)[[1]]
+#
+# spear_best_model_beek <- update(best_model_ML, REML = TRUE)
+#
+# summary(spear_best_model_beek)
+# save(spear_best_model_beek, file = here("source", "analyse", "sem", "dredge_output", "spear_best_model_beek.rdata"))
+#
+# plot_model_vif(spear_best_model_beek, "VIF Check") # "intensiteit_combo_oeverzone_s" weggelaten
+# sw(spear_dredge)
+
+################################################################################
 # model fitten stikstof
 ################################################################################
 
@@ -364,6 +420,7 @@ options(na.action = "na.fail") # Verplicht voor dredge
 model <- glmmTMB(data = dredge_data, formula = formula_obj,
                  REML = FALSE,
                  family = gaussian)
+performance::check_singularity(model)
 
 source(here("source" , "analyse", "sem", "dredge.R"))
 
@@ -421,7 +478,7 @@ plot_model_vif(ptot_best_model_beek, "VIF Check")
 # model fitten o2
 ################################################################################
 y_var <- "o2_s"
-predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen, "n_t_log", "p_t_log", "t_s", "ec_20_log")
+predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen, "n_t_log", "p_t_log", "t_s", "ec_20_log", "czv_log")
 
 source(here("source", "analyse", "sem", "dredge_formula.R"))
 
@@ -429,6 +486,7 @@ options(na.action = "na.fail") # Verplicht voor dredge
 model <- glmmTMB(data = dredge_data, formula = formula_obj,
                  REML = FALSE,
                  family = gaussian)
+performance::check_singularity(model)
 
 source(here("source" , "analyse", "sem", "dredge.R"))
 
@@ -449,7 +507,7 @@ plot_model_vif(o2_best_model_beek, "VIF Check")
 ################################################################################
 
 y_var <- "czv_log"
-predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen)
+predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen, "zs_log")
 
 source(here("source", "analyse", "sem", "dredge_formula.R"))
 
@@ -487,7 +545,7 @@ plot_model_vif(czv_best_model_beek, "VIF Check")
 ################################################################################
 
 y_var <- "ec_20_log"
-predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen)
+predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen, "p_t_log", "n_t_log")
 
 source(here("source", "analyse", "sem", "dredge_formula.R"))
 
@@ -495,6 +553,7 @@ options(na.action = "na.fail") # Verplicht voor dredge
 model <- glmmTMB(data = dredge_data, formula = formula_obj,
                  REML = FALSE,
                  family = gaussian)
+performance::check_singularity(model)
 
 source(here("source" , "analyse", "sem", "dredge.R"))
 
@@ -514,27 +573,27 @@ plot_model_vif(ec20_best_model_beek, "VIF Check")
 # model fitten T
 ################################################################################
 
-y_var <- "t_s"
-predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen)
-
-source(here("source", "analyse", "sem", "dredge_formula.R"))
-
-options(na.action = "na.fail") # Verplicht voor dredge
-model <- glmmTMB(data = dredge_data, formula = formula_obj,
-                 REML = FALSE,
-                 family = gaussian)
-
-source(here("source" , "analyse", "sem", "dredge.R"))
-
-t_dredge <- dredge_model
-
-best_model_ML <- get.models(t_dredge, subset = 1)[[1]]
-
-t_best_model_beek <- update(best_model_ML, REML = TRUE)
-
-summary(t_best_model_beek)
-
-plot_model_vif(t_best_model_beek, "VIF Check")
+# y_var <- "t_s"
+# predictors <- c(clean_klimaat, "ekc2_waterlichaam_s", clean_landuse, clean_lozingen)
+#
+# source(here("source", "analyse", "sem", "dredge_formula.R"))
+#
+# options(na.action = "na.fail") # Verplicht voor dredge
+# model <- glmmTMB(data = dredge_data, formula = formula_obj,
+#                  REML = FALSE,
+#                  family = gaussian)
+#
+# source(here("source" , "analyse", "sem", "dredge.R"))
+#
+# t_dredge <- dredge_model
+#
+# best_model_ML <- get.models(t_dredge, subset = 1)[[1]]
+#
+# t_best_model_beek <- update(best_model_ML, REML = TRUE)
+#
+# summary(t_best_model_beek)
+#
+# plot_model_vif(t_best_model_beek, "VIF Check")
 ################################################################################
 # model fitten zs
 ################################################################################
@@ -551,7 +610,7 @@ model <- glmmTMB(data = dredge_data, formula = formula_obj,
 
 performance::check_singularity(model)
 
-formula_obj <- update(formula_obj, . ~ . - (1|meetplaats))
+formula_obj <- update(formula_obj, . ~ . - (1|meetplaats) - (1|bekken))
 
 options(na.action = "na.fail") # Verplicht voor dredge
 model <- glmmTMB(data = dredge_data, formula = formula_obj,
@@ -578,6 +637,23 @@ plot_model_vif(zs_best_model_beek, "VIF Check")
 # sem models fitten
 ################################################################################
 
+# laden dredge resultaten
+load(file = here("source", "analyse", "sem", "dredge_output", "mmif_best_model_beek.rdata"))
+load(file = here("source", "analyse", "sem", "dredge_output", "ept_best_model_beek.rdata"))
+load(file = here("source", "analyse", "sem", "dredge_output", "swd_best_model_beek.rdata"))
+load(file = here("source", "analyse", "sem", "dredge_output", "nst_best_model_beek.rdata"))
+
+load(file = here("source", "analyse", "sem", "dredge_output", "tax_best_model_beek.rdata"))
+# load(file = here("source", "analyse", "sem", "dredge_output", "spear_best_model_beek.rdata"))
+load(file = here("source", "analyse", "sem", "dredge_output", "mts_best_model_beek.rdata"))
+
+load(file = here("source", "analyse", "sem", "dredge_output", "ntot_best_model_beek.rdata"))
+load(file = here("source", "analyse", "sem", "dredge_output", "ptot_best_model_beek.rdata"))
+load(file = here("source", "analyse", "sem", "dredge_output", "o2_best_model_beek.rdata"))
+load(file = here("source", "analyse", "sem", "dredge_output", "ec20_best_model_beek.rdata"))
+load(file = here("source", "analyse", "sem", "dredge_output", "zs_best_model_beek.rdata"))
+load(file = here("source", "analyse", "sem", "dredge_output", "czv_best_model_beek.rdata"))
+
 # MMIF
 
 sem_mmif_beek <- psem(
@@ -593,47 +669,26 @@ sem_mmif_beek <- psem(
 summary(sem_mmif_beek)
 
 # model updaten op basis van dSepS
-mmif_best_model_updated <- update(mmif_best_model_beek, . ~ . + intensiteit_combo_afstr_s + n_t_log + p_t_log + o2_s + verharding_afstr_s)
+mmif_best_model_updated <- update(mmif_best_model_beek, . ~ . + intensiteit_combo_afstr_s + n_t_log + p_t_log + verharding_afstr_s + o2_s)
+
+# mmif_best_model_updated <- update(mmif_best_model_beek, . ~ . + intensiteit_combo_afstr_s + n_t_log+ p_t_log*ekc2_waterlichaam_s + verharding_afstr_s + o2_s)
+
+# mmif_best_model_updated <- update(mmif_best_model_beek, . ~ . + intensiteit_combo_afstr_s + n_t_log*jaar_s + p_t_log*jaar_s + verharding_afstr_s + o2_s*jaar_s)
 
 ntot_best_model_updated <- update(ntot_best_model_beek, . ~ . )
-+ spei6_s)
-
-ptot_best_model_updated <- update(ptot_best_model_beek, . ~ .)
-
-# + lozingen_riool_ie_log  + lozingen_rwzi_ie_log)
-# czv_best_model_updated <- update(czv_best_model_beek, . ~ . - p_t_log - zs_log + intensiteit_combo_afstr_s + t_s)
-ec20_best_model_updated <- update(ec20_best_model_beek, . ~ . + verharding_afstr_s)
-
-o2_best_model_updated <- update(o2_best_model_beek, . ~ . - (1 | meetplaats))
-# + p_sum_7d_s  # singularity
-# t_best_model_updated <-  update(t_best_model_beek, . ~ . - (1 | meetplaats)) # singularity
-zs_best_model_updated <- update(zs_best_model_beek, . ~ .)
-
-mmif_sem_nat_sv_beek <- psem(mmif_best_model_updated,
-                 ntot_best_model_updated,
-                 ptot_best_model_updated,
-                 # czv_best_model_updated,
-                 o2_best_model_updated,
-                 ec20_best_model_updated,
-                 # t_best_model_updated,
-                 zs_best_model_updated,
-                 n_t_log %~~% p_t_log,
-                 n_t_log %~~% t_s,
-                 p_t_log %~~% t_s,
-                 ec_20_log %~~% t_s,
-                 zs_log %~~% t_s,
-                 p_t_log %~~% ec_20_log
-)
-summary(mmif_sem_nat_sv_beek)
+ptot_best_model_updated <- update(ptot_best_model_beek, . ~ . + natuur_oever_s)
+czv_best_model_updated <- update(czv_best_model_beek, . ~ . )
+ec20_best_model_updated <- update(ec20_best_model_beek, . ~ . )
+o2_best_model_updated <- update(o2_best_model_beek, . ~ . + zs_log)
+zs_best_model_updated <- update(zs_best_model_beek, . ~ . )
 
 # het optimale model clean maken!
 f_mmif  <- formula(mmif_best_model_updated)
 f_ntot  <- formula(ntot_best_model_updated)
 f_ptot  <- formula(ptot_best_model_updated)
-# f_czv   <- formula(czv_best_model_updated)
 f_o2    <- formula(o2_best_model_updated)
 f_ec20  <- formula(ec20_best_model_updated)
-# f_t     <- formula(t_best_model_updated)
+f_czv   <- formula(czv_best_model_updated)
 f_zs     <- formula(zs_best_model_updated)
 
 mmif_clean <- glmmTMB(
@@ -644,32 +699,31 @@ mmif_clean <- glmmTMB(
 
 ntot_clean  <- glmmTMB(f_ntot,  data = dredge_data, family = gaussian())
 ptot_clean  <- glmmTMB(f_ptot,  data = dredge_data, family = gaussian())
-# czv_clean   <- glmmTMB(f_czv,   data = dredge_data, family = gaussian())
+czv_clean   <- glmmTMB(f_czv,   data = dredge_data, family = gaussian())
 o2_clean    <- glmmTMB(f_o2,    data = dredge_data, family = gaussian())
 ec20_clean  <- glmmTMB(f_ec20,  data = dredge_data, family = gaussian())
-# t_clean     <- glmmTMB(f_t,     data = dredge_data, family = gaussian())
 zs_clean     <- glmmTMB(f_zs,     data = dredge_data, family = gaussian())
 
 mmif_sem_nat_sv_beek_clean <- psem(
   mmif_clean,
   ntot_clean,
   ptot_clean,
-  # czv_clean,
+  czv_clean,
   o2_clean,
   ec20_clean,
-  # t_clean,
   zs_clean,
-  n_t_log %~~% p_t_log,
   n_t_log %~~% t_s,
   p_t_log %~~% t_s,
-  ec_20_log %~~% t_s,
-  zs_log %~~% t_s,
-  p_t_log %~~% ec_20_log
-)
+  n_t_log %~~% czv_log,
+  p_t_log %~~% czv_log,
+  n_t_log %~~% p_t_log)
 
 mmif_sem_nat_sv_beek_clean %>% summary
 
 save(mmif_sem_nat_sv_beek_clean, file = here("source", "analyse", "sem", "mi_nat_sv_beek", "mmif_sem_nat_sv_beek_clean.rdata"))
+
+# --- R2 opslaan ---
+bewaar_r2(mmif_sem_nat_sv_beek_clean, "mi", "beek", "mmif")
 
 load(file = here("source", "analyse", "sem", "mi_nat_sv_beek", "mmif_sem_nat_sv_beek_clean.rdata"))
 
@@ -700,14 +754,14 @@ library(ggplot2)
 
 # Zet je modellen in een lijst
 model_list <- list(
-  mmif = mmif_best_model_updated,
-  ntot = ntot_best_model_updated,
-  ptot = ptot_best_model_updated,
-  # czv  = czv_best_model_updated,
-  ec20 = ec20_best_model_updated,
-  o2   = o2_best_model_updated,
-  # t = t_best_model_updated,
-  zs = zs_best_model_updated
+  mmif = mmif_clean,
+  ntot = ntot_clean,
+  ptot = ptot_clean,
+  czv  = czv_clean,
+  ec20 = ec20_clean,
+  o2   = o2_clean,
+  # t = t_clean,
+  zs = zs_clean
 )
 
 # Loop voor validatie
@@ -726,23 +780,14 @@ for (name in names(model_list)) {
   print(testOutliers(res))
 }
 
-load(file = here("source", "analyse", "sem", "mi_nat_sv_beek", "mmif_sem_nat_sv_beek_clean.rdata"))
-
-
 coefs_filled <- standardize_psem(mmif_sem_nat_sv_beek_clean)[,-9]
-source(here("source", "analyse", "sem", "figuur_sem_zonder_corrfout.R")) #zonder cluster gecorreleerde fouten
+saveRDS(coefs_filled, file = "source/analyse/sem/synthese/sem_output/mi_beek_mmif.rds")
 
-ggsave(
-  filename =  here("output", "figuren", "SEM_mi_nat_sv_beek_mmif.png"),
-  plot = last_plot(), # Expliciet de laatste plot kiezen
-  width = 40,
-  height = 20,
-  units = "cm",
-  dpi = 300,
-  bg = "white"
-)
+
+
+
 source(here("source", "analyse", "sem", "figuur_sem_interactive.R")) #zonder cluster gecorreleerde fouten
-saveWidget(network, file = here("output", "figuren", "psem_inter_netw_mi_nat_sv_mmif.html"), selfcontained = TRUE)
+saveWidget(network, file = here("output", "figuren", "psem_inter_netw_mi_nat_sv_mmif_beek.html"), selfcontained = TRUE)
 
 #############################
 # EPT
@@ -751,7 +796,7 @@ sem_ept_beek <- psem(
   ept_best_model_beek,
   ntot_best_model_beek,
   ptot_best_model_beek,
-  # czv_best_model_beek,
+  czv_best_model_beek,
   o2_best_model_beek,
   ec20_best_model_beek,
   # t_best_model_beek,
@@ -761,41 +806,14 @@ sem_ept_beek <- psem(
 summary(sem_ept_beek)
 # updaten
 
-ept_best_model_updated <- update(ept_best_model_beek, . ~ . + p_t_log + n_t_log - (1 | meetplaats))
-
-
+ept_best_model_updated <- update(ept_best_model_beek, . ~ .)
 ntot_best_model_updated <- update(ntot_best_model_beek, . ~ . )
-+ spei6_s)
-
-ptot_best_model_updated <- update(ptot_best_model_beek, . ~ . )
-
-ec20_best_model_updated <- update(ec20_best_model_beek, . ~ . + verharding_afstr_s)
-
-o2_best_model_updated <- update(o2_best_model_beek, . ~ . - (1|meetplaats))
-
-# t_best_model_updated <- update(t_best_model_beek, . ~ . - (1|meetplaats))
-
+ptot_best_model_updated <- update(ptot_best_model_beek, . ~ . + natuur_oever_s)
+ec20_best_model_updated <- update(ec20_best_model_beek, . ~ . )
+o2_best_model_updated <- update(o2_best_model_beek, . ~ . + zs_log)
+czv_best_model_updated <- update(czv_best_model_beek, . ~ . )
 zs_best_model_updated <- update(zs_best_model_beek, . ~ .)
 
-ept_sem_nat_sv_beek <- psem(ept_best_model_updated,
-                             ntot_best_model_updated,
-                             ptot_best_model_updated,
-                             o2_best_model_updated,
-                             ec20_best_model_updated,
-                            # t_best_model_updated,
-                            zs_best_model_updated,
-                            n_t_log %~~% p_t_log,
-                            zs_log %~~% t_s,
-                            n_t_log %~~% t_s,
-                            p_t_log %~~% t_s,
-                            ec_20_log %~~% t_s,
-                            p_t_log %~~% ec_20_log)
-
-summary(ept_sem_nat_sv_beek)
-r.squaredGLMM(ept_best_model_updated)
-
-
-save(ept_sem_nat_sv_beek, file = here("source", "analyse", "sem", "mi_nat_sv_beek", "ept_sem_nat_sv_beek.rdata"))
 
 # het optimale model clean maken!
 f_ept  <- formula(ept_best_model_updated)
@@ -804,7 +822,7 @@ f_ptot  <- formula(ptot_best_model_updated)
 f_zs   <- formula(zs_best_model_updated)
 f_o2    <- formula(o2_best_model_updated)
 f_ec20  <- formula(ec20_best_model_updated)
-# f_t     <- formula(t_best_model_updated)
+f_czv    <- formula(czv_best_model_updated)
 
 
 ept_clean <- glmmTMB(
@@ -818,7 +836,7 @@ ptot_clean  <- glmmTMB(f_ptot,  data = dredge_data, family = gaussian())
 zs_clean   <- glmmTMB(f_zs,   data = dredge_data, family = gaussian())
 o2_clean    <- glmmTMB(f_o2,    data = dredge_data, family = gaussian()) # Nu zonder singularity-ruis
 ec20_clean  <- glmmTMB(f_ec20,  data = dredge_data, family = gaussian())
-# t_clean     <- glmmTMB(f_t,     data = dredge_data, family = gaussian()) # Nu zonder singularity-ruis
+czv_clean     <- glmmTMB(f_czv,     data = dredge_data, family = gaussian()) # Nu zonder singularity-ruis
 
 ept_sem_nat_sv_beek_clean <- psem(
   ept_clean,
@@ -827,17 +845,19 @@ ept_sem_nat_sv_beek_clean <- psem(
   zs_clean,
   o2_clean,
   ec20_clean,
-  # t_clean,
-  n_t_log %~~% p_t_log,
-  zs_log %~~% t_s,
+  czv_clean,
   n_t_log %~~% t_s,
   p_t_log %~~% t_s,
-  ec_20_log %~~% t_s,
-  p_t_log %~~% ec_20_log)
+  n_t_log %~~% czv_log,
+  p_t_log %~~% czv_log,
+  n_t_log %~~% p_t_log)
+
 
 ept_sem_nat_sv_beek_clean %>% summary
 
 save(ept_sem_nat_sv_beek_clean, file = here("source", "analyse", "sem", "mi_nat_sv_beek", "ept_sem_nat_sv_beek_clean.rdata"))
+# --- R2 opslaan ---
+bewaar_r2(ept_sem_nat_sv_beek_clean,          "mi",   "beek", "ept")
 
 load(file = here("source", "analyse", "sem", "mi_nat_sv_beek", "ept_sem_nat_sv_beek_clean.rdata"))
 
@@ -846,13 +866,13 @@ library(ggplot2)
 
 # Zet je modellen in een lijst
 model_list <- list(
-  ept = ept_clean,
-  ntot = ntot_clean,
-  ptot = ptot_clean,
-  zs  = zs_clean,
-  ec20 = ec20_clean,
-  o2   = o2_clean,
-  # t = t_clean
+  ept = ept_clean
+  # ntot = ntot_clean,
+  # ptot = ptot_clean,
+  # zs  = zs_clean,
+  # ec20 = ec20_clean,
+  # o2   = o2_clean,
+  # # t = t_clean
 )
 
 # Loop voor validatie
@@ -873,20 +893,10 @@ for (name in names(model_list)) {
 
 
 coefs_filled <- standardize_psem(ept_sem_nat_sv_beek_clean)[,-9]
-source(here("source", "analyse", "sem", "figuur_sem_zonder_corrfout.R")) #zonder cluster gecorreleerde fouten
-
-ggsave(
-  filename =  here("output", "figuren", "SEM_mi_nat_sv_beek_ept.png"),
-  plot = last_plot(), # Expliciet de laatste plot kiezen
-  width = 40,
-  height = 20,
-  units = "cm",
-  dpi = 300,
-  bg = "white"
-)
+saveRDS(coefs_filled, file = "source/analyse/sem/synthese/sem_output/mi_beek_ept.rds")
 
 source(here("source", "analyse", "sem", "figuur_sem_interactive.R")) #zonder cluster gecorreleerde fouten
-saveWidget(network, file = here("output", "figuren", "psem_inter_netw_mi_nat_sv_ept.html"), selfcontained = TRUE)
+saveWidget(network, file = here("output", "figuren", "psem_inter_netw_mi_nat_sv_ept_beek.html"), selfcontained = TRUE)
 
 # SAC test
 model <- ept_clean
@@ -911,14 +921,14 @@ testSpatialAutocorrelation(res_grouped,
 
 
 
-
+######
 ## swd
-
+#####
 sem_swd_beek <- psem(
   swd_best_model_beek,
   ntot_best_model_beek,
   ptot_best_model_beek,
-  # czv_best_model_beek,
+  czv_best_model_beek,
   o2_best_model_beek,
   ec20_best_model_beek,
   zs_best_model_beek
@@ -928,27 +938,15 @@ summary(sem_swd_beek)
 r.squaredGLMM(swd_best_model_beek)
 # updaten
 
-swd_best_model_updated <- update(swd_best_model_beek, . ~ . + intensiteit_combo_afstr_s + spei6_s + n_t_log + p_t_log)
+swd_best_model_updated <- update(swd_best_model_beek, . ~ . + intensiteit_combo_afstr_s + n_t_log + verharding_afstr_s)
 
 ntot_best_model_updated <- update(ntot_best_model_beek, . ~ . )
-ptot_best_model_updated <- update(ptot_best_model_beek, . ~ . )
-# czv_best_model_updated <- update(czv_best_model_beek, . ~ . + t_s - p_t_log + intensiteit_combo_afstr_s)
-ec20_best_model_updated <- update(ec20_best_model_beek, . ~ .  + verharding_afstr_s)
-o2_best_model_updated <- update(o2_best_model_beek, . ~ . - (1|meetplaats))
+ptot_best_model_updated <- update(ptot_best_model_beek, . ~ . + natuur_oever_s)
+czv_best_model_updated <- update(czv_best_model_beek, . ~ .)
+ec20_best_model_updated <- update(ec20_best_model_beek, . ~ . )
+o2_best_model_updated <- update(o2_best_model_beek, . ~ . + zs_log)
+zs_best_model_updated <- update(zs_best_model_beek, . ~ .)
 
-swd_sem_nat_sv_beek <- psem(swd_best_model_updated,
-                            ntot_best_model_updated,
-                            ptot_best_model_updated,
-                            # czv_best_model_updated,
-                            o2_best_model_updated,
-                            ec20_best_model_updated,
-                            n_t_log %~~% p_t_log,
-                            t_s %~~% n_t_log,
-                            t_s %~~% p_t_log,
-                            t_s %~~% ec_20_log,
-                            t_s %~~% zs_log,
-                            p_t_log %~~% ec_20_log)
-summary(swd_sem_nat_sv_beek)
 
 # het optimale model clean maken!
 f_swd  <- formula(swd_best_model_updated)
@@ -957,7 +955,7 @@ f_ptot  <- formula(ptot_best_model_updated)
 f_zs   <- formula(zs_best_model_updated)
 f_o2    <- formula(o2_best_model_updated)
 f_ec20  <- formula(ec20_best_model_updated)
-# f_t     <- formula(t_best_model_updated)
+f_czv     <- formula(czv_best_model_updated)
 
 
 swd_clean <- glmmTMB(
@@ -971,7 +969,7 @@ ptot_clean  <- glmmTMB(f_ptot,  data = dredge_data, family = gaussian())
 zs_clean   <- glmmTMB(f_zs,   data = dredge_data, family = gaussian())
 o2_clean    <- glmmTMB(f_o2,    data = dredge_data, family = gaussian()) # Nu zonder singularity-ruis
 ec20_clean  <- glmmTMB(f_ec20,  data = dredge_data, family = gaussian())
-# t_clean     <- glmmTMB(f_t,     data = dredge_data, family = gaussian()) # Nu zonder singularity-ruis
+czv_clean     <- glmmTMB(f_czv,     data = dredge_data, family = gaussian()) # Nu zonder singularity-ruis
 
 swd_sem_nat_sv_beek_clean <- psem(
   swd_clean,
@@ -980,18 +978,18 @@ swd_sem_nat_sv_beek_clean <- psem(
   zs_clean,
   o2_clean,
   ec20_clean,
-  # t_clean,
+  czv_clean,
   n_t_log %~~% p_t_log,
-  t_s %~~% n_t_log,
-  t_s %~~% p_t_log,
-  t_s %~~% ec_20_log,
-  t_s %~~% zs_log,
-  p_t_log %~~% ec_20_log)
+  n_t_log %~~% t_s,
+  p_t_log %~~% t_s,
+  n_t_log %~~% czv_log,
+  p_t_log %~~% czv_log)
 
 swd_sem_nat_sv_beek_clean %>% summary
 
 save(swd_sem_nat_sv_beek_clean, file = here("source", "analyse", "sem", "mi_nat_sv_beek", "swd_sem_nat_sv_beek_clean.rdata"))
-
+bewaar_r2(swd_sem_nat_sv_beek_clean,          "mi",   "beek", "swd")
+load(file = here("source", "analyse", "sem", "mi_nat_sv_beek", "swd_sem_nat_sv_beek_clean.rdata"))
 # SAC test
 model <- swd_clean
 # 1. Set glmmTMB to simulate conditionally on fitted REs
@@ -1013,63 +1011,657 @@ testSpatialAutocorrelation(res_grouped,
                            x = locaties_match$x,
                            y = locaties_match$y)
 
+# Zet je modellen in een lijst
+model_list <- list(
+  swd = swd_clean
+  # ntot = ntot_clean,
+  # ptot = ptot_clean,
+  # zs  = zs_clean,
+  # ec20 = ec20_clean,
+  # o2   = o2_clean,
+  # # t = t_clean
+)
+
+# Loop voor validatie
+for (name in names(model_list)) {
+  cat("\n--- Diagnostiek voor model:", name, "---\n")
+
+  # 1. Bereken residuen (simulatie-gebaseerd)
+  res <- simulateResiduals(fittedModel = model_list[[name]], n = 1000)
+
+  # 2. Plot residuen (QQ-plot en Residual vs Predicted)
+  plot(res)
+  title(main = paste("DHARMa residuals:", name), line = 2)
+
+  # 3. Test specifiek op overdispersie en outliers
+  print(testDispersion(res))
+  print(testOutliers(res))
+}
+
+load(file = here("source", "analyse", "sem", "mi_nat_sv_beek", "swd_sem_nat_sv_beek_clean.rdata"))
+
 coefs_filled <- standardize_psem(swd_sem_nat_sv_beek_clean)[,-9]
+saveRDS(coefs_filled, file = "source/analyse/sem/synthese/sem_output/mi_beek_swd.rds")
+
 source(here("source", "analyse", "sem", "figuur_sem_interactive.R")) #zonder cluster gecorreleerde fouten
-saveWidget(network, file = here("output", "figuren", "psem_inter_netw_mi_nat_sv_swd.html"), selfcontained = TRUE)
+saveWidget(network, file = here("output", "figuren", "psem_inter_netw_mi_nat_sv_swd_beek.html"), selfcontained = TRUE)
 
-
+#######
 ## tax
+#######
 
-sem_tax <- psem(
+sem_tax_beek <- psem(
   tax_best_model_beek,
   ntot_best_model_beek,
   ptot_best_model_beek,
   czv_best_model_beek,
   o2_best_model_beek,
-  ec20_best_model_beek
+  ec20_best_model_beek,
+  zs_best_model_beek
 )
 
-summary(sem_tax)
+summary(sem_tax_beek)
 
+
+# model updaten op basis van dSepS
+tax_best_model_updated <- update(tax_best_model_beek, . ~ . + intensiteit_combo_afstr_s + lozingen_industrie_ie_log + n_t_log + p_t_log + zs_log)
+ntot_best_model_updated <- update(ntot_best_model_beek, . ~ . )
+ptot_best_model_updated <- update(ptot_best_model_beek, . ~ . + natuur_oever_s)
+czv_best_model_updated <- update(czv_best_model_beek, . ~ . )
+ec20_best_model_updated <- update(ec20_best_model_beek, . ~ . )
+o2_best_model_updated <- update(o2_best_model_beek, . ~ . + zs_log)
+# t_best_model_updated <-  update(t_best_model_beek, . ~ . - (1 | meetplaats)) # singularity
+zs_best_model_updated <- update(zs_best_model_beek, . ~ .)
+
+# het optimale model clean maken!
+f_tax  <- formula(tax_best_model_updated)
+f_ntot  <- formula(ntot_best_model_updated)
+f_ptot  <- formula(ptot_best_model_updated)
+f_o2    <- formula(o2_best_model_updated)
+f_ec20  <- formula(ec20_best_model_updated)
+# f_t     <- formula(t_best_model_updated)
+f_czv   <- formula(czv_best_model_updated)
+f_zs     <- formula(zs_best_model_updated)
+
+tax_clean <- glmmTMB(
+  formula     = f_tax,
+  data        = dredge_data,
+  family      = poisson
+)
+
+ntot_clean  <- glmmTMB(f_ntot,  data = dredge_data, family = gaussian())
+ptot_clean  <- glmmTMB(f_ptot,  data = dredge_data, family = gaussian())
+czv_clean   <- glmmTMB(f_czv,   data = dredge_data, family = gaussian())
+o2_clean    <- glmmTMB(f_o2,    data = dredge_data, family = gaussian())
+ec20_clean  <- glmmTMB(f_ec20,  data = dredge_data, family = gaussian())
+# t_clean     <- glmmTMB(f_t,     data = dredge_data, family = gaussian())
+zs_clean     <- glmmTMB(f_zs,     data = dredge_data, family = gaussian())
+
+tax_sem_nat_sv_beek_clean <- psem(
+  tax_clean,
+  ntot_clean,
+  ptot_clean,
+  czv_clean,
+  o2_clean,
+  ec20_clean,
+  # t_clean,
+  zs_clean,
+  n_t_log %~~% t_s,
+  p_t_log %~~% t_s,
+  n_t_log %~~% p_t_log,
+  n_t_log %~~% czv_log,
+  p_t_log %~~% czv_log)
+
+
+tax_sem_nat_sv_beek_clean %>% summary
+
+save(tax_sem_nat_sv_beek_clean, file = here("source", "analyse", "sem", "mi_nat_sv_beek", "tax_sem_nat_sv_beek_clean.rdata"))
+bewaar_r2(tax_sem_nat_sv_beek_clean,          "mi",   "beek", "tax")
+
+load(file = here("source", "analyse", "sem", "mi_nat_sv_beek", "tax_sem_nat_sv_beek_clean.rdata"))
+
+
+# SAC test
+model <- tax_clean
+# 1. Set glmmTMB to simulate conditionally on fitted REs
+glmmTMB::set_simcodes(model$obj, val = "fix")
+# 2. Run DHARMa as usual
+res <- simulateResiduals(fittedModel = model)
+glmmTMB::set_simcodes(model$obj, val = "random")
+
+locaties_match <- dredge_data %>%
+  group_by(meetplaats) %>%
+  summarize(x = dplyr::first(x), y = dplyr::first(y), .groups = "drop") %>%
+  arrange(meetplaats) # DHARMa sorteert groepen standaard op naam/factor level
+
+# 3. Aggregeer residuen
+res_grouped <- recalculateResiduals(res, group = dredge_data$meetplaats)
+
+# 4. De test
+testSpatialAutocorrelation(res_grouped,
+                           x = locaties_match$x,
+                           y = locaties_match$y)
+
+library(DHARMa)
+library(ggplot2)
+
+# Zet je modellen in een lijst
+model_list <- list(
+  tax = tax_clean
+  # ntot = ntot_clean,
+  # ptot = ptot_clean,
+  # czv  = czv_clean,
+  # ec20 = ec20_clean,
+  # o2   = o2_clean,
+  # # t = t_clean,
+  # zs = zs_clean
+)
+
+# Loop voor validatie
+for (name in names(model_list)) {
+  cat("\n--- Diagnostiek voor model:", name, "---\n")
+
+  # 1. Bereken residuen (simulatie-gebaseerd)
+  res <- simulateResiduals(fittedModel = model_list[[name]], n = 1000)
+
+  # 2. Plot residuen (QQ-plot en Residual vs Predicted)
+  plot(res)
+  title(main = paste("DHARMa residuals:", name), line = 2)
+
+  # 3. Test specifiek op overdispersie en outliers
+  print(testDispersion(res))
+  print(testOutliers(res))
+}
+
+load(file = here("source", "analyse", "sem", "mi_nat_sv_beek", "tax_sem_nat_sv_beek_clean.rdata"))
+
+
+coefs_filled <- standardize_psem(tax_sem_nat_sv_beek_clean)[,-9]
+saveRDS(coefs_filled, file = "source/analyse/sem/synthese/sem_output/mi_beek_tax.rds")
+
+# source(here("source", "analyse", "sem", "figuur_sem_zonder_corrfout.R")) #zonder cluster gecorreleerde fouten
+#
+# ggsave(
+#   filename =  here("output", "figuren", "SEM_mi_nat_sv_beek_tax.png"),
+#   plot = last_plot(), # Expliciet de laatste plot kiezen
+#   width = 40,
+#   height = 20,
+#   units = "cm",
+#   dpi = 300,
+#   bg = "white"
+# )
+source(here("source", "analyse", "sem", "figuur_sem_interactive.R")) #zonder cluster gecorreleerde fouten
+saveWidget(network, file = here("output", "figuren", "psem_inter_netw_mi_nat_sv_tax_beek.html"), selfcontained = TRUE)
+
+#######
 ## nst
+#######
 
-sem_nst <- psem(
+sem_nst_beek <- psem(
   nst_best_model_beek,
   ntot_best_model_beek,
   ptot_best_model_beek,
   czv_best_model_beek,
   o2_best_model_beek,
-  ec20_best_model_beek
+  ec20_best_model_beek,
+  zs_best_model_beek
 )
 
-summary(sem_nst)
+summary(sem_nst_beek)
 
-## mts
 
-sem_mts <- psem(
+# model updaten op basis van dSepS
+nst_best_model_updated <- update(nst_best_model_beek, . ~ . + intensiteit_combo_afstr_s + lozingen_riool_ie_log + lozingen_industrie_ie_log + n_t_log + p_t_log + zs_log)
+ntot_best_model_updated <- update(ntot_best_model_beek, . ~ . )
+ptot_best_model_updated <- update(ptot_best_model_beek, . ~ . + natuur_oever_s)
+czv_best_model_updated <- update(czv_best_model_beek, . ~ . )
+ec20_best_model_updated <- update(ec20_best_model_beek, . ~ . )
+o2_best_model_updated <- update(o2_best_model_beek, . ~ . + zs_log)
+# t_best_model_updated <-  update(t_best_model_beek, . ~ . - (1 | meetplaats)) # singularity
+zs_best_model_updated <- update(zs_best_model_beek, . ~ .)
+
+# het optimale model clean maken!
+f_nst  <- formula(nst_best_model_updated)
+f_ntot  <- formula(ntot_best_model_updated)
+f_ptot  <- formula(ptot_best_model_updated)
+f_o2    <- formula(o2_best_model_updated)
+f_ec20  <- formula(ec20_best_model_updated)
+# f_t     <- formula(t_best_model_updated)
+f_czv   <- formula(czv_best_model_updated)
+f_zs     <- formula(zs_best_model_updated)
+
+nst_clean <- glmmTMB(
+  formula     = f_nst,
+  data        = dredge_data,
+  family = binomial(link = "logit"),
+  weights = dredge_data$ta_xw
+)
+
+ntot_clean  <- glmmTMB(f_ntot,  data = dredge_data, family = gaussian())
+ptot_clean  <- glmmTMB(f_ptot,  data = dredge_data, family = gaussian())
+czv_clean   <- glmmTMB(f_czv,   data = dredge_data, family = gaussian())
+o2_clean    <- glmmTMB(f_o2,    data = dredge_data, family = gaussian())
+ec20_clean  <- glmmTMB(f_ec20,  data = dredge_data, family = gaussian())
+# t_clean     <- glmmTMB(f_t,     data = dredge_data, family = gaussian())
+zs_clean     <- glmmTMB(f_zs,     data = dredge_data, family = gaussian())
+
+nst_sem_nat_sv_beek_clean <- psem(
+  nst_clean,
+  ntot_clean,
+  ptot_clean,
+  czv_clean,
+  o2_clean,
+  ec20_clean,
+  # t_clean,
+  zs_clean,
+  n_t_log %~~% t_s,
+  p_t_log %~~% t_s,
+  n_t_log %~~% p_t_log,
+  n_t_log %~~% czv_log,
+  p_t_log %~~% czv_log)
+
+
+nst_sem_nat_sv_beek_clean %>% summary
+bewaar_r2(nst_sem_nat_sv_beek_clean,          "mi",   "beek", "nst")
+save(nst_sem_nat_sv_beek_clean, file = here("source", "analyse", "sem", "mi_nat_sv_beek", "nst_sem_nat_sv_beek_clean.rdata"))
+
+load(file = here("source", "analyse", "sem", "mi_nat_sv_beek", "nst_sem_nat_sv_beek_clean.rdata"))
+
+
+# SAC test
+model <- nst_clean
+# 1. Set glmmTMB to simulate conditionally on fitted REs
+glmmTMB::set_simcodes(model$obj, val = "fix")
+# 2. Run DHARMa as usual
+res <- simulateResiduals(fittedModel = model)
+glmmTMB::set_simcodes(model$obj, val = "random")
+
+locaties_match <- dredge_data %>%
+  group_by(meetplaats) %>%
+  summarize(x = dplyr::first(x), y = dplyr::first(y), .groups = "drop") %>%
+  arrange(meetplaats) # DHARMa sorteert groepen standaard op naam/factor level
+
+# 3. Aggregeer residuen
+res_grouped <- recalculateResiduals(res, group = dredge_data$meetplaats)
+
+# 4. De test
+testSpatialAutocorrelation(res_grouped,
+                           x = locaties_match$x,
+                           y = locaties_match$y)
+
+library(DHARMa)
+library(ggplot2)
+
+# Zet je modellen in een lijst
+model_list <- list(
+  nst = nst_clean
+  # ntot = ntot_clean,
+  # ptot = ptot_clean,
+  # czv  = czv_clean,
+  # ec20 = ec20_clean,
+  # o2   = o2_clean,
+  # # t = t_clean,
+  # zs = zs_clean
+)
+
+# Loop voor validatie
+for (name in names(model_list)) {
+  cat("\n--- Diagnostiek voor model:", name, "---\n")
+
+  # 1. Bereken residuen (simulatie-gebaseerd)
+  res <- simulateResiduals(fittedModel = model_list[[name]], n = 1000)
+
+  # 2. Plot residuen (QQ-plot en Residual vs Predicted)
+  plot(res)
+  title(main = paste("DHARMa residuals:", name), line = 2)
+
+  # 3. Test specifiek op overdispersie en outliers
+  print(testDispersion(res))
+  print(testOutliers(res))
+}
+
+load(file = here("source", "analyse", "sem", "mi_nat_sv_beek", "nst_sem_nat_sv_beek_clean.rdata"))
+
+
+coefs_filled <- standardize_psem(nst_sem_nat_sv_beek_clean)[,-9]
+saveRDS(coefs_filled, file = "source/analyse/sem/synthese/sem_output/mi_beek_nst.rds")
+
+# source(here("source", "analyse", "sem", "figuur_sem_zonder_corrfout.R")) #zonder cluster gecorreleerde fouten
+#
+# ggsave(
+#   filename =  here("output", "figuren", "SEM_mi_nat_sv_beek_nst.png"),
+#   plot = last_plot(), # Expliciet de laatste plot kiezen
+#   width = 40,
+#   height = 20,
+#   units = "cm",
+#   dpi = 300,
+#   bg = "white"
+# )
+source(here("source", "analyse", "sem", "figuur_sem_interactive.R")) #zonder cluster gecorreleerde fouten
+saveWidget(network, file = here("output", "figuren", "psem_inter_netw_mi_nat_sv_nst_beek.html"), selfcontained = TRUE)
+
+
+#############################
+# mts
+#############################
+sem_mts_beek <- psem(
   mts_best_model_beek,
   ntot_best_model_beek,
   ptot_best_model_beek,
   czv_best_model_beek,
   o2_best_model_beek,
-  ec20_best_model_beek
+  ec20_best_model_beek,
+  # t_best_model_beek,
+  zs_best_model_beek
 )
 
-summary(sem_mts)
+summary(sem_mts_beek)
+
+# updaten
+
+mts_best_model_updated <- update(mts_best_model_beek, . ~ . + intensiteit_combo_afstr_s + lozingen_riool_ie_log + t_s + n_t_log + zs_log + p_t_log + verharding_afstr_s + natuur_oever_s + lozingen_industrie_ie_log + p_sum_7d_s)
+ntot_best_model_updated <- update(ntot_best_model_beek, . ~ . )
+ptot_best_model_updated <- update(ptot_best_model_beek, . ~ . + natuur_oever_s)
+ec20_best_model_updated <- update(ec20_best_model_beek, . ~ . )
+o2_best_model_updated <- update(o2_best_model_beek, . ~ . + zs_log)
+czv_best_model_updated <- update(czv_best_model_beek, . ~ . )
+zs_best_model_updated <- update(zs_best_model_beek, . ~ .)
 
 
-## stress
+# het optimale model clean maken!
+f_mts  <- formula(mts_best_model_updated)
+f_ntot  <- formula(ntot_best_model_updated)
+f_ptot  <- formula(ptot_best_model_updated)
+f_zs   <- formula(zs_best_model_updated)
+f_o2    <- formula(o2_best_model_updated)
+f_ec20  <- formula(ec20_best_model_updated)
+f_czv    <- formula(czv_best_model_updated)
 
-sem_stress <- psem(
-  stress_best_model_beek,
+
+mts_clean <- glmmTMB(
+  formula     = f_mts,
+  data        = dredge_data,
+  family = ordbeta
+)
+
+ntot_clean  <- glmmTMB(f_ntot,  data = dredge_data, family = gaussian())
+ptot_clean  <- glmmTMB(f_ptot,  data = dredge_data, family = gaussian())
+zs_clean   <- glmmTMB(f_zs,   data = dredge_data, family = gaussian())
+o2_clean    <- glmmTMB(f_o2,    data = dredge_data, family = gaussian()) # Nu zonder singularity-ruis
+ec20_clean  <- glmmTMB(f_ec20,  data = dredge_data, family = gaussian())
+czv_clean     <- glmmTMB(f_czv,     data = dredge_data, family = gaussian()) # Nu zonder singularity-ruis
+
+mts_sem_nat_sv_beek_clean <- psem(
+  mts_clean,
+  ntot_clean,
+  ptot_clean,
+  zs_clean,
+  o2_clean,
+  ec20_clean,
+  czv_clean,
+  n_t_log %~~% t_s,
+  p_t_log %~~% t_s,
+  n_t_log %~~% czv_log,
+  p_t_log %~~% czv_log,
+  n_t_log %~~% p_t_log)
+
+
+mts_sem_nat_sv_beek_clean %>% summary
+
+save(mts_sem_nat_sv_beek_clean, file = here("source", "analyse", "sem", "mi_nat_sv_beek", "mts_sem_nat_sv_beek_clean.rdata"))
+bewaar_r2(mts_sem_nat_sv_beek_clean,          "mi",   "beek", "mts")
+
+load(file = here("source", "analyse", "sem", "mi_nat_sv_beek", "mts_sem_nat_sv_beek_clean.rdata"))
+
+library(DHARMa)
+library(ggplot2)
+
+# Zet je modellen in een lijst
+model_list <- list(
+  mts = mts_clean
+  # ntot = ntot_clean,
+  # ptot = ptot_clean,
+  # zs  = zs_clean,
+  # ec20 = ec20_clean,
+  # o2   = o2_clean,
+  # # t = t_clean
+)
+
+# Loop voor validatie
+for (name in names(model_list)) {
+  cat("\n--- Diagnostiek voor model:", name, "---\n")
+
+  # 1. Bereken residuen (simulatie-gebaseerd)
+  res <- simulateResiduals(fittedModel = model_list[[name]], n = 1000)
+
+  # 2. Plot residuen (QQ-plot en Residual vs Predicted)
+  plot(res)
+  title(main = paste("DHARMa residuals:", name), line = 2)
+
+  # 3. Test specifiek op overdispersie en outliers
+  print(testDispersion(res))
+  print(testOutliers(res))
+}
+
+
+coefs_filled <- standardize_psem(mts_sem_nat_sv_beek_clean)[,-9]
+saveRDS(coefs_filled, file = "source/analyse/sem/synthese/sem_output/mi_beek_mts.rds")
+
+
+source(here("source", "analyse", "sem", "figuur_sem_interactive.R")) #zonder cluster gecorreleerde fouten
+saveWidget(network, file = here("output", "figuren", "psem_inter_netw_mi_nat_sv_mts_beek.html"), selfcontained = TRUE)
+
+# SAC test
+model <- mts_clean
+# 1. Set glmmTMB to simulate conditionally on fitted REs
+glmmTMB::set_simcodes(model$obj, val = "fix")
+# 2. Run DHARMa as usual
+res <- simulateResiduals(fittedModel = model)
+glmmTMB::set_simcodes(model$obj, val = "random")
+
+locaties_match <- dredge_data %>%
+  group_by(meetplaats) %>%
+  summarize(x = dplyr::first(x), y = dplyr::first(y), .groups = "drop") %>%
+  arrange(meetplaats) # DHARMa sorteert groepen standaard op naam/factor level
+
+# 3. Aggregeer residuen
+res_grouped <- recalculateResiduals(res, group = dredge_data$meetplaats)
+
+# 4. De test
+testSpatialAutocorrelation(res_grouped,
+                           x = locaties_match$x,
+                           y = locaties_match$y)
+
+########
+# SAC: spatial autocorrelation
+#######
+
+psems_mi_beek <- list(mmif = mmif_sem_nat_sv_beek_clean, tax = tax_sem_nat_sv_beek_clean, swd = swd_sem_nat_sv_beek_clean,
+                      nst = nst_sem_nat_sv_beek_clean, mts = mts_sem_nat_sv_beek_clean, ept = ept_sem_nat_sv_beek_clean)
+sac_tab <- sac_psem_set(psems_mi_beek, data = dredge_data)
+plot_sac_overview(sac_tab)                      # tegelplot: I per model en test, * = BH-significant
+
+pl <- sac_plan(sac_tab)                         # eerst bekijken wat er gedraaid wordt
+pl                                              # run_site / run_owl zijn aan te passen
+
+fu <- sac_followup(sac_tab, psems_mi_beek, dredge_data,
+                   plan = pl, out_dir = "output/figuren/sac/sac_mi_beek")
+fu$resultaten    # één rij per model en schaal, met oordeel
+fu$coef          # alle coëfficiënten, iid versus ruimtelijk
+fu$zin           # concepttekst voor de methodesectie
+
+# bekijk welke estimates verschilden?
+fu$coef %>% filter(model == "nst_prop", schaal == "owl", term != "(Intercept)") %>%
+  select(term, est_iid, est_sp, se_iid, se_sp, se_ratio, shift_se, p_iid, p_sp)
+
+# “Ruimtelijke autocorrelatie werd per deelmodel getoetst met Moran’s I op DHARMa-residuen en op de random-effect intercepts (BH-correctie over alle tests). Voor de vier deelmodellen met een significant restpatroon (nst_prop, n_t_log, ec_20_log) werd een ruimtelijk gecorreleerd random effect (exponentiële covariantie) op meetplaats- of owl-niveau gefit. Dit verbeterde de modelfit (dAIC −36 tot −51), maar veranderde de schattingen en standaardfouten van de fixed effects niet in die mate dat conclusies wijzigden. De modellen met iid random effects zijn daarom behouden.”
+
+################################################################################
+# spear pesticides
+################################################################################
+
+spear_pesticides_model <- glmmTMB(
+  spear_pesticides ~ intensiteit_combo_afstr_s + intensiteit_combo_oeverzone_s + verharding_afstr_s + verharding_oever_s +
+    lozingen_rwzi_ie_log + lozingen_riool_ie_log + lozingen_industrie_ie_log + overstorten_blootstelling_index_log + (1 |bekken) + (1 | meetplaats) + (1 | owl),
+  data = dredge_data,
+  family = ordbeta
+)
+spear_pesticides_model %>% summary()
+plot_model_vif(spear_pesticides_model)
+
+options(na.action = "na.fail") # Verplicht voor dredge
+spear_pesticides_model <- glmmTMB(
+  spear_pesticides ~ intensiteit_combo_afstr_s + intensiteit_combo_oeverzone_s + verharding_afstr_s + verharding_oever_s +
+    lozingen_rwzi_ie_log + lozingen_riool_ie_log + lozingen_industrie_ie_log + overstorten_blootstelling_index_log + (1 |bekken) + (1 | meetplaats) + (1 | owl),
+  data = dredge_data,
+  family = ordbeta,
+  REML = FALSE
+)
+d <- dredge(
+  global.model = spear_pesticides_model,
+  rank = "AICc",
+  fixed = "cond(jaar_s)",
+  trace = 2
+)
+best_model_ML <- get.models(d, subset = 1)[[1]]
+averaged_model <- model.avg(d, subset = delta <= 2)
+summary(averaged_model)
+spear_best <- update(best_model_ML, REML = TRUE)
+
+summary(spear_best)
+plot_model(spear_best, "pred")
+sw(d)
+
+#sem
+sem_spear_beek <- psem(
+  spear_best_model_beek,
   ntot_best_model_beek,
   ptot_best_model_beek,
-  czv_best_model_beek,
+  # czv_best_model_beek,
   o2_best_model_beek,
-  ec20_best_model_beek
+  ec20_best_model_beek,
+  zs_best_model_beek
 )
 
-summary(sem_stress)
+summary(sem_spear_beek)
+
+# model updaten op basis van dSepS
+spear_best_model_updated <- update(spear_best_model_beek, . ~ . + n_t_log)
+ntot_best_model_updated <- update(ntot_best_model_beek, . ~ . )
+ptot_best_model_updated <- update(ptot_best_model_beek, . ~ . + natuur_oever_s)
+ec20_best_model_updated <- update(ec20_best_model_beek, . ~ . + verharding_afstr_s)
+o2_best_model_updated <- update(o2_best_model_beek, . ~ . )
+zs_best_model_updated <- update(zs_best_model_beek, . ~ .)
+
+# het optimale model clean maken!
+f_spear  <- formula(spear_best_model_updated)
+f_ntot  <- formula(ntot_best_model_updated)
+f_ptot  <- formula(ptot_best_model_updated)
+f_o2    <- formula(o2_best_model_updated)
+f_ec20  <- formula(ec20_best_model_updated)
+# f_t     <- formula(t_best_model_updated)
+# f_czv   <- formula(czv_best_model_updated)
+f_zs     <- formula(zs_best_model_updated)
+
+spear_clean <- glmmTMB(
+  formula     = f_spear,
+  data        = dredge_data,
+  family      = ordbeta()
+)
+
+ntot_clean  <- glmmTMB(f_ntot,  data = dredge_data, family = gaussian())
+ptot_clean  <- glmmTMB(f_ptot,  data = dredge_data, family = gaussian())
+# czv_clean   <- glmmTMB(f_czv,   data = dredge_data, family = gaussian())
+o2_clean    <- glmmTMB(f_o2,    data = dredge_data, family = gaussian())
+ec20_clean  <- glmmTMB(f_ec20,  data = dredge_data, family = gaussian())
+# t_clean     <- glmmTMB(f_t,     data = dredge_data, family = gaussian())
+zs_clean     <- glmmTMB(f_zs,     data = dredge_data, family = gaussian())
+
+spear_sem_nat_sv_beek_clean <- psem(
+  spear_clean,
+  ntot_clean,
+  ptot_clean,
+  o2_clean,
+  ec20_clean,
+  zs_clean,
+  ec_20_log %~~% t_s,
+  n_t_log %~~% t_s,
+  p_t_log %~~% t_s,
+  n_t_log %~~% p_t_log,
+  zs_log %~~% ec_20_log,
+  p_t_log %~~% ec_20_log,
+  o2_s %~~% zs_log)
+
+
+spear_sem_nat_sv_beek_clean %>% summary
+
+save(spear_sem_nat_sv_beek_clean, file = here("source", "analyse", "sem", "mi_nat_sv_beek", "spear_sem_nat_sv_beek_clean.rdata"))
+
+load(file = here("source", "analyse", "sem", "mi_nat_sv_beek", "spear_sem_nat_sv_beek_clean.rdata"))
+
+
+# SAC test
+model <- spear_clean
+# 1. Set glmmTMB to simulate conditionally on fitted REs
+glmmTMB::set_simcodes(model$obj, val = "fix")
+# 2. Run DHARMa as usual
+res <- simulateResiduals(fittedModel = model)
+glmmTMB::set_simcodes(model$obj, val = "random")
+
+locaties_match <- dredge_data %>%
+  group_by(meetplaats) %>%
+  summarize(x = dplyr::first(x), y = dplyr::first(y), .groups = "drop") %>%
+  arrange(meetplaats) # DHARMa sorteert groepen standaard op naam/factor level
+
+# 3. Aggregeer residuen
+res_grouped <- recalculateResiduals(res, group = dredge_data$meetplaats)
+
+# 4. De test
+testSpatialAutocorrelation(res_grouped,
+                           x = locaties_match$x,
+                           y = locaties_match$y)
+
+library(DHARMa)
+library(ggplot2)
+
+# Zet je modellen in een lijst
+model_list <- list(
+  spear = spear_clean
+)
+
+# Loop voor validatie
+for (name in names(model_list)) {
+  cat("\n--- Diagnostiek voor model:", name, "---\n")
+
+  # 1. Bereken residuen (simulatie-gebaseerd)
+  res <- simulateResiduals(fittedModel = model_list[[name]], n = 1000)
+
+  # 2. Plot residuen (QQ-plot en Residual vs Predicted)
+  plot(res)
+  title(main = paste("DHARMa residuals:", name), line = 2)
+
+  # 3. Test specifiek op overdispersie en outliers
+  print(testDispersion(res))
+  print(testOutliers(res))
+}
+
+load(file = here("source", "analyse", "sem", "mi_nat_sv_beek", "spear_sem_nat_sv_beek_clean.rdata"))
+
+
+coefs_filled <- standardize_psem(spear_sem_nat_sv_beek_clean)[,-9]
+# source(here("source", "analyse", "sem", "figuur_sem_zonder_corrfout.R")) #zonder cluster gecorreleerde fouten
+#
+# ggsave(
+#   filename =  here("output", "figuren", "SEM_mi_nat_sv_beek_spear.png"),
+#   plot = last_plot(), # Expliciet de laatste plot kiezen
+#   width = 40,
+#   height = 20,
+#   units = "cm",
+#   dpi = 300,
+#   bg = "white"
+# )
+source(here("source", "analyse", "sem", "figuur_sem_interactive.R")) #zonder cluster gecorreleerde fouten
+saveWidget(network, file = here("output", "figuren", "psem_inter_netw_mi_nat_sv_spear_beek.html"), selfcontained = TRUE)
 
 
 ################################################################################

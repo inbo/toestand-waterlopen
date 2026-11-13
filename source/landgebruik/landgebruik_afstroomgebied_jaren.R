@@ -1,6 +1,8 @@
 source(here::here("source", "inladen_packages.R"))
 load(here("data", "verwerkt", "mi_data.rdata"))
 load(here("data", "verwerkt", "mafy_data.rdata"))
+load(here("data", "verwerkt", "fybe_data.rdata"))
+
 
 # landgebruik bepalen (procentueel) binnen elke afstroomgebied
 landuse_raster_2013 <- raster::raster(here("data", "ruw", "landgebruik", "niveau1_vla_2013_v3.tif"))
@@ -104,6 +106,9 @@ landgebruik_koppeling0 <- mi_data %>%
   bind_rows(mafy_data %>%
               select(meetplaats, monsternamedatum) %>%
               st_drop_geometry()) %>%
+  # bind_rows(fybe_data %>%
+  #             select(meetplaats, monsternamedatum) %>%
+  #             st_drop_geometry()) %>%
   mutate(
     landgebruiksjaar = as.character(case_when(
       monsternamedatum < ymd("2014-07-01") ~ 2013,  # Van 2007 tot halverwege 2014

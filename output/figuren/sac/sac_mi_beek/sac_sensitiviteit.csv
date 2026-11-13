@@ -1,0 +1,5 @@
+"groep";"psem";"model";"strategie";"pdHess";"AIC_iid";"AIC_ruimtelijk";"dAIC";"sd_ruimtelijk";"n_sig_change";"n_sign_change";"n_se_na";"max_se_ratio";"min_se_ratio";"max_shift_se";"post_I";"post_p";"oordeel";"waarschuwing";"schaal"
+"biologisch";"nst";"nst_prop";"toevoegen, eenheid 1 km";TRUE;3156,09074034005;3117,90368797458;-38,1870523654702;0,411053109755098;0;0;0;1,05198608769699;0,93166383444685;0,730096898085103;NA;NA;"robuust";"";"site"
+"biologisch";"nst";"nst_prop";"vervangen, eenheid 1 km";TRUE;3156,09074034005;3119,90585525517;-36,1848850848728;0,411636345842178;0;0;0;1,06240522538812;0,898065756400999;0,76224893015978;NA;NA;"let op";"";"owl"
+"gedeeld";"mmif";"ec_20_log";"vervangen, eenheid 1 km";TRUE;92,9505053682874;41,5891916036712;-51,3613137646162;0,229879830042284;0;0;0;0,983748807123654;0,969705180308122;0,305656800564355;NA;NA;"robuust";"failed to invert Hessian from numDeriv::jacobian(), falling back to internal vcov estimate";"site"
+"gedeeld";"mmif";"n_t_log";"toevoegen, eenheid 1 km";TRUE;1330,00779756662;1290,85606504565;-39,1517325209777;0,337843860473532;0;0;0;1,08303093536887;0,979405425621307;0,889666300020272;NA;NA;"robuust";"";"site"

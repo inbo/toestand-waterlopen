@@ -201,7 +201,7 @@ river_network_fine <- build_river_network_auto_nodes(fd_fine)
 
 
 # ==============================================================================
-# NIEUWE FUNCTIE: Match in een straal (Radius) - Ongeacht stroomrichting
+# Match simpel - Ongeacht stroomrichting
 # ==============================================================================
 match_nearby <- function(target_sf,              # Bijv. Macro-invertebraten
                          source_sf,              # Bijv. Macrofyten
@@ -330,8 +330,14 @@ match_nearby <- function(target_sf,              # Bijv. Macro-invertebraten
 # ==============================================================================
 
 # Laad macrofyten data
-mafy_data <- st_read(here("data", "ruw", "macrofyten", "mafy_meetpunten_datum.gpkg")) %>%
-  filter(monsternamedatum > '2009-12-31')
+# mafy_data <- st_read(here("data", "ruw", "macrofyten", "mafy_meetpunten_datum.gpkg")) %>%
+#   filter(monsternamedatum > '2009-12-31')
+
+load(here("data", "verwerkt", "mafy_data.rdata"))
+source(here::here("source", "analyse", "mafy_datasets_prep.R"))
+
+mafy_data <- mafy_data3 %>%
+  select(meetplaats, monsternamedatum, index_zonder_gep, index_nieuw, vo_zonder_gep, v_zonder_gep, gv_zonder_gep, ts_zonder_gep, vhas)
 
 mi_data <- st_read(here("data", "ruw", "macroinvertebraten", "mi_meetpunten_datum.gpkg"), quiet = T) %>%
   filter(monsternamedatum > '2009-12-31')
@@ -354,19 +360,6 @@ vis_data <- data_traits_EQR %>%
 # - Maximaal 2km van elkaar verwijderd (via de rivier)
 # - Zowel stroomop als stroomafwaarts
 
-mi_met_mafy <- match_nearby(
-  target_sf = mi_data,
-  source_sf = mafy_data,
-  network_list = river_network,
-  max_dist_m = 5000,       # 2000 meter radius
-  year_window = 0,         # Zelfde kalenderjaar
-  selection_mode = "closest_distance"
-)
-
-print(paste("Aantal matches:", sum(!is.na(mi_met_mafy$mp_meetplaats))))
-# Opslaan
-# save(mi_met_mp, file = "mi_met_mp_matched.rdata")
-
 mi_met_mafy_2km_2jaar <- match_nearby(
   target_sf = mi_data,
   source_sf = mafy_data,
@@ -388,3 +381,295 @@ mi_met_vis_2km_2jaar <- match_nearby(
 )
 print(paste("Aantal matches:", sum(!is.na(mi_met_vis_2km_2jaar$mp_meetplaats))))
 save(mi_met_vis_2km_2jaar, file = here("data", "verwerkt" , "koppeling", "koppeling_mi_vis_2km_2jaar.rdata"))
+
+# ==============================================================================
+# nieuwe functie
+# ==============================================================================
+match_biota_network <- function(sf_base,
+                                sf_match,
+                                network_list,
+                                max_upstream_m = 5000,
+                                max_downstream_m = 2000,
+                                snap_tolerance = 25,
+                                days_before = 30,
+                                days_after = 10,
+                                col_date_base = "monsternamedatum",
+                                col_date_match = "monsternamedatum",
+                                selection_mode = "closest_distance",
+                                aggr_method = "mean",
+                                aggr_cols = NULL,
+                                grouping_col = NULL,
+                                vhas_col_network = "VHAS",
+                                vhas_col_base = NULL,
+                                vhas_col_match = NULL) {
+
+  # --- 1. Validatie ---
+  valid_modes <- c("closest_distance", "closest_time", "all", "aggregate")
+  if (!selection_mode %in% valid_modes) stop("selection_mode moet zijn: 'closest_distance', 'closest_time', 'all' of 'aggregate'")
+
+  valid_aggr <- c("mean", "min", "max")
+  if (!aggr_method %in% valid_aggr) stop("aggr_method moet zijn: 'mean', 'min' of 'max'")
+
+  if (!is.null(aggr_cols)) {
+    missing_cols <- setdiff(aggr_cols, names(sf_match))
+    if (length(missing_cols) > 0) stop(paste("aggr_cols niet gevonden in sf_match:", paste(missing_cols, collapse=", ")))
+  }
+
+  g <- network_list$graph
+  net_sf <- network_list$network_sf
+
+  if (!is.null(grouping_col)) {
+    if (!grouping_col %in% names(net_sf)) stop(paste("De grouping_col", grouping_col, "bestaat niet in je netwerk!"))
+    message(paste0("Grouping geactiveerd: enkel matchen binnen zelfde '", grouping_col, "'."))
+  }
+
+  # Datum conversies
+  sf_base[[col_date_base]] <- as.Date(sf_base[[col_date_base]])
+  sf_match[[col_date_match]] <- as.Date(sf_match[[col_date_match]])
+  sf_base$tmp_join_id <- seq_len(nrow(sf_base))
+
+  sf_match$orig_index_geo <- seq_len(nrow(sf_match))
+
+  message("1/4 Snapping points to river network...")
+
+  # --- HYBRID SNAP FUNCTIE ---
+  snap_and_attribute <- function(points, network, grp_col, tol, vhas_col_pts, vhas_col_net) {
+    points$node_id <- NA
+    if (!is.null(grp_col)) points$match_group_val <- NA
+
+    # 1. VHAS MATCHING
+    has_vhas_config <- !is.null(vhas_col_pts) && !is.null(vhas_col_net)
+    can_use_vhas <- has_vhas_config && (vhas_col_pts %in% names(points)) && (vhas_col_net %in% names(network))
+
+    if (can_use_vhas) {
+      pts_with_vhas_idx <- which(!is.na(points[[vhas_col_pts]]))
+      if (length(pts_with_vhas_idx) > 0) {
+        unique_codes <- unique(points[[vhas_col_pts]][pts_with_vhas_idx])
+        for (code in unique_codes) {
+          net_idx <- which(network[[vhas_col_net]] == code)
+          if (length(net_idx) > 0) {
+            p_subset_idx <- which(points[[vhas_col_pts]] == code)
+            rel_nearest <- st_nearest_feature(points[p_subset_idx,], network[net_idx,])
+            abs_nearest <- net_idx[rel_nearest]
+            points$node_id[p_subset_idx] <- as.character(network$from_node[abs_nearest])
+            if (!is.null(grp_col)) points$match_group_val[p_subset_idx] <- network[[grp_col]][abs_nearest]
+          }
+        }
+      }
+    }
+
+    # 2. GEOMETRIC FALLBACK
+    missing_idx <- which(is.na(points$node_id))
+    if (length(missing_idx) > 0) {
+      subset_pts <- points[missing_idx, ]
+      nearest_idx <- st_nearest_feature(subset_pts, network)
+      dists <- st_distance(subset_pts, network[nearest_idx, ], by_element = TRUE)
+      dists_num <- as.numeric(dists)
+      dists_num[is.na(dists_num)] <- Inf
+
+      valid_snaps <- dists_num <= tol
+      valid_global_idx <- missing_idx[valid_snaps]
+      valid_net_idx <- nearest_idx[valid_snaps]
+
+      if (length(valid_global_idx) > 0) {
+        points$node_id[valid_global_idx] <- as.character(network$from_node[valid_net_idx])
+        if (!is.null(grp_col)) points$match_group_val[valid_global_idx] <- network[[grp_col]][valid_net_idx]
+      }
+
+      n_dropped <- length(missing_idx) - length(valid_global_idx)
+      if (n_dropped > 0) message(paste("      ->", n_dropped, "points dropped (too far/no VHAS match)."))
+    }
+    return(points)
+  }
+
+  sf_base <- snap_and_attribute(sf_base, net_sf, grouping_col, snap_tolerance, vhas_col_base, vhas_col_network)
+  sf_match <- snap_and_attribute(sf_match, net_sf, grouping_col, snap_tolerance, vhas_col_match, vhas_col_network)
+
+  df_match <- st_drop_geometry(sf_match)
+
+  message(paste0("2/4 Matching points (Mode: ", selection_mode, " | Upstream: ", max_upstream_m, "m | Downstream: ", max_downstream_m, "m)..."))
+
+  results <- list()
+  pb <- progress_bar$new(format = "  [:bar] :percent eta: :eta", total = nrow(sf_base), clear = FALSE, width = 60)
+
+  for (i in seq_len(nrow(sf_base))) {
+    pb$tick()
+    b_pt <- sf_base[i, ]
+    b_node <- b_pt$node_id
+    b_id   <- b_pt$tmp_join_id
+    match_row <- NA
+    n_matches_found <- 0
+
+    if (is.na(b_node)) {
+      match_row <- df_match[1, ]
+      match_row[] <- NA; match_row$river_dist_m <- NA
+    } else {
+      b_date <- b_pt[[col_date_base]]
+
+      # STAP 1: Filter op Groep en Tijd
+      subset_match <- df_match %>% filter(!is.na(node_id))
+
+      if (!is.null(grouping_col)) {
+        b_group_val <- b_pt$match_group_val
+        if (!is.na(b_group_val)) {
+          subset_match <- subset_match %>% filter(match_group_val == b_group_val)
+        } else {
+          subset_match <- subset_match[0, ]
+        }
+      }
+
+      if (nrow(subset_match) > 0) {
+        subset_match <- subset_match %>%
+          mutate(
+            temp_diff_days = as.numeric(difftime(b_date, .[[col_date_match]], units = "days")),
+            abs_time_diff  = abs(temp_diff_days)
+          ) %>%
+          filter(temp_diff_days >= -days_after & temp_diff_days <= days_before)
+      }
+
+      if (nrow(subset_match) > 0) {
+
+        # STAP 2: Bereken afstanden (Stroomopwaarts & Stroomafwaarts via graaf)
+        upstream_nodes <- names(subcomponent(g, v = b_node, mode = "in"))
+        downstream_nodes <- names(subcomponent(g, v = b_node, mode = "out"))
+
+        subset_match$is_upstream <- subset_match$node_id %in% upstream_nodes
+        subset_match$is_downstream <- subset_match$node_id %in% downstream_nodes
+
+        # --- FIX VOOR IGRAPH DUPLICATES ---
+        # Bepaal unieke knooppunten in de match-set
+        unique_target_nodes <- unique(subset_match$node_id)
+
+        # Afstand stroomopwaarts: van unieke match punten NAAR basis punt
+        d_up_matrix <- distances(g, v = unique_target_nodes, to = b_node, mode = "out")
+
+        # Afstand stroomafwaarts: van basis punt NAAR unieke match punten
+        d_down_matrix <- distances(g, v = b_node, to = unique_target_nodes, mode = "out")
+
+        # Maak named vectors (lookups)
+        lookup_up <- setNames(as.numeric(d_up_matrix), unique_target_nodes)
+        lookup_down <- setNames(as.numeric(d_down_matrix), unique_target_nodes)
+
+        # Map de afstanden terug naar de volledige dataframe (zelfs bij dubbele coördinaten)
+        subset_match$dist_up <- lookup_up[subset_match$node_id]
+        subset_match$dist_down <- lookup_down[subset_match$node_id]
+        # -----------------------------------
+
+        # STAP 3: Filter op afstand
+        candidates <- subset_match %>%
+          filter(
+            (is_upstream & dist_up <= max_upstream_m) |
+              (is_downstream & dist_down <= max_downstream_m)
+          )
+
+        if (nrow(candidates) > 0) {
+          # Neem de kortste afstand (een punt kan stroomop én stroomaf liggen als dist=0 is)
+          candidates$river_dist_m <- pmin(candidates$dist_up, candidates$dist_down, na.rm = TRUE)
+
+          # STAP 4: Selectie / Aggregatie
+          if (selection_mode == "closest_distance") {
+            match_row <- candidates[which.min(candidates$river_dist_m), ]; n_matches_found <- 1
+          } else if (selection_mode == "closest_time") {
+            match_row <- candidates[which.min(candidates$abs_time_diff), ]; n_matches_found <- 1
+          } else if (selection_mode == "all") {
+            match_row <- candidates; n_matches_found <- nrow(candidates)
+          } else if (selection_mode == "aggregate") {
+            n_matches_found <- nrow(candidates)
+            if (!is.null(aggr_cols)) { cols_to_agg <- aggr_cols } else {
+              tech_cols <- c("node_id", "river_dist_m", "dist_up", "dist_down", "temp_diff_days", "abs_time_diff", "match_group_val", "orig_index_geo", "is_upstream", "is_downstream")
+              num_cols <- names(select_if(candidates, is.numeric))
+              cols_to_agg <- setdiff(num_cols, tech_cols)
+            }
+            agg_fun <- switch(aggr_method, "mean"=function(x) mean(x, na.rm=T), "min"=function(x) min(x, na.rm=T), "max"=function(x) max(x, na.rm=T))
+
+            if (length(cols_to_agg) > 0) {
+              agg_values <- candidates %>% summarise(across(all_of(cols_to_agg), agg_fun))
+              match_row <- candidates[1, ]
+              match_row[, cols_to_agg] <- agg_values
+            } else { match_row <- candidates[1, ] }
+            match_row$river_dist_m <- mean(candidates$river_dist_m)
+          }
+        }
+      }
+      if (!is.data.frame(match_row)) { match_row <- df_match[1, ]; match_row[] <- NA; match_row$river_dist_m <- NA }
+    }
+    match_row$base_match_id <- b_id
+    match_row$n_matches <- n_matches_found
+
+    # Cleanup extra technische kolommen voor we mergen
+    cols_to_remove <- c("temp_diff_days", "abs_time_diff", "match_group_val", "orig_index_geo", "is_upstream", "is_downstream", "dist_up", "dist_down")
+    match_row[, base::intersect(names(match_row), cols_to_remove)] <- NULL
+    results[[i]] <- match_row
+  }
+
+  message("3/4 Merging results...")
+  matched_df <- do.call(rbind, results)
+  cols_to_rename <- setdiff(names(matched_df), "base_match_id")
+
+  # Prefix wordt 'match_' in plaats van 'qual_'
+  names(matched_df)[names(matched_df) %in% cols_to_rename] <- paste0("match_", cols_to_rename)
+  final_sf <- left_join(sf_base, matched_df, by = c("tmp_join_id" = "base_match_id"))
+
+  # Laatste opschoning
+  final_sf$tmp_join_id <- NULL
+  if("match_group_val" %in% names(final_sf)) final_sf$match_group_val <- NULL
+
+  message("4/4 Klaar!")
+  return(final_sf)
+}
+
+mi_mafy_gekoppeld <- match_biota_network(
+  sf_base = mi_data,                  # De MI meetpunten (jouw focus/respons)
+  sf_match = mafy_data,               # De MAFY meetpunten (de habitatvormers)
+  network_list = river_network_fine,  # Het opgebouwde netwerk
+
+  # --- 1. Ruimtelijke instellingen (Afstanden) ---
+  max_upstream_m = 1000,    # Zoek tot 1 km stroomopwaarts
+  max_downstream_m = 500,   # Zoek tot 500 m stroomafwaarts
+  snap_tolerance = 25,      # Mogen we iets ruimer nemen (50m) om snelle snaps te garanderen
+
+  # --- 2. Temporele instellingen (Tijdsvenster) ---
+  days_before = 365,         # Planten tot 3 maanden (1 kwartaal) vóór de MI staalname
+  days_after = 180,          # Planten tot 3 maanden ná de MI staalname
+
+  # --- 3. Match & Aggregatie instellingen ---
+  selection_mode = "aggregate",  # Neem het gemiddelde als er meerdere mafy-punten in de buurt liggen
+  aggr_method = "mean",
+  aggr_cols = c("index_zonder_gep", "index_nieuw", "vo_zonder_gep", "v_zonder_gep", "gv_zonder_gep", "ts_zonder_gep"), # PAS AAN: de kolommen in mafy_data die je in je pSEM wil steken
+
+  # --- 4. Verplichte criteria uit jouw vraag ---
+  grouping_col = "VHAG",
+  vhas_col_network = "VHAS",
+  vhas_col_base = "vhas",
+  vhas_col_match = "vhas"
+)
+print(paste("Aantal matches:", sum(!is.na(mi_mafy_gekoppeld$match_meetplaats))))
+mi_mafy_gekoppeld
+
+mi_vis_gekoppeld <- match_biota_network(
+  sf_base = mi_data,                  # De MI meetpunten (jouw focus/respons)
+  sf_match = vis_data,               # De MAFY meetpunten (de habitatvormers)
+  network_list = river_network_fine,  # Het opgebouwde netwerk
+
+  # --- 1. Ruimtelijke instellingen (Afstanden) ---
+  max_upstream_m = 2000,    # Zoek tot 1 km stroomopwaarts
+  max_downstream_m = 1000,   # Zoek tot 500 m stroomafwaarts
+  snap_tolerance = 25,      # Mogen we iets ruimer nemen (50m) om snelle snaps te garanderen
+
+  # --- 2. Temporele instellingen (Tijdsvenster) ---
+  days_before = 365,         # Planten tot 3 maanden (1 kwartaal) vóór de MI staalname
+  days_after = 365,          # Planten tot 3 maanden ná de MI staalname
+
+  # --- 3. Match & Aggregatie instellingen ---
+  selection_mode = "aggregate",  # Neem het gemiddelde als er meerdere mafy-punten in de buurt liggen
+  aggr_method = "mean",
+  aggr_cols = c("perc_inv_fresh", "perc_exoot", "EQR"), # PAS AAN: de kolommen in mafy_data die je in je pSEM wil steken
+
+  # --- 4. Verplichte criteria uit jouw vraag ---
+  grouping_col = "VHAG",
+  vhas_col_network = "VHAS",
+  vhas_col_base = "vhas",
+  vhas_col_match = "vhas"
+)
+print(paste("Aantal matches:", sum(!is.na(mi_vis_gekoppeld$match_meetplaats))))
+mi_vis_gekoppeld

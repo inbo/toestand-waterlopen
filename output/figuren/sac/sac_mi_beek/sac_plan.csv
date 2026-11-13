@@ -1,0 +1,13 @@
+"groep";"psem";"model";"type";"flag_site";"flag_owl";"flag_bekken";"dI_owl";"reden";"run_site";"run_owl"
+"biologisch";"ept";"ept_prop";"glmmTMB";FALSE;FALSE;TRUE;0,0215;"residuen_onvoorwaardelijk (I=0.155, p_bh=0); RE_bekken (I=0.078, p_bh=0.029)";FALSE;FALSE
+"biologisch";"mmif";"mmif";"glmmTMB";FALSE;TRUE;FALSE;0,0354;"residuen_onvoorwaardelijk (I=0.109, p_bh=0); RE_owl (I=0.03, p_bh=0.019)";FALSE;FALSE
+"biologisch";"mts";"mt_sw_prop";"glmmTMB";FALSE;TRUE;FALSE;0,0351;"residuen_onvoorwaardelijk (I=0.128, p_bh=0); RE_owl (I=0.03, p_bh=0.02)";FALSE;FALSE
+"biologisch";"nst";"nst_prop";"glmmTMB";TRUE;TRUE;FALSE;0,0492;"residuen_onvoorwaardelijk (I=0.093, p_bh=0); residuen_conditioneel (I=0.037, p_bh=0.0014); RE_meetplaats (I=0.029, p_bh=0.011); RE_owl (I=0.044, p_bh=0.00092)";TRUE;TRUE
+"biologisch";"swd";"sw_dw";"glmmTMB";FALSE;FALSE;FALSE;0,0202;"residuen_onvoorwaardelijk (I=0.069, p_bh=7.3e-10)";FALSE;FALSE
+"biologisch";"tax";"ta_xw";"glmmTMB";FALSE;TRUE;FALSE;0,0392;"residuen_onvoorwaardelijk (I=0.112, p_bh=0); RE_owl (I=0.034, p_bh=0.01)";FALSE;FALSE
+"gedeeld";"mmif";"czv_log";"glmmTMB";FALSE;TRUE;TRUE;0,0399;"residuen_onvoorwaardelijk (I=0.288, p_bh=0); RE_bekken (I=0.115, p_bh=0.01); RE_owl (I=0.035, p_bh=0.0092)";FALSE;FALSE
+"gedeeld";"mmif";"ec_20_log";"glmmTMB";TRUE;TRUE;TRUE;0,0375;"residuen_onvoorwaardelijk (I=0.118, p_bh=0); residuen_conditioneel (I=0.025, p_bh=0.031); RE_meetplaats (I=0.024, p_bh=0.035); RE_bekken (I=0.062, p_bh=0.049); RE_owl (I=0.032, p_bh=0.012)";TRUE;FALSE
+"gedeeld";"mmif";"n_t_log";"glmmTMB";TRUE;FALSE;FALSE;0,0236;"residuen_onvoorwaardelijk (I=0.097, p_bh=0); residuen_conditioneel (I=0.037, p_bh=0.0014); RE_meetplaats (I=0.029, p_bh=0.011)";TRUE;FALSE
+"gedeeld";"mmif";"o2_s";"glmmTMB";FALSE;FALSE;FALSE;0,0018;"residuen_onvoorwaardelijk (I=0.116, p_bh=0)";FALSE;FALSE
+"gedeeld";"mmif";"p_t_log";"glmmTMB";FALSE;FALSE;FALSE;0,0228;"residuen_onvoorwaardelijk (I=0.19, p_bh=0)";FALSE;FALSE
+"gedeeld";"mmif";"zs_log";"glmmTMB";FALSE;FALSE;FALSE;0,02;"residuen_onvoorwaardelijk (I=0.05, p_bh=9.6e-06)";FALSE;FALSE

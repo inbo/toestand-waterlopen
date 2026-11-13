@@ -1,16 +1,9 @@
-# Installeer en laad benodigde packages als ze nog niet geïnstalleerd zijn
-if (!exists("packages_geladen")) {
-  source(here::here("source", "inladen_packages.R"))
-}
-source(here::here("source", "functies.R"))
 library(dplyr)
 library(stringr)
 library(purrr)
+library(here)
 
-# 1. Definieer de map (Let op: in R gebruik je forward slashes '/')
 map_pad <- "C:/Users/emiel_delombaerde/Documents/R/toestand-waterlopen/source/analyse/sem/synthese/sem_output"
-
-# 2. Zoek alle .rds bestanden in deze map
 bestanden <- list.files(path = map_pad, pattern = "\\.rds$", full.names = TRUE)
 
 if (length(bestanden) == 0) {
@@ -18,42 +11,39 @@ if (length(bestanden) == 0) {
 } else {
   message(sprintf("🔄 %d .rds bestanden gevonden. Bezig met samenvoegen...", length(bestanden)))
 
-  # 3. Loop over elk bestand, lees in, extraheer naam-info, en bind alles samen
-  master_df <- purrr::map_dfr(bestanden, function(pad) {
+  master_df_all <- purrr::map_dfr(bestanden, function(pad) {
 
     # Lees het .rds dataframe in
     df <- readRDS(pad)
-
-    # Haal de pure bestandsnaam op (bijv. "mi_rivier_tax.rds")
     bestandsnaam <- basename(pad)
-
-    # Verwijder de ".rds" extensie (bijv. "mi_rivier_tax")
     naam_zonder_ext <- str_remove(bestandsnaam, "\\.rds$")
-
-    # Splits de string op de underscores
     naam_delen <- str_split(naam_zonder_ext, "_")[[1]]
 
-    # Haal de onderdelen eruit (met een fallback voor als een naam afwijkt)
-    # Als 'maatlat' zelf underscores bevat, plakken we de rest weer netjes aan elkaar.
     groep_val     <- ifelse(length(naam_delen) >= 1, naam_delen[1], NA)
     typologie_val <- ifelse(length(naam_delen) >= 2, naam_delen[2], NA)
     maatlat_val   <- ifelse(length(naam_delen) >= 3, paste(naam_delen[3:length(naam_delen)], collapse = "_"), NA)
 
-    # Voeg de kolommen vooraan toe aan het dataframe
+    # Voeg de kolommen toe EN repareer de Std.Error kolom
     df <- df %>%
       mutate(
         groep     = groep_val,
         typologie = typologie_val,
         maatlat   = maatlat_val,
+        # Oplossing: forceer Std.Error (en evt. andere stat kolommen) naar numeric
+        Std.Error = as.numeric(Std.Error),
         .before   = 1
       )
 
     return(df)
   })
 
-  message("✅ master_df is succesvol aangemaakt!")
+  message("✅ master_df_all is succesvol aangemaakt!")
 }
 
+master_df <- master_df_all %>%
+  filter(P.Value < 0.05)
+
+saveRDS(master_df, here("source", "analyse", "sem", "synthese", "sem_effecten_master_df.rds"))
 
 ########
 # check de upstream paths voor verschillen #

@@ -1,10 +1,7 @@
-library(sf)
-library(igraph)
-library(tidyverse)
-library(progress)
-library(here)
-library(mapview)
-library(lwgeom)
+# Installeer en laad benodigde packages als ze nog niet geïnstalleerd zijn
+if (!exists("packages_geladen")) {
+  source(here::here("source", "inladen_packages.R"))
+}
 
 # ==============================================================================
 # Data inlezen + Bouw het netwerk
@@ -29,6 +26,7 @@ mi_data <- st_read(here("data", "ruw", "macroinvertebraten", "mi_meetpunten_datu
             by = c("meetplaats" = "nummer"))
 
 load(here("data", "verwerkt", "mafy_data.rdata"))
+load(here("data", "verwerkt", "fybe_data.rdata"))
 
 
 if (!file.exists(here("data", "verwerkt", "koppeling", "nutrient_meetpunten_datum.gpkg"))) {
@@ -37,7 +35,7 @@ if (!file.exists(here("data", "verwerkt", "koppeling", "nutrient_meetpunten_datu
     filter(monsternamedatum > '2007-12-31')
   nutrient_meetpunten_datum <- fc_selectie %>%
     filter(!is.na(n_t)) %>%
-    select(meetplaats, monsternamedatum, n_t, p_t, czv, zs, nh4, no2, no3) %>%
+    select(meetplaats, monsternamedatum, n_t, p_t, czv, zs, nh4, no2, no3, cl, clfyl_a, ec_20, t, o2) %>%
     left_join(fc_meetpunten_datum,
               by = c("meetplaats", "monsternamedatum"))
   st_write(nutrient_meetpunten_datum, dsn = here("data", "verwerkt", "koppeling", "nutrient_meetpunten_datum.gpkg"), delete_dsn = T)
@@ -47,8 +45,24 @@ nutrient_data <- st_read(dsn = here("data", "verwerkt", "koppeling", "nutrient_m
               select(vhas, nummer),
             by = c("meetplaats" = "nummer")) # om N en P te koppelen aan MI. Dataset met alle observaties (meetplaats, monsternamedatum, locatie)
 
+if (!file.exists(here("data", "verwerkt", "koppeling", "o2_meetpunten_datum.gpkg"))) {
+  load(here("data", "verwerkt", "fc_selectie.rdata"))
+  fc_meetpunten_datum <- st_read(here("data", "ruw", "fys_chem", "fc_meetpunten.gpkg"), quiet = T) %>%
+    filter(monsternamedatum > '2009-12-31')
+  o2_meetpunten_datum <- fc_selectie %>%
+    filter(!is.na(o2)) %>%
+    select(meetplaats, monsternamedatum, o2, ec_20) %>%
+    left_join(fc_meetpunten_datum,
+              by = c("meetplaats", "monsternamedatum"))
+  st_write(o2_meetpunten_datum, dsn = here("data", "verwerkt", "koppeling", "o2_meetpunten_datum.gpkg"), delete_dsn = T)
+}
+o2_data <- st_read(dsn = here("data", "verwerkt", "koppeling", "o2_meetpunten_datum.gpkg"), quiet = T) %>%
+  left_join(meetnetten %>%
+              select(vhas, nummer),
+            by = c("meetplaats" = "nummer")) # om N en P te koppelen aan MI. Dataset met alle observaties (meetplaats, monsternamedatum, locatie)
+
 if (!file.exists(here("data", "verwerkt", "koppeling", "pesticide_meetpunten_datum.gpkg"))) {
-  load(here("data", "verwerkt", "tu_resultaten.rdata"))
+  load(here("data", "verwerkt", "tu_resultaten.rdata")) # oude nu met load(file = here("data", "verwerkt", "polluenten", "tu_master_macroinvertebrates.rdata"))
   fc_data <- st_read(here("data", "ruw", "fys_chem", "fc_meetpunten.gpkg"), quiet = T) %>%
     filter(monsternamedatum > '2007-12-31')
   pesticide_meetpunten_datum <- tu_per_sample %>%
@@ -58,6 +72,36 @@ if (!file.exists(here("data", "verwerkt", "koppeling", "pesticide_meetpunten_dat
   st_write(pesticide_meetpunten_datum, dsn = here("data", "verwerkt", "koppeling", "pesticide_meetpunten_datum.gpkg"))
 }
 pesticide_data <- st_read(here("data", "verwerkt", "koppeling", "pesticide_meetpunten_datum.gpkg"), quiet = T) %>%
+  left_join(meetnetten %>%
+              select(vhas, nummer),
+            by = c("meetplaats" = "nummer"))
+
+if (!file.exists(here("data", "verwerkt", "koppeling", "metalen_meetpunten_datum.gpkg"))) {
+  load(file = here("data", "verwerkt", "polluenten", "tu_master_metals_macroinvertebrates.rdata"))
+  fc_data <- st_read(here("data", "ruw", "fys_chem", "fc_meetpunten.gpkg"), quiet = T) %>%
+    filter(monsternamedatum > '2007-12-31') #nodige voor de coordinaten
+  metalen_meetpunten_datum <- tu_master_mi_metalen %>%
+    select(meetplaats, monsternamedatum) %>%
+    left_join(fc_data,
+              by = c("meetplaats", "monsternamedatum"))
+  st_write(metalen_meetpunten_datum, dsn = here("data", "verwerkt", "koppeling", "metalen_meetpunten_datum.gpkg"))
+}
+metalen_data <- st_read(here("data", "verwerkt", "koppeling", "metalen_meetpunten_datum.gpkg"), quiet = T) %>%
+  left_join(meetnetten %>%
+              select(vhas, nummer),
+            by = c("meetplaats" = "nummer"))
+
+if (!file.exists(here("data", "verwerkt", "koppeling", "paks_meetpunten_datum.gpkg"))) {
+  load(file = here("data", "verwerkt", "polluenten", "tu_master_paks_macroinvertebrates.rdata"))
+  fc_data <- st_read(here("data", "ruw", "fys_chem", "fc_meetpunten.gpkg"), quiet = T) %>%
+    filter(monsternamedatum > '2007-12-31') #nodige voor de coordinaten
+  paks_meetpunten_datum <- tu_master_mi_pak %>%
+    select(meetplaats, monsternamedatum) %>%
+    left_join(fc_data,
+              by = c("meetplaats", "monsternamedatum"))
+  st_write(paks_meetpunten_datum, dsn = here("data", "verwerkt", "koppeling", "paks_meetpunten_datum.gpkg"))
+}
+paks_data <- st_read(here("data", "verwerkt", "koppeling", "paks_meetpunten_datum.gpkg"), quiet = T) %>%
   left_join(meetnetten %>%
               select(vhas, nummer),
             by = c("meetplaats" = "nummer"))
@@ -80,47 +124,47 @@ chlora_data <- st_read(dsn = here("data", "verwerkt", "koppeling", "chlora_meetp
             by = c("meetplaats" = "nummer")) # om N en P te koppelen aan MI. Dataset met alle observaties (meetplaats, monsternamedatum, locatie)
 
 # netwerk bouwen
-build_river_network <- function(lines_sf, nodes_sf) {
-
-  message("Building network graph... (this may take a moment)")
-
-  # 1. Prepareer coordinaten
-  # We gaan ervan uit dat lines_sf StartX/Y en EndX/Y heeft, of we berekenen ze
-  # Voor veiligheid berekenen we ze vers (consistentie)
-  coords <- st_coordinates(lines_sf)
-
-  # Startpunt is het eerste punt van elke lijn, Eindpunt het laatste
-  # (Dit werkt voor LINESTRING, check of je MULTILINESTRING hebt, dan moet je casten)
-  lines_sf <- st_cast(lines_sf, "LINESTRING", warn = FALSE)
-
-  start_points <- st_line_sample(lines_sf, sample = 0)
-  end_points <- st_line_sample(lines_sf, sample = 1)
-
-  # 2. Match lijnen aan nodes
-  # We zoeken welke node ID bij het start- en eindpunt hoort
-  lines_sf$from_node <- st_nearest_feature(start_points, nodes_sf)
-  lines_sf$to_node   <- st_nearest_feature(end_points, nodes_sf)
-
-  # 3. Bereken lengtes voor gewichten
-  lines_sf$length_m <- as.numeric(st_length(lines_sf))
-
-  # 4. Bouw de graaf
-  edges <- data.frame(
-    from = as.character(lines_sf$from_node),
-    to = as.character(lines_sf$to_node),
-    weight = lines_sf$length_m,
-    segment_id = seq_len(nrow(lines_sf))
-  )
-
-  g <- graph_from_data_frame(edges, directed = TRUE)
-
-  message("Graph built successfully!")
-
-  # Return een lijst met de graaf EN de ruimtelijke lijnen (nodig voor snapping later)
-  return(list(graph = g, network_sf = lines_sf))
-}
-
-river_network <- build_river_network(fd, nodes)
+# build_river_network <- function(lines_sf, nodes_sf) {
+#
+#   message("Building network graph... (this may take a moment)")
+#
+#   # 1. Prepareer coordinaten
+#   # We gaan ervan uit dat lines_sf StartX/Y en EndX/Y heeft, of we berekenen ze
+#   # Voor veiligheid berekenen we ze vers (consistentie)
+#   coords <- st_coordinates(lines_sf)
+#
+#   # Startpunt is het eerste punt van elke lijn, Eindpunt het laatste
+#   # (Dit werkt voor LINESTRING, check of je MULTILINESTRING hebt, dan moet je casten)
+#   lines_sf <- st_cast(lines_sf, "LINESTRING", warn = FALSE)
+#
+#   start_points <- st_line_sample(lines_sf, sample = 0)
+#   end_points <- st_line_sample(lines_sf, sample = 1)
+#
+#   # 2. Match lijnen aan nodes
+#   # We zoeken welke node ID bij het start- en eindpunt hoort
+#   lines_sf$from_node <- st_nearest_feature(start_points, nodes_sf)
+#   lines_sf$to_node   <- st_nearest_feature(end_points, nodes_sf)
+#
+#   # 3. Bereken lengtes voor gewichten
+#   lines_sf$length_m <- as.numeric(st_length(lines_sf))
+#
+#   # 4. Bouw de graaf
+#   edges <- data.frame(
+#     from = as.character(lines_sf$from_node),
+#     to = as.character(lines_sf$to_node),
+#     weight = lines_sf$length_m,
+#     segment_id = seq_len(nrow(lines_sf))
+#   )
+#
+#   g <- graph_from_data_frame(edges, directed = TRUE)
+#
+#   message("Graph built successfully!")
+#
+#   # Return een lijst met de graaf EN de ruimtelijke lijnen (nodig voor snapping later)
+#   return(list(graph = g, network_sf = lines_sf))
+# }
+#
+# river_network <- build_river_network(fd, nodes)
 
 # netwerk verfijnen door segmenten op te splitsen
 
@@ -596,6 +640,51 @@ print(paste("Aantal matches:", sum(!is.na(koppeling_mi_nutrient$qual_meetplaats)
 
 save(koppeling_mi_nutrient, file = "data/verwerkt/koppeling/koppeling_mi_nutrient.rdata")
 
+koppeling_mi_all_matches_nutrient <- match_upstream_strahler(
+  biota_sf = mi_data,
+  quality_sf = nutrient_data,
+  network_list = river_network_fine,
+  strahler_sf = strahler,
+  use_strahler = FALSE,
+  strahler_col = "orde",
+  max_downstream_m = 200,
+  max_dist_m = 5000,       # Max 5km stroomopwaarts
+  days_before = 180,       # Kwaliteit mag tot 180 dagen VOOR de biota meting zijn
+  days_after = 14,         # Kwaliteit mag tot 30dagen NA de biota meting zijn
+  col_date_biota = "monsternamedatum",
+  col_date_quality = "monsternamedatum",
+  selection_mode = "all",
+  grouping_col = "VHAG",
+  vhas_col_network = "VHAS",
+  vhas_col_biota = "vhas",
+  vhas_col_quality = "vhas"
+)
+print(paste("Aantal matches:", sum(!is.na(koppeling_mi_all_matches_nutrient$qual_meetplaats))))
+
+save(koppeling_mi_all_matches_nutrient, file = "data/verwerkt/koppeling/koppeling_mi_all_matches_nutrient.rdata")
+
+koppeling_mi_all_matches_o2 <- match_upstream_strahler(
+  biota_sf = mi_data,
+  quality_sf = o2_data,
+  network_list = river_network_fine,
+  strahler_sf = strahler,
+  use_strahler = FALSE,
+  strahler_col = "orde",
+  max_downstream_m = 200,
+  max_dist_m = 5000,       # Max 5km stroomopwaarts
+  days_before = 180,       # Kwaliteit mag tot 180 dagen VOOR de biota meting zijn
+  days_after = 14,         # Kwaliteit mag tot 30dagen NA de biota meting zijn
+  col_date_biota = "monsternamedatum",
+  col_date_quality = "monsternamedatum",
+  selection_mode = "all",
+  grouping_col = "VHAG",
+  vhas_col_network = "VHAS",
+  vhas_col_biota = "vhas",
+  vhas_col_quality = "vhas"
+)
+print(paste("Aantal matches:", sum(!is.na(koppeling_mi_all_matches_o2$qual_meetplaats))))
+
+save(koppeling_mi_all_matches_o2, file = "data/verwerkt/koppeling/koppeling_mi_all_matches_o2.rdata")
 
 koppeling_mi_pesticides <- match_upstream_strahler(
   biota_sf = mi_data,
@@ -604,9 +693,9 @@ koppeling_mi_pesticides <- match_upstream_strahler(
   strahler_sf = strahler,
   use_strahler = FALSE,
   strahler_col = "orde",
-  max_dist_m = 5000,       # Max 5km stroomopwaarts
+  max_dist_m = 1000,       # Max 5km stroomopwaarts
   days_before = 730,       # Kwaliteit mag tot 180 dagen VOOR de biota meting zijn
-  days_after = 730,         # Kwaliteit mag tot 14 dagen NA de biota meting zijn
+  days_after = 0,         # Kwaliteit mag tot 14 dagen NA de biota meting zijn
   col_date_biota = "monsternamedatum",
   col_date_quality = "monsternamedatum",
   selection_mode = "closest_distance",
@@ -617,6 +706,29 @@ koppeling_mi_pesticides <- match_upstream_strahler(
 )
 print(paste("Aantal matches:", sum(!is.na(koppeling_mi_pesticides$qual_meetplaats))))
 save(koppeling_mi_pesticides, file = "data/verwerkt/koppeling/koppeling_mi_pesticides.rdata")
+
+#hier
+
+koppeling_mafy_pesticides <- match_upstream_strahler(
+  biota_sf = mafy_data,
+  quality_sf = pesticide_data,
+  network_list = river_network_fine,
+  strahler_sf = strahler,
+  use_strahler = FALSE,
+  strahler_col = "orde",
+  max_dist_m = 1000,       # Max 5km stroomopwaarts
+  days_before = 730,       # Kwaliteit mag tot 180 dagen VOOR de biota meting zijn
+  days_after = 0,         # Kwaliteit mag tot 14 dagen NA de biota meting zijn
+  col_date_biota = "monsternamedatum",
+  col_date_quality = "monsternamedatum",
+  selection_mode = "closest_distance",
+  grouping_col = "VHAG",
+  vhas_col_network = "VHAS",
+  vhas_col_biota = "vhas",
+  vhas_col_quality = "vhas"
+)
+print(paste("Aantal matches:", sum(!is.na(koppeling_mafy_pesticides$qual_meetplaats))))
+save(koppeling_mafy_pesticides, file = "data/verwerkt/koppeling/koppeling_mafy_pesticides.rdata")
 
 koppeling_mi_pesticides_strict <- match_upstream_strahler(
   biota_sf = mi_data,
@@ -714,10 +826,11 @@ print(paste("Aantal matches:", sum(!is.na(koppeling_mafy_nutrient_aggregate_wide
 
 save(koppeling_mafy_nutrient_aggregate_wide, file = "data/verwerkt/koppeling/koppeling_mafy_nutrient_aggregate_wide.rdata")
 
-koppeling_mafy_nutrient <- match_upstream_strahler(
-  biota_sf = mafy_data,
+
+koppeling_fybe_nutrient_aggregate <- match_upstream_strahler(
+  biota_sf = fybe_data,
   quality_sf = nutrient_data,
-  network_list = river_network,
+  network_list = river_network_fine,
   strahler_sf = strahler,
   use_strahler = FALSE,             # AANGEPAST: Strikter op stroomgrootte
   strahler_col = "orde",
@@ -727,15 +840,62 @@ koppeling_mafy_nutrient <- match_upstream_strahler(
   days_after = 30,
   col_date_biota = "monsternamedatum",
   col_date_quality = "monsternamedatum",
-  selection_mode = "closest_distance",    # AANGEPAST: Gemiddelde nemen in plaats van 1 punt
-  # aggr_method = "mean",            # AANGEPAST: Gemiddelde over het jaar/gebied
-  # aggr_cols = c("n_t", "p_t"),     # Vul hier de daadwerkelijke kolomnamen van je nutriënten in
+  selection_mode = "aggregate",    # AANGEPAST: Gemiddelde nemen in plaats van 1 punt
+  aggr_method = "mean",            # AANGEPAST: Gemiddelde over het jaar/gebied
+  aggr_cols = c("n_t", "p_t", "czv", "zs", "no2", "no3", "nh4", "cl", "clfyl_a", "ec_20", "t", "o2"),     # Vul hier de daadwerkelijke kolomnamen van je nutriënten in
   grouping_col = "VHAG",
   vhas_col_network = "VHAS",
   vhas_col_biota = "vhas",
   vhas_col_quality = "vhas"
 )
-print(paste("Aantal matches:", sum(!is.na(koppeling_mafy_nutrient$qual_meetplaats))))
+print(paste("Aantal matches:", sum(!is.na(koppeling_fybe_nutrient_aggregate$qual_meetplaats))))
+
+save(koppeling_fybe_nutrient_aggregate, file = "data/verwerkt/koppeling/koppeling_fybe_nutrient_aggregate.rdata")
+
+koppeling_mi_metalen <- match_upstream_strahler(
+  biota_sf = mi_data,
+  quality_sf = metalen_data,
+  network_list = river_network_fine,
+  strahler_sf = strahler,
+  use_strahler = FALSE,
+  strahler_col = "orde",
+  max_downstream_m = 200,
+  max_dist_m = 5000,       # Max 5km stroomopwaarts
+  days_before = 180,       # Kwaliteit mag tot 180 dagen VOOR de biota meting zijn
+  days_after = 14,         # Kwaliteit mag tot 30dagen NA de biota meting zijn
+  col_date_biota = "monsternamedatum",
+  col_date_quality = "monsternamedatum",
+  selection_mode = "closest_distance", # neemt dichtste punt
+  grouping_col = "VHAG", # moeten op zelfde vhag segment liggen
+  vhas_col_network = "VHAS",
+  vhas_col_biota = "vhas",
+  vhas_col_quality = "vhas"
+)
+print(paste("Aantal matches:", sum(!is.na(koppeling_mi_metalen$qual_meetplaats))))
+save(koppeling_mi_metalen, file = "data/verwerkt/koppeling/koppeling_mi_metalen.rdata")
+
+koppeling_mi_paks <- match_upstream_strahler(
+  biota_sf = mi_data,
+  quality_sf = paks_data,
+  network_list = river_network_fine,
+  strahler_sf = strahler,
+  use_strahler = FALSE,
+  strahler_col = "orde",
+  max_downstream_m = 200,
+  max_dist_m = 5000,       # Max 5km stroomopwaarts
+  days_before = 180,       # Kwaliteit mag tot 180 dagen VOOR de biota meting zijn
+  days_after = 14,         # Kwaliteit mag tot 30dagen NA de biota meting zijn
+  col_date_biota = "monsternamedatum",
+  col_date_quality = "monsternamedatum",
+  selection_mode = "closest_distance", # neemt dichtste punt
+  grouping_col = "VHAG", # moeten op zelfde vhag segment liggen
+  vhas_col_network = "VHAS",
+  vhas_col_biota = "vhas",
+  vhas_col_quality = "vhas"
+)
+print(paste("Aantal matches:", sum(!is.na(koppeling_mi_paks$qual_meetplaats))))
+save(koppeling_mi_paks, file = "data/verwerkt/koppeling/koppeling_mi_paks.rdata")
+## extra test?
 
 #vergelijking aggregated vs closest distance methode voor koppeling mafy en nutrienten en co
 # Haal de geometrie weg zodat we gewone dataframes overhouden

@@ -18,7 +18,8 @@ spear_data <- read.csv("data/ruw/macroinvertebraten/traits/spear_calculation.csv
            sep = "_",
            remove = T) %>%
   janitor::clean_names() %>%
-  mutate(monsternamedatum = as.Date(monsternamedatum))
+  mutate(monsternamedatum = as.Date(monsternamedatum)) %>%
+  rename(spear_tu_estimated = tu_estimated)
 
 # opslaan
 save(spear_data, file = here("data", "verwerkt", "spear_data.rdata"))

@@ -23,6 +23,7 @@ load(file = here("data", "verwerkt", "hydro_data.rdata")) # hydrologie (neerslag
 load(file = here("data", "verwerkt", "lozingen_data.rdata")) # lozingen
 
 load(file = "data/verwerkt/koppeling/koppeling_mi_nutrient.rdata") # koppeling fyschem
+load(file = here("data", "verwerkt", "mi_data_analyse_rtnt_update.rdata"))
 
 load(file = here("data", "verwerkt", "spear_data.rdata")) # spear pesticides
 load(file = here("data", "verwerkt", "tu_resultaten.rdata")) # tu score pesticiden
@@ -33,7 +34,7 @@ deelbekken <- st_read("data/ruw/bekkens/Wsdeelbek.shp") %>%
   st_transform(., crs = st_crs(mi_data))
 
 # weglaten vijvers, meren, geisoleerd water en punten buiten Vlaanderen
-mi_data_analyse <- mi_data %>%
+mi_data_analyse1 <- mi_data %>%
   filter(categorie != "Vijver") %>%
   filter(waterlooptype != "Geïsoleerd water") %>%
   filter(waterlichaamcategorie != "meer") %>%
@@ -44,6 +45,33 @@ mi_data_analyse <- mi_data %>%
           join = st_intersects) %>%
   rename(deelbekken = DEELBID) %>%
   mutate(deelbekken = replace_na(as.character(deelbekken), "onbekend"))
+
+mi_data_analyse <- mi_data_analyse1 %>%
+  # 1. Koppel de update data aan de originele dataset
+  left_join(
+    mi_data_analyse_rtnt_update %>%
+      rename(type_rtnt = type) %>%
+      st_drop_geometry() %>%
+      # Selecteer enkel de sleutels en de te updaten kolommen, en geef ze een tijdelijke naam
+      select(meetplaats, monsternamedatum, type_rtnt,
+             mmif_upd = mmif, ept_upd = ept, swd_upd = swd,
+             nst_upd = nst, mts_upd = mts, tax_upd = tax) %>%
+      # Voeg een hulpkolom toe zodat we zeker weten welke rijen gevonden zijn
+      mutate(is_match = TRUE),
+    by = c("meetplaats", "monsternamedatum")
+  ) %>%
+  # 2. Vervang de waarden in de originele kolommen alléén als type == "RtNt" én er een match is
+  mutate(
+    mmif = if_else(type == "RtNt" & !is.na(is_match), mmif_upd, mmif),
+    ept  = if_else(type == "RtNt" & !is.na(is_match), ept_upd, ept),
+    swd  = if_else(type == "RtNt" & !is.na(is_match), swd_upd, swd),
+    nst  = if_else(type == "RtNt" & !is.na(is_match), nst_upd, nst),
+    mts  = if_else(type == "RtNt" & !is.na(is_match), mts_upd, mts),
+    tax  = if_else(type == "RtNt" & !is.na(is_match), tax_upd, tax)
+  ) %>%
+  # 3. Verwijder de tijdelijke kolommen (is_match en alles dat eindigt op _upd)
+  select(-ends_with("_upd"), -is_match)
+
 mi_data_verrijkt <- st_join(mi_data_analyse, deelbekken["DEELBID"], join = st_intersects)
 
 # koppeling fyschem
@@ -68,52 +96,6 @@ gekoppelde_data_mi_nutrient <- mi_data_analyse %>%
                    "qual_monsternamedatum" = "monsternamedatum"),
             suffix = c("", "_fc"))
 
-#### vergelijking met oude koppeling ####
-#
-# fc_mi_old <- mi_data_analyse %>%
-#   st_drop_geometry() %>%
-#   filter(jaar > 2009) %>%
-#   select(meetplaats, monsternamedatum, groep, jaar) %>%
-#   left_join(.,
-#             fc_selectie,
-#             by = c("meetplaats"), suffix = c("", "_fc")) %>%
-#   filter(
-#
-#     {
-#       days_before <- as.numeric(difftime(monsternamedatum, monsternamedatum_fc, units = "days"))
-#       days_before < 90 &
-#         days_before > -14
-#
-#     }
-#   ) %>%
-#   group_by(meetplaats, monsternamedatum) %>% #dubbele samples uitmiddelen
-#   summarise(
-#     across(
-#       where(is.numeric), \(x) mean(x, na.rm = TRUE) # enkel numerische kolommen om de mean te pakken
-#     ), # voor niet numerische waarden gewoon de eerste string nemen om te behouden
-#     across(
-#       where(is.factor) | where(is.character),
-#       ~ dplyr::first(.)
-#     ),
-#     .groups = "drop" # Drop the grouping at the end
-#   )
-# fc_mi_old$n_t %>% is.na() %>% sum
-gekoppelde_data_mi_nutrient %>%
-  filter(statuut %in% c("Natuurlijk", "Sterk Veranderd")) %>%
-  filter(groep == "beek") %>%
-  filter(jaar > 2009) %>%
-  filter(!is.na(n_t))
-#
-#   pull(n_t) %>%
-#   is.na() %>% sum
-#
-# fc_mi_old$czv %>% is.na() %>% sum
-#
-# fc_mi_old %>%
-#   filter(groep == "beek") %>%
-#   filter(jaar > 2009) %>%
-#   filter(!is.na(n_t))
-# gekoppelde_data_mi_nutrient$czv %>% is.na() %>% sum
 
 #### koppeling overige data ####
 data0 <- gekoppelde_data_mi_nutrient %>%
@@ -164,6 +146,11 @@ fd_mi_filtered <- fd_mi %>%
 
 data4 <- data3 %>%
   left_join(., fd_mi_filtered,
+                         by = c("meetplaats", "monsternamedatum"))
+
+data5 <- data4 %>%
+  left_join(., spear_data %>%
+              select(meetplaats, monsternamedatum, spear_pesticides, spear_tu_estimated),
                          by = c("meetplaats", "monsternamedatum"))
 #
 # mi_subsets_plot <- data4 %>%
@@ -244,32 +231,31 @@ data4 <- data3 %>%
 ################################################################################
 # 1. natuurlijk en sterk veranderd
 # 1.1 beek
-mi_nat_sv_beek <- data4 %>%
+mi_nat_sv_beek <- data5 %>%
   filter(statuut %in% c("Natuurlijk", "Sterk Veranderd")) %>%
   filter(groep == "beek")
 save(mi_nat_sv_beek, file = here("data", "verwerkt", "mi_subsets", "mi_nat_sv_beek.rdata"))
 
 # 1.2 kempen
-mi_nat_sv_kempen <- data4 %>%
+mi_nat_sv_kempen <- data5 %>%
   filter(statuut %in% c("Natuurlijk", "Sterk Veranderd")) %>%
   filter(groep == "kempen")
 save(mi_nat_sv_kempen, file = here("data", "verwerkt", "mi_subsets", "mi_nat_sv_kempen.rdata"))
 
 # 1.3 polder
-mi_nat_sv_polder <- data4 %>%
+mi_nat_sv_polder <- data5 %>%
   filter(statuut %in% c("Natuurlijk", "Sterk Veranderd")) %>%
   filter(groep == "polder")
 
 # 1.4 rivier
-mi_nat_sv_rivier <- data4 %>%
+mi_nat_sv_rivier <- data5 %>%
   filter(statuut %in% c("Natuurlijk", "Sterk Veranderd")) %>%
   filter(groep == "rivier")
 
 # 2. kunstmatig
-mi_kunstmatig <- data4 %>%
+mi_kunstmatig <- data5 %>%
   filter(statuut %in% c("Kunstmatig"))
 
 # 3. RtNt - bovenlopen -> NVT????
-rtnt <- data4 %>%
+mi_rtnt <- data5 %>%
   filter(type == "RtNt")
-load(file = here("data", "verwerkt", "mi_data_analyse_rtnt_update.rdata"))

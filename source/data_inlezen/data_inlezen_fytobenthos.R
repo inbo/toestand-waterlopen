@@ -1,4 +1,9 @@
-source(here::here("source", "inladen_packages.R"))
+# Installeer en laad benodigde packages als ze nog niet geïnstalleerd zijn
+if (!exists("packages_geladen")) {
+  source(here::here("source", "inladen_packages.R"))
+}
+meetnetten <- read_delim("data/ruw/vmm/meetnetten.txt") %>%
+  mutate(meetplaats_fybe = stringr::str_remove(nummer, "OW"))
 
 # data macro-invertebraten inlezen ----
 locatie <- here("data", "ruw", "fytobenthos", "fytobenthos 2010-2023.xlsx")
@@ -32,7 +37,11 @@ fybe_data0 <- fybe_deelmaatlatten0 %>%
   # filter(waterlooptype != "Geïsoleerd water" &
   #          !(waterlichaamcategorie %in% c("meer", "overgangswater"))) %>%
   left_join(waterlopen_groep, by = "type")
-fybe_data <- janitor::clean_names(fybe_data0)
+fybe_data <- janitor::clean_names(fybe_data0) %>%
+  rename(fybe_index = ekc) %>%
+  left_join(meetnetten %>%
+              select(meetplaats_fybe, vhas, vha_naam),
+            by = c("meetplaats" = "meetplaats_fybe"))
 save(fybe_data, file = here("data", "verwerkt", "fybe_data.rdata"))
 
 fybe_meetpunten_datum <- fybe_data %>%
@@ -51,3 +60,4 @@ fybe_soorten <- vmm_fybe$determinaties %>%
   pull(taxon) %>%
   unique
 write.table(fybe_soorten, "fybe_soorten.txt")
+

@@ -1,4 +1,7 @@
-source(here::here("source", "inladen_packages.R"))
+# Installeer en laad benodigde packages als ze nog niet geïnstalleerd zijn
+if (!exists("packages_geladen")) {
+  source(here::here("source", "inladen_packages.R"))
+}
 
 # data macro-invertebraten inlezen ----
 locatie <- here("data", "ruw", "macrofyten", "macrofyten tot 2023.xlsx")
@@ -34,7 +37,7 @@ mafy_deelmaatlatten0 <- vmm_mafy$ekc_maf %>%
         monsternamedatum =  as.Date(monsternamedatum, format = "%Y-%m-%d"),
         deelmonster_id = as.character(deelmonster_id_mow)
       ) %>%
-      select(-teken, -eenh, - secchischijf_op_bodem) %>%
+      select(-teken, -eenh, -secchischijf_op_bodem) %>%
       filter(par %in% c("T", "pH", "O2", "O2 verz", "EC 20", "Secchi")) %>%
       pivot_wider(names_from = par, values_from = resultaat),
     by = c("meetplaats", "monsternamedatum", "deelmonster_id")
@@ -59,10 +62,52 @@ mafy_data1 <- janitor::clean_names(mafy_data0)
 meetnetten <- read.delim("data/ruw/vmm/meetnetten.txt") %>%
   mutate(meetplaats_mafy = stringr::str_remove(nummer, "OW"))
 
-mafy_data <- mafy_data1 %>%
+mafy_diepte <- vmm_mafy$kenmerken %>%
+  select(meetplaats, monsternamedatum, diepte_maximum_cm, diepte_gemiddeld_cm) %>%
+  mutate(monsternamedatum =  as.Date(monsternamedatum, format = "%Y-%m-%d"),
+         meetplaats = as.factor(meetplaats))
+
+mafy_beschaduwing <- vmm_mafy$kenmerken %>%
+  select(meetplaats, monsternamedatum, beschaduwing_macrofyten_percent) %>%
+  mutate(monsternamedatum =  as.Date(monsternamedatum, format = "%Y-%m-%d"),
+         meetplaats = as.factor(meetplaats))
+
+secchi_bodem <- vmm_mafy$veldmetingen_fc %>%
+  mutate(
+    monsternamedatum =  as.Date(monsternamedatum, format = "%Y-%m-%d"),
+    deelmonster_id = as.character(deelmonster_id_mow),
+    meetplaats = as.factor(meetplaats)
+  ) %>%
+  filter(par == "Secchi") %>%
+  select(meetplaats, monsternamedatum, secchischijf_op_bodem)
+
+mafy_data2 <- mafy_data1 %>%
   left_join(meetnetten %>%
               select(meetplaats_mafy, vhas, vha_naam),
             by = c("meetplaats" = "meetplaats_mafy"))
+
+secchi <- mafy_data2 %>%
+  st_drop_geometry() %>%
+  select(meetplaats, monsternamedatum, secchi) %>%
+  left_join(secchi_bodem,
+            by = c("meetplaats", "monsternamedatum")) %>%
+  left_join(mafy_diepte,
+            by = c("meetplaats", "monsternamedatum")) %>%
+  drop_na(secchi) %>%
+  replace_na(list(secchischijf_op_bodem = "Nee")) %>%
+  filter(secchischijf_op_bodem == "Ja" | (secchischijf_op_bodem == "Nee" & secchi < diepte_maximum_cm)) %>%
+  mutate(
+    relatieve_doorzichtbaarheid = case_when(
+      secchischijf_op_bodem == "Ja" ~ 1,
+      secchischijf_op_bodem == "Nee" ~ secchi / diepte_maximum_cm
+    )
+  )
+
+mafy_data <- mafy_data2 %>%
+  left_join(secchi %>%
+              select(-secchi),
+                by = c("meetplaats", "monsternamedatum")) %>%
+  distinct()
 
 save(mafy_data, file = here("data", "verwerkt", "mafy_data.rdata"))
 
@@ -74,4 +119,5 @@ st_write(mafy_meetpunten_datum, dsn = here("data", "ruw", "macrofyten", "mafy_me
 mafy_meetpunten <- mafy_data %>%
   select(meetplaats, geometry) %>%
   unique
+
 st_write(mafy_meetpunten, dsn = here("data", "ruw", "macrofyten", "mafy_meetpunten.gpkg"), delete_dsn = T)
