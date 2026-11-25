@@ -5,28 +5,15 @@
 # WAT DOET DIT SCRIPT?
 #   Aan elk biota-meetpunt (hier: macroinvertebraten, MI) wordt de meest
 #   geschikte kwaliteitsmeting (hier: nutriënten/fys-chem) gekoppeld die
-#   STROOMOPWAARTS ligt, binnen een bepaald tijdsvenster.
+#   STROOMOPWAARTS ligt (of lokaal stroomafwaarts binnen max_downstream_m),
+#   binnen een bepaald tijdsvenster.
 #
 # OPBOUW
 #   1. Data inlezen
 #   2. Riviernetwerk bouwen (lijnen opknippen + igraph-graaf) en cachen
-#   3. Hoofdfunctie match_upstream_strahler() (alle hulpfuncties zitten er, net
-#      als in het originele script, binnenin)
+#   3. Hoofdfunctie match_upstream_strahler() (fractie-methode; exacte afstand)
 #   4. Voorbeelden van gebruik (verschillende opties)
-#
-# De METHODE is ongewijzigd t.o.v. het originele script. Aangepast:
-#   - structuur, commentaar en kleine technische opkuisingen (T -> TRUE,
-#     select_if -> select(where()), .[[ ]] -> .data[[ ]])
-#   - meetnetten: dubbele 'nummer' worden gededupliceerd (met waarschuwing)
-#   - CRS van mi_data en nutrient_data wordt naar die van het netwerk getransformeerd
-#   - split-functie: restsegment < 1 mm wordt niet meer afgeknipt maar bij het
-#     laatste stuk gehouden (geen gaten meer in de graaf)
-#   - vogelvlucht-afstand is weggehaald: "lokale" matches stroomafwaarts worden nu
-#     ook langs de graaf gemeten (max_downstream_m = max afstand stroomafwaarts, in m)
-#   - nieuw argument keep_time_diff: bewaart qual_temp_diff_days (biota - kwaliteit, in dagen)
-#   - aggregate: de VHAS-kolom van quality_sf wordt nooit meer gemiddeld
-# LET OP: omdat de split-functie lichtjes wijzigt, moet je het bestaande
-# river_network_fine.rds eenmalig verwijderen zodat het netwerk opnieuw gebouwd wordt.
+
 # ==============================================================================
 
 
@@ -102,18 +89,6 @@ nutrient_data <- st_transform(nutrient_data, st_crs(fd))
 # ------------------------------------------------------------------------------
 # 2a. Lijnen opknippen in stukken van maximaal `max_length` meter
 # ------------------------------------------------------------------------------
-# Waarom? Hoe fijner de segmenten, hoe nauwkeuriger de afstanden in de graaf
-# (een punt wordt namelijk gesnapt op het BEGINPUNT van het dichtstbijzijnde
-# segment, dus de maximale fout is ongeveer `max_length`).
-#
-# Werking:
-#   - lijnen <= max_length blijven ongewijzigd
-#   - langere lijnen worden n keer gekopieerd (n = ceiling(lengte / max_length))
-#   - kopie k krijgt het stuk van fractie (k-1)*stap tot k*stap van de lijn
-#   - alle attributen (VHAS, VHAG, ...) worden meegekopieerd
-# Opmerking: de stukken zijn dus max_length lang, het LAATSTE stuk is korter
-# (niet allemaal even lang, ondanks de functienaam).
-# Opmerking: werkt enkel als de geometriekolom "geometry" heet (is zo bij .shp).
 
 split_lines_equal_length <- function(lines_sf, max_length = 200) {
 
@@ -191,149 +166,165 @@ split_lines_equal_length <- function(lines_sf, max_length = 200) {
 
 
 # ------------------------------------------------------------------------------
-# 2b. Gerichte graaf bouwen uit de lijnsegmenten
+# 2b. Gerichte graaf bouwen, met clustering van nodes binnen `snap_tol` meter
 # ------------------------------------------------------------------------------
-# - Stap 0: data wassen (lege/foute geometrieën en lijnen < 1 mm verwijderen)
-# - Stap 1: node-ID = afgeronde (1 mm) coördinaten van begin- en eindpunt;
-#           twee segmenten die op dezelfde coördinaat eindigen/beginnen delen
-#           dus automatisch een node
-# - Stap 2: from_node, to_node en weight (= lengte in m) als attributen
-# - Stap 3: igraph-graaf (directed = TRUE: richting = stroomrichting)
-#
-# Geeft een lijst terug:
-#   $graph      igraph-object (edges = segmenten, vertices = nodes)
-#   $network_sf sf-object met de segmenten + from_node/to_node/weight
-
-build_river_network_auto_nodes <- function(lines_sf) {
+build_river_network_auto_nodes <- function(lines_sf, snap_tol = 2) {
   message("Graaf bouwen: data opschonen en knooppunten genereren...")
 
-  # --- STAP 0: data wassen ---
+  # --- STAP 0: data wassen (ongewijzigd) ---
   lines_sf <- lines_sf[!st_is_empty(lines_sf), ]
-
-  # GEOMETRYCOLLECTION -> enkel de lijnen houden
   if (any(grepl("GEOMETRY|COLLECTION", st_geometry_type(lines_sf)))) {
     lines_sf <- st_collection_extract(lines_sf, "LINESTRING")
   }
-
-  # Enkel (MULTI)LINESTRINGS houden
   valid_types <- c("LINESTRING", "MULTILINESTRING")
   lines_sf <- lines_sf[st_geometry_type(lines_sf) %in% valid_types, ]
-
-  # Lijnen met lengte ~0 geven problemen in de graaf (start = eind)
   lines_sf$check_len <- as.numeric(st_length(lines_sf))
-  lines_sf <- lines_sf[lines_sf$check_len > 0.001, ]   # alles < 1 mm weg
+  lines_sf <- lines_sf[lines_sf$check_len > 0.001, ]
   lines_sf$check_len <- NULL
-
   lines_sf <- st_cast(lines_sf, "LINESTRING", warn = FALSE)
   message(paste(" -> Netwerk bevat", nrow(lines_sf), "geldige lijnsegmenten."))
 
-  # --- STAP 1: nodes bepalen ---
-  p_start <- st_line_sample(lines_sf, sample = 0)
-  p_end   <- st_line_sample(lines_sf, sample = 1)
+  # Oude node-kolommen (bv. uit een gecachet netwerk) verwijderen
+  lines_sf$from_node <- NULL
+  lines_sf$to_node   <- NULL
+  lines_sf$weight    <- NULL
 
-  coords_start <- st_coordinates(p_start)
-  coords_end   <- st_coordinates(p_end)
+  # --- STAP 1: ruwe nodes (1 mm-afronding) ---
+  # Begin- en eindpunten rechtstreeks uit de coördinaten (veel sneller dan st_line_sample)
+  cc <- st_coordinates(lines_sf)
+  is_first <- !duplicated(cc[, "L1"])
+  is_last  <- !duplicated(cc[, "L1"], fromLast = TRUE)
+  coords_start <- cc[is_first, c("X", "Y"), drop = FALSE]
+  coords_end   <- cc[is_last,  c("X", "Y"), drop = FALSE]
+  rm(cc)
 
-  node_id_start <- paste(round(coords_start[, 1], 3), round(coords_start[, 2], 3), sep = "_")
-  node_id_end   <- paste(round(coords_end[, 1], 3),   round(coords_end[, 2], 3),   sep = "_")
+  id_start <- paste(round(coords_start[, 1], 3), round(coords_start[, 2], 3), sep = "_")
+  id_end   <- paste(round(coords_end[, 1], 3),   round(coords_end[, 2], 3),   sep = "_")
 
-  # --- STAP 2: attributen ---
-  lines_sf$from_node <- node_id_start
-  lines_sf$to_node   <- node_id_end
+  # --- STAP 1b: clusteren van nodes binnen snap_tol meter ---
+  ends <- data.frame(
+    id = c(id_start, id_end),
+    x  = c(coords_start[, 1], coords_end[, 1]),
+    y  = c(coords_start[, 2], coords_end[, 2])
+  )
+  ends <- ends[!duplicated(ends$id), ]
+
+  if (snap_tol > 0) {
+    message(paste(" -> Nodes clusteren binnen", snap_tol, "m..."))
+    # kd-tree (dbscan::frNN): seconden i.p.v. uren; st_is_within_distance is O(n^2)
+    nb <- dbscan::frNN(as.matrix(ends[, c("x", "y")]), eps = snap_tol)$id
+    nb <- lapply(seq_along(nb), function(i) c(i, nb[[i]]))       # inclusief zichzelf
+    g_nb <- graph_from_adj_list(nb, mode = "all")
+    ends$cluster <- components(g_nb)$membership
+  } else {
+    ends$cluster <- seq_len(nrow(ends))
+  }
+
+  ends$node <- paste0("n", ends$cluster)
+
+  # Controle: hoe groot worden de clusters? (ketting-effect opsporen)
+  extent <- tapply(seq_len(nrow(ends)), ends$cluster, function(i) {
+    max(diff(range(ends$x[i])), diff(range(ends$y[i])))
+  })
+  n_merged <- sum(table(ends$cluster) > 1)
+  message(sprintf(" -> %d clusters met >1 ruwe node samengevoegd; grootste cluster-uitbreiding: %.1f m",
+                  n_merged, max(extent)))
+  if (max(extent) > 3 * snap_tol) {
+    warning("Er zijn clusters die groter zijn dan 3x de tolerantie (ketting-effect). Controleer die in QGIS.")
+  }
+
+  lookup <- setNames(ends$node, ends$id)
+  lines_sf$from_node <- unname(lookup[id_start])
+  lines_sf$to_node   <- unname(lookup[id_end])
   lines_sf$weight    <- as.numeric(st_length(lines_sf))
 
-  # --- STAP 3: graaf bouwen ---
-  edges <- st_drop_geometry(lines_sf) %>%
-    select(from = from_node, to = to_node, weight, everything())
+  # Vertex-tabel: cluster-id + gemiddelde coördinaat
+  vertices <- aggregate(cbind(x, y) ~ node, data = ends, FUN = mean)
+  names(vertices)[1] <- "name"
 
-  g <- graph_from_data_frame(edges, directed = TRUE)
+  # --- STAP 2: edges. Segmenten met from == to (korter dan tolerantie) vallen weg ---
+  edges <- st_drop_geometry(lines_sf)
+  edges <- edges[, c("from_node", "to_node", "weight",
+                     setdiff(names(edges), c("from_node", "to_node", "weight")))]
+  names(edges)[1:2] <- c("from", "to")
+  n_loops <- sum(edges$from == edges$to)
+  if (n_loops > 0) {
+    message(paste(" ->", n_loops, "segmenten met begin = eind (na clustering) niet in de graaf opgenomen."))
+  }
+  edges <- edges[edges$from != edges$to, ]
+
+  # --- STAP 3: graaf, met alle nodes als vertices ---
+  g <- graph_from_data_frame(edges, directed = TRUE, vertices = vertices)
 
   message("Graaf succesvol gebouwd!")
-  return(list(graph = g, network_sf = lines_sf))
+  return(list(graph = g, network_sf = lines_sf, nodes = vertices))
 }
 
 
 # ------------------------------------------------------------------------------
 # 2c. Netwerk bouwen OF inladen (cache)
 # ------------------------------------------------------------------------------
-# LET OP: wijzig je max_length of de ruwe shapefile, verwijder dan eerst het
-# .rds-bestand, anders wordt het oude netwerk ingeladen.
+max_length <- 200   # m, max. segmentlengte
+snap_tol   <- 2     # m, nodes binnen deze afstand worden samengevoegd
 
-pad_netwerk <- here("data", "verwerkt", "koppeling", "river_network_fine.rds")
+pad_netwerk <- here(
+  "data", "verwerkt", "koppeling",
+  sprintf("river_network_%dm_tol%gm.rds", max_length, snap_tol)
+)
 
 if (!file.exists(pad_netwerk)) {
-  fd_fine <- split_lines_equal_length(fd, max_length = 200)
-  river_network_fine <- build_river_network_auto_nodes(fd_fine)
+  message("Geen cache gevonden: riviernetwerk opnieuw opbouwen...")
+  fd_fine <- split_lines_equal_length(fd, max_length = max_length)
+  river_network_fine <- build_river_network_auto_nodes(fd_fine, snap_tol = snap_tol)
+
+  dir.create(dirname(pad_netwerk), recursive = TRUE, showWarnings = FALSE)
   saveRDS(river_network_fine, pad_netwerk)
+  message(paste("Netwerk opgeslagen in:", pad_netwerk))
 } else {
+  message(paste("Netwerk inladen uit cache:", pad_netwerk))
   river_network_fine <- readRDS(pad_netwerk)
+  if (inherits(river_network_fine$graph, "igraph")) {
+    river_network_fine$graph <- igraph::upgrade_graph(river_network_fine$graph)
+  }
 }
 
-
 # ==============================================================================
-# 3. HOOFDFUNCTIE: match_upstream_strahler()
+# 3. HOOFDFUNCTIE: match_upstream_strahler()  -- v2 (fractie-methode)
 # ==============================================================================
+# Koppelt biota-observaties aan kwaliteitsmetingen langs het gerichte
+# riviernetwerk met positie langs het segment (`along_m`).
 #
-# DOEL
-#   Koppel aan elk punt in `biota_sf` de beste meting uit `quality_sf` die
-#   stroomopwaarts ligt (via het riviernetwerk) en binnen het tijdsvenster valt.
+# Belangrijke argumenten (inclusief nieuw / gewijzigd t.o.v. v1):
+#   max_dist_m        max. afstand stroomopwaarts langs de graaf (in m)
+#   max_downstream_m  max. "lokale" afstand stroomafwaarts langs de graaf (in m)
+#   max_vhas_snap     max. afstand (m) waarover een punt met VHAS nog op een segment
+#                     met dezelfde VHAS gesnapt wordt; Inf = geen limiet; bij
+#                     overschrijding valt het punt terug op geometrisch snappen
+#                     binnen `snap_tolerance`
+#   keep_time_diff    indien TRUE, blijft `qual_temp_diff_days` (biota -
+#                     kwaliteit, in dagen) behouden in de output
 #
-# WERKWIJZE PER BIOTA-PUNT
-#   1. Alle punten snappen op het netwerk (VHAS-match of geometrisch, zie 3a)
-#   2. Kandidaten filteren op (a) zelfde groep (optioneel), (b) Strahler-orde
-#      (optioneel), (c) tijdsvenster
-#   3. Afstanden berekenen:
-#        - graaf-afstand stroomopwaarts (langs de rivier, kandidaat -> biota-punt)
-#        - graaf-afstand stroomafwaarts (langs de rivier, biota-punt -> kandidaat)
-#   4. Een kandidaat blijft over als:
-#        (stroomopwaarts EN graaf-afstand <= max_dist_m)
-#        OF (stroomafwaarts EN graaf-afstand <= max_downstream_m)
-#      De "rivierafstand" (river_dist_m) is de graaf-afstand (stroomopwaarts of
-#      stroomafwaarts, altijd positief). Punten op een zijtak of op een ander
-#      segment zonder verbinding in de stroomrichting komen dus NIET meer in aanmerking.
-#   5. (Optioneel) kandidaten verwijderen als er een lozingspunt tussen
-#      kandidaat en biota-punt ligt
-#   6. Selectie volgens `selection_mode`
+# Werking v2 (fractie-methode):
+#   - Elk punt wordt gesnapt op een SEGMENT, met de positie langs dat segment
+#     (`along_m` = afstand vanaf het begin van het segment, in m), beveiligd
+#     voor segmenten met minder dan 2 coördinaten (`n < 2`).
+#   - Afstanden zijn exact langs de rivier (tot op de snapafstand):
+#       stroomopwaartse kandidaat Q -> punt P:
+#           (len_Q - along_Q) + graafafstand(to_node_Q -> from_node_P) + along_P
+#       stroomafwaartse kandidaat Q van P:
+#           (len_P - along_P) + graafafstand(to_node_P -> from_node_Q) + along_Q
+#       zelfde segment: |along_P - along_Q|, met richting uit de volgorde
+#   - Twee punten op hetzelfde segment hebben dus een echte richting en afstand.
+#   - Per biota-punt 2 Dijkstra-runs i.p.v. 1 per kandidaat: veel sneller.
+#   - Punten zonder geometrie worden overgeslagen (geen fout meer bij NA).
+#   - Lozingscontrole ook met de fractie-methode: lozingen worden op een segment
+#     gesnapt (met positie), en een kandidaat vervalt enkel als de lozing echt
+#     tussen kandidaat en biota-punt ligt, ook binnen hetzelfde segment.
+#   - Elke iteratie start met `empty_match()`, `aggregate` wijst veilig toe via
+#     `as.list()`, en `results` wordt samengevoegd met `bind_rows()`.
 #
-# PARAMETERS
-#   biota_sf          sf-punten waaraan je wil koppelen (bv. MI)
-#   quality_sf        sf-punten met de te koppelen variabelen (bv. nutriënten)
-#   network_list      uitvoer van build_river_network_auto_nodes()
-#   discharge_sf      optioneel: sf-punten van lozingen (bv. hpunt). Een kandidaat
-#                     wordt geweigerd als er een lozing tússen kandidaat en
-#                     biota-punt ligt. NULL = geen controle.
-#   strahler_sf       sf-lijnen met Strahler-orde (nodig als use_strahler = TRUE)
-#   use_strahler      TRUE: orde van biota- en kwaliteitspunt mag max 1 verschillen
-#   strahler_col      kolomnaam van de orde in strahler_sf
-#   max_dist_m        max afstand (m) langs de rivier, stroomopwaarts
-#   max_downstream_m  max afstand (m) langs de rivier, STROOMAFWAARTS
-#   snap_tolerance    max afstand (m) waarover een punt zonder VHAS-match nog
-#                     op het netwerk gesnapt wordt (ook voor Strahler/lozingen)
-#   days_before       kwaliteitsmeting mag tot zoveel dagen VOOR het biota-staal
-#   days_after        kwaliteitsmeting mag tot zoveel dagen NA het biota-staal
-#   col_date_biota / col_date_quality   datumkolommen
-#   selection_mode    "closest_distance": kleinste rivierafstand (bij gelijk: kleinste tijdsverschil)
-#                     "closest_time"    : kleinste tijdsverschil (bij gelijk: kleinste afstand)
-#                     "all"             : alle kandidaten (1 rij per match, biota-rij wordt herhaald)
-#                     "aggregate"       : 1 rij met gemiddelde/min/max van alle kandidaten
-#   aggr_method       "mean", "min" of "max" (enkel bij "aggregate")
-#   aggr_cols         welke kolommen samengevat worden (enkel bij "aggregate");
-#                     NULL = alle numerieke kolommen (let op met numerieke ID's)
-#   grouping_col      kolom in het netwerk (bv. "VHAG"); biota en kwaliteit moeten
-#                     tot dezelfde groep behoren. NULL = geen groepsfilter.
-#   vhas_col_network  VHAS-kolom in het netwerk
-#   vhas_col_biota / vhas_col_quality   VHAS-kolom in de puntenlagen (NULL = enkel geometrisch snappen)
-#   keep_time_diff    TRUE: bewaar qual_temp_diff_days (biota minus kwaliteit, in dagen;
-#                     positief = kwaliteitsmeting lag VOOR het biota-staal). Bij
-#                     "aggregate" is dit het gemiddelde over alle kandidaten.
-#
-# OUTPUT
-#   sf-object = biota_sf + kolommen van de gekoppelde kwaliteitsmeting, allemaal
-#   met prefix "qual_" (bv. qual_n_t, qual_meetplaats, qual_monsternamedatum), plus:
-#     qual_river_dist_m   gebruikte afstand (m)
-#     qual_n_matches      aantal kandidaten dat voldeed (0 = geen match)
-#     qual_temp_diff_days tijdsverschil in dagen (enkel als keep_time_diff = TRUE)
-#   Biota-punten zonder match hebben NA in alle qual_-kolommen.
+# Vereist: network_list met $graph en $network_sf (kolommen from_node, to_node,
+# weight), zoals gebouwd door build_river_network_auto_nodes().
 
 match_upstream_strahler <- function(biota_sf,
                                     quality_sf,
@@ -345,6 +336,7 @@ match_upstream_strahler <- function(biota_sf,
                                     max_dist_m = 5000,
                                     max_downstream_m = 200,
                                     snap_tolerance = 25,
+                                    max_vhas_snap = Inf,
                                     days_before = 30,
                                     days_after = 10,
                                     col_date_biota = "monsternamedatum",
@@ -359,15 +351,13 @@ match_upstream_strahler <- function(biota_sf,
                                     keep_time_diff = TRUE) {
 
   # ---------------------------------------------------------------------------
-  # 3.1 Validatie van de input
+  # 3.1 Validatie
   # ---------------------------------------------------------------------------
   valid_modes <- c("closest_distance", "closest_time", "all", "aggregate")
   if (!selection_mode %in% valid_modes) {
     stop("selection_mode moet zijn: 'closest_distance', 'closest_time', 'all' of 'aggregate'")
   }
-
-  valid_aggr <- c("mean", "min", "max")
-  if (!aggr_method %in% valid_aggr) stop("aggr_method moet zijn: 'mean', 'min' of 'max'")
+  if (!aggr_method %in% c("mean", "min", "max")) stop("aggr_method moet zijn: 'mean', 'min' of 'max'")
 
   if (!is.null(aggr_cols)) {
     missing_cols <- setdiff(aggr_cols, names(quality_sf))
@@ -385,83 +375,128 @@ match_upstream_strahler <- function(biota_sf,
   g      <- network_list$graph
   net_sf <- network_list$network_sf
 
+  if (!all(c("from_node", "to_node", "weight") %in% names(net_sf))) {
+    stop("network_sf mist from_node/to_node/weight. Bouw het netwerk opnieuw.")
+  }
+
   if (!is.null(grouping_col)) {
     if (!grouping_col %in% names(net_sf)) stop(paste("De grouping_col", grouping_col, "bestaat niet in je netwerk!"))
     message(paste0("Grouping geactiveerd: enkel matchen binnen zelfde '", grouping_col, "'."))
   }
 
   # ---------------------------------------------------------------------------
-  # 3.2 Voorbereiding: datums, hulp-ID's
+  # 3.2 Voorbereiding
   # ---------------------------------------------------------------------------
   biota_sf[[col_date_biota]]     <- as.Date(biota_sf[[col_date_biota]])
   quality_sf[[col_date_quality]] <- as.Date(quality_sf[[col_date_quality]])
 
-  biota_sf$tmp_join_id <- seq_len(nrow(biota_sf))       # om achteraf terug te joinen
-  quality_sf$orig_index_geo <- seq_len(nrow(quality_sf)) # om geometrie terug te vinden
+  # Kwaliteitspunten zonder geometrie kunnen nooit gekoppeld worden
+  n_empty_q <- sum(st_is_empty(quality_sf))
+  if (n_empty_q > 0) {
+    message(paste("    ->", n_empty_q, "quality points without geometry removed."))
+    quality_sf <- quality_sf[!st_is_empty(quality_sf), ]
+  }
+
+  biota_sf$tmp_join_id <- seq_len(nrow(biota_sf))
+  quality_sf$orig_index_geo <- seq_len(nrow(quality_sf))
+
+  # Coördinaten van alle netwerksegmenten (voor de positie langs het segment)
+  net_xy   <- st_coordinates(net_sf)
+  net_rows <- split(seq_len(nrow(net_xy)), net_xy[, "L1"])
+  if (length(net_rows) != nrow(net_sf)) {
+    stop("network_sf moet enkel LINESTRINGs bevatten (1 rij = 1 lijn).")
+  }
+
+  # Positie (m vanaf het begin van het segment) van punt i op segment seg_idx[i]
+  along_distance <- function(pts_sf, seg_idx) {
+    xy  <- st_coordinates(pts_sf)[, c("X", "Y"), drop = FALSE]
+    out <- rep(NA_real_, length(seg_idx))
+    for (i in which(!is.na(seg_idx))) {
+      L  <- net_xy[net_rows[[seg_idx[i]]], c("X", "Y"), drop = FALSE]
+      n  <- nrow(L)
+      if (n < 2) {
+        out[i] <- 0
+        next
+      }
+      ax <- L[-n, 1]; ay <- L[-n, 2]
+      dx <- L[-1, 1] - ax; dy <- L[-1, 2] - ay
+      len2 <- dx^2 + dy^2
+      t  <- ((xy[i, 1] - ax) * dx + (xy[i, 2] - ay) * dy) / ifelse(len2 == 0, 1, len2)
+      t  <- pmin(1, pmax(0, t))
+      d2 <- (xy[i, 1] - (ax + t * dx))^2 + (xy[i, 2] - (ay + t * dy))^2
+      k  <- which.min(d2)
+      sl <- sqrt(len2)
+      out[i] <- sum(sl[seq_len(k - 1)]) + t[k] * sl[k]
+    }
+    out
+  }
 
   # ---------------------------------------------------------------------------
   # 3.3 Snapping op het netwerk (stap 1/5)
   # ---------------------------------------------------------------------------
   message("1/5 Snapping points to river network...")
 
-  # ----------------------------------------
-  # Elk punt krijgt een `node_id` (= from_node van het gekozen segment).
-  #   1. EERST via VHAS-code: heeft het punt een VHAS, dan wordt het gesnapt op het
-  #      dichtstbijzijnde segment MET DEZELFDE VHAS (ongeacht de afstand!).
-  #   2. DAARNA (voor punten zonder VHAS of zonder VHAS-match in het netwerk):
-  #      geometrisch, dichtstbijzijnde segment, maar enkel als de afstand
-  #      <= `tol` meter. Anders valt het punt weg (node_id blijft NA).
-  # Als `grp_col` is opgegeven, wordt ook de groepswaarde (bv. VHAG) van het
-  # gekozen segment bewaard in `match_group_val`.
-  # ----------------------------------------
+  # Elk punt krijgt:
+  #   seg_idx     rij in net_sf van het gekozen segment
+  #   node_id     from_node van dat segment, to_node_id: to_node
+  #   along_m     positie langs het segment (m), seg_len_m: lengte segment
+  # Volgorde: 1) segment met dezelfde VHAS (binnen max_vhas_snap),
+  #           2) anders geometrisch dichtstbijzijnde segment binnen `tol`.
 
   snap_and_attribute <- function(points, network, grp_col, tol, vhas_col_pts, vhas_col_net) {
-    points$node_id <- NA
+    points$seg_idx     <- NA_integer_
+    points$node_id     <- NA_character_
+    points$to_node_id  <- NA_character_
+    points$along_m     <- NA_real_
+    points$seg_len_m   <- NA_real_
     if (!is.null(grp_col)) points$match_group_val <- NA
+    empty <- st_is_empty(points)
 
     # --- 1. VHAS-matching ---
-    has_vhas_config <- !is.null(vhas_col_pts) && !is.null(vhas_col_net)
-    can_use_vhas <- has_vhas_config &&
-      (vhas_col_pts %in% names(points)) &&
-      (vhas_col_net %in% names(network))
+    can_use_vhas <- !is.null(vhas_col_pts) && !is.null(vhas_col_net) &&
+      (vhas_col_pts %in% names(points)) && (vhas_col_net %in% names(network))
 
     if (can_use_vhas) {
-      pts_with_vhas_idx <- which(!is.na(points[[vhas_col_pts]]))
-      if (length(pts_with_vhas_idx) > 0) {
-        unique_codes <- unique(points[[vhas_col_pts]][pts_with_vhas_idx])
-        for (code in unique_codes) {
-          net_idx <- which(network[[vhas_col_net]] == code)
-          if (length(net_idx) > 0) {
-            p_subset_idx <- which(points[[vhas_col_pts]] == code)
-            rel_nearest  <- st_nearest_feature(points[p_subset_idx, ], network[net_idx, ])
-            abs_nearest  <- net_idx[rel_nearest]
-            points$node_id[p_subset_idx] <- as.character(network$from_node[abs_nearest])
-            if (!is.null(grp_col)) points$match_group_val[p_subset_idx] <- network[[grp_col]][abs_nearest]
-          }
+      unique_codes <- unique(points[[vhas_col_pts]][!is.na(points[[vhas_col_pts]]) & !empty])
+      for (code in unique_codes) {
+        net_idx <- which(network[[vhas_col_net]] == code)
+        if (length(net_idx) == 0) next
+        p_idx <- which(points[[vhas_col_pts]] == code & !empty)
+        if (length(p_idx) == 0) next
+        rel   <- st_nearest_feature(points[p_idx, ], network[net_idx, ])
+        abs_n <- net_idx[rel]
+        if (is.finite(max_vhas_snap)) {
+          dd <- as.numeric(st_distance(points[p_idx, ], network[abs_n, ], by_element = TRUE))
+          ok <- !is.na(dd) & dd <= max_vhas_snap
+          p_idx <- p_idx[ok]; abs_n <- abs_n[ok]
         }
+        points$seg_idx[p_idx] <- abs_n
       }
     }
 
     # --- 2. Geometrische fallback ---
-    missing_idx <- which(is.na(points$node_id))
+    missing_idx <- which(is.na(points$seg_idx) & !empty)
     if (length(missing_idx) > 0) {
       subset_pts  <- points[missing_idx, ]
       nearest_idx <- st_nearest_feature(subset_pts, network)
-      dists       <- st_distance(subset_pts, network[nearest_idx, ], by_element = TRUE)
-      dists_num   <- as.numeric(dists)
+      dists_num   <- as.numeric(st_distance(subset_pts, network[nearest_idx, ], by_element = TRUE))
       dists_num[is.na(dists_num)] <- Inf
+      valid <- dists_num <= tol
+      points$seg_idx[missing_idx[valid]] <- nearest_idx[valid]
 
-      valid_snaps      <- dists_num <= tol
-      valid_global_idx <- missing_idx[valid_snaps]
-      valid_net_idx    <- nearest_idx[valid_snaps]
-
-      if (length(valid_global_idx) > 0) {
-        points$node_id[valid_global_idx] <- as.character(network$from_node[valid_net_idx])
-        if (!is.null(grp_col)) points$match_group_val[valid_global_idx] <- network[[grp_col]][valid_net_idx]
-      }
-
-      n_dropped <- length(missing_idx) - length(valid_global_idx)
+      n_dropped <- sum(!valid)
       if (n_dropped > 0) message(paste("      ->", n_dropped, "points dropped (too far/no VHAS match)."))
+    }
+
+    # --- Segmentgegevens en positie langs het segment ---
+    has <- which(!is.na(points$seg_idx))
+    if (length(has) > 0) {
+      s <- points$seg_idx[has]
+      points$node_id[has]    <- as.character(network$from_node[s])
+      points$to_node_id[has] <- as.character(network$to_node[s])
+      points$seg_len_m[has]  <- network$weight[s]
+      points$along_m[has]    <- pmin(along_distance(points[has, ], s), network$weight[s])
+      if (!is.null(grp_col)) points$match_group_val[has] <- network[[grp_col]][s]
     }
     return(points)
   }
@@ -471,47 +506,56 @@ match_upstream_strahler <- function(biota_sf,
   quality_sf <- snap_and_attribute(quality_sf, net_sf, grouping_col, snap_tolerance,
                                    vhas_col_quality, vhas_col_network)
 
-  # --- Strahler-orde: dichtstbijzijnde Strahler-lijn binnen snap_tolerance ---
+  # --- Strahler-orde (ongewijzigd) ---
   if (use_strahler) {
     message("    -> Determining Strahler order...")
     get_strahler_order <- function(pts, str_layer, str_col, tol) {
-      idx       <- st_nearest_feature(pts, str_layer)
-      dists     <- st_distance(pts, str_layer[idx, ], by_element = TRUE)
-      dists_num <- as.numeric(dists)
+      vals <- rep(NA_real_, nrow(pts))
+      ok   <- !st_is_empty(pts)
+      if (!any(ok)) return(vals)
+      idx       <- st_nearest_feature(pts[ok, ], str_layer)
+      dists_num <- as.numeric(st_distance(pts[ok, ], str_layer[idx, ], by_element = TRUE))
       dists_num[is.na(dists_num)] <- Inf
-      vals  <- rep(NA, nrow(pts))
+      v <- rep(NA_real_, sum(ok))
       valid <- dists_num <= tol
-      vals[valid] <- str_layer[[str_col]][idx[valid]]
-      return(vals)
+      v[valid] <- as.numeric(str_layer[[str_col]][idx[valid]])
+      vals[ok] <- v
+      vals
     }
-    biota_sf$strahler_val   <- as.numeric(get_strahler_order(biota_sf,   strahler_sf, strahler_col, snap_tolerance))
-    quality_sf$strahler_val <- as.numeric(get_strahler_order(quality_sf, strahler_sf, strahler_col, snap_tolerance))
+    biota_sf$strahler_val   <- get_strahler_order(biota_sf,   strahler_sf, strahler_col, snap_tolerance)
+    quality_sf$strahler_val <- get_strahler_order(quality_sf, strahler_sf, strahler_col, snap_tolerance)
   }
 
-  # Vanaf hier werken we met een tabel zonder geometrie (sneller); de geometrie
-  # van quality_sf wordt hier niet meer gebruikt
   quality_df <- st_drop_geometry(quality_sf)
 
-  # Lozingspunten snappen op het netwerk -> vector met node-ID's
-  discharge_nodes <- character(0)
+  # Lozingspunten: gesnapt op een segment, met positie langs het segment (fractie-methode)
+  dis_by_seg <- list(); dis_keys <- character(0); dis_loop_nodes <- character(0); n_dis <- 0
   if (!is.null(discharge_sf)) {
     message("    -> Snapping discharge points...")
+    discharge_sf <- discharge_sf[!st_is_empty(discharge_sf), ]
     idx_dis   <- st_nearest_feature(discharge_sf, net_sf)
-    dists_dis <- st_distance(discharge_sf, net_sf[idx_dis, ], by_element = TRUE)
-    dists_num <- as.numeric(dists_dis)
+    dists_num <- as.numeric(st_distance(discharge_sf, net_sf[idx_dis, ], by_element = TRUE))
     dists_num[is.na(dists_num)] <- Inf
     valid_dis <- dists_num <= snap_tolerance
     if (sum(valid_dis) > 0) {
-      discharge_nodes <- unique(as.character(net_sf$from_node[idx_dis[valid_dis]]))
+      s_dis <- idx_dis[valid_dis]
+      a_dis <- pmin(along_distance(discharge_sf[valid_dis, ], s_dis), net_sf$weight[s_dis])
+      dis_df <- unique(data.frame(seg_idx = s_dis, along_m = a_dis,
+                                  from = as.character(net_sf$from_node[s_dis]),
+                                  to   = as.character(net_sf$to_node[s_dis])))
+      n_dis          <- nrow(dis_df)
+      dis_by_seg     <- split(dis_df$along_m, dis_df$seg_idx)
+      dis_keys       <- paste(dis_df$from, dis_df$to)            # "from to" van elk segment met lozing
+      dis_loop_nodes <- unique(dis_df$from[dis_df$from == dis_df$to])  # lozing op segmentje < tolerantie
     }
+    message(paste("      ->", n_dis, "discharge points snapped."))
   }
 
-  # Lege rij (alles NA) voor biota-punten zonder match
   empty_match <- function() {
     m <- quality_df[1, ]
     m[] <- NA
     m$river_dist_m <- NA
-    m$temp_diff_days <- NA_real_   # zodat rbind met echte matches klopt
+    m$temp_diff_days <- NA_real_
     m
   }
 
@@ -528,19 +572,22 @@ match_upstream_strahler <- function(biota_sf,
   for (i in seq_len(nrow(biota_sf))) {
     pb$tick()
     b_pt   <- biota_sf[i, ]
-    b_node <- b_pt$node_id
+    b_node <- b_pt$node_id          # from_node van het segment van het biota-punt
     b_id   <- b_pt$tmp_join_id
-    match  <- NA
+    match  <- empty_match()
     n_matches_found <- 0
 
     if (is.na(b_node)) {
-      # Biota-punt kon niet gesnapt worden -> geen match mogelijk
       match <- empty_match()
 
     } else {
-      b_date <- b_pt[[col_date_biota]]
+      b_date  <- b_pt[[col_date_biota]]
+      b_to    <- b_pt$to_node_id
+      b_seg   <- b_pt$seg_idx
+      b_along <- b_pt$along_m
+      b_len   <- b_pt$seg_len_m
 
-      # --- STAP A: niet-ruimtelijke filters (gesnapt, groep, Strahler, tijd) ---
+      # --- STAP A: niet-ruimtelijke filters (ongewijzigd) ---
       subset_quality <- quality_df %>% filter(!is.na(node_id))
 
       if (!is.null(grouping_col)) {
@@ -562,7 +609,6 @@ match_upstream_strahler <- function(biota_sf,
         }
       }
 
-      # Tijdsverschil = biota - kwaliteit (positief = kwaliteit lag VOOR biota)
       if (nrow(subset_quality) > 0) {
         subset_quality <- subset_quality %>%
           mutate(
@@ -574,25 +620,31 @@ match_upstream_strahler <- function(biota_sf,
 
       if (nrow(subset_quality) > 0) {
 
-        # --- STAP B: afstanden langs de graaf (stroomopwaarts + stroomafwaarts) ---
+        # --- STAP B: exacte afstanden langs de rivier (fractie-methode) ---
+        cand_to   <- unique(subset_quality$to_node_id)
+        cand_from <- unique(subset_quality$node_id)
 
-        # Welke nodes liggen stroomopwaarts van het biota-punt?
-        upstream_nodes <- names(subcomponent(g, v = b_node, mode = "in"))
-        subset_quality$is_upstream <- subset_quality$node_id %in% upstream_nodes
+        # Eén Dijkstra-run per richting:
+        #  stroomopwaarts: van elke to_node_Q naar from_node_P (mode "in" = omgekeerde graaf)
+        #  stroomafwaarts: van to_node_P naar elke from_node_Q
+        d_up   <- distances(g, v = b_node, to = cand_to,   mode = "in")
+        d_down <- distances(g, v = b_to,   to = cand_from, mode = "out")
+        lk_up   <- setNames(as.numeric(d_up),   cand_to)
+        lk_down <- setNames(as.numeric(d_down), cand_from)
 
-        # Kortste weg langs de rivier van elke kandidaat-node naar het biota-punt
-        # (Inf als de kandidaat niet stroomopwaarts ligt). Via een lookup per
-        # unieke node om duplicate-vertex-fouten in igraph te vermijden.
-        unique_nodes_step2 <- unique(subset_quality$node_id)
-        d_matrix <- distances(g, v = unique_nodes_step2, to = b_node, mode = "out")
-        lookup_graph_dist <- setNames(as.numeric(d_matrix), unique_nodes_step2)
-        subset_quality$graph_dist <- lookup_graph_dist[subset_quality$node_id]
+        qa <- subset_quality$along_m
+        ql <- subset_quality$seg_len_m
+        up <- (ql - qa) + unname(lk_up[subset_quality$to_node_id]) + b_along
+        dn <- (b_len - b_along) + unname(lk_down[subset_quality$node_id]) + qa
 
-        # Kortste weg langs de rivier van het biota-punt naar elke kandidaat-node
-        # (stroomafwaarts; Inf als de kandidaat niet stroomafwaarts ligt)
-        d_down <- distances(g, v = b_node, to = unique_nodes_step2, mode = "out")
-        lookup_down_dist <- setNames(as.numeric(d_down), unique_nodes_step2)
-        subset_quality$down_dist <- lookup_down_dist[subset_quality$node_id]
+        # Zelfde segment: richting volgt uit de positie langs het segment
+        same <- subset_quality$seg_idx == b_seg
+        up[same] <- ifelse(qa[same] <= b_along, b_along - qa[same], Inf)
+        dn[same] <- ifelse(qa[same] >  b_along, qa[same] - b_along, Inf)
+
+        subset_quality$graph_dist  <- up
+        subset_quality$down_dist   <- dn
+        subset_quality$is_upstream <- is.finite(up)
 
         # --- STAP C: de "OR"-filter ---
         candidates <- subset_quality %>%
@@ -603,30 +655,53 @@ match_upstream_strahler <- function(biota_sf,
 
         if (nrow(candidates) > 0) {
 
-          # Definitieve afstand: graaf-afstand stroomopwaarts ("via_graph") of,
-          # zo niet, de graaf-afstand stroomafwaarts.
           candidates$via_graph <- candidates$is_upstream & candidates$graph_dist <= max_dist_m
           candidates$river_dist_m <- ifelse(candidates$via_graph,
                                             candidates$graph_dist,
                                             candidates$down_dist)
 
-          # --- STAP D: lozingscontrole ---
-          # Een stroomopwaartse kandidaat vervalt als er een lozingsnode ligt op
-          # de weg tussen kandidaat en biota-punt (begin- en eindnode uitgezonderd).
-          if (length(discharge_nodes) > 0) {
+          # --- STAP D: lozingscontrole (fractie-methode) ---
+          # Een stroomopwaartse kandidaat Q vervalt als er een lozing D ligt tussen Q en
+          # het biota-punt P:
+          #   - zelfde segment:      along_Q < along_D <= along_P
+          #   - segment van Q:       along_D > along_Q  (voorbij Q)
+          #   - segment van P:       along_D <= along_P (vóór P)
+          #   - tussenliggende segmenten: segmenten die volledig op de kortste weg liggen
+          # Enkel voor stroomopwaartse kandidaten (zoals voorheen).
+          if (n_dis > 0) {
             to_check_idx <- which(candidates$via_graph & candidates$river_dist_m > 0)
 
             if (length(to_check_idx) > 0) {
+              # Kortste wegen in 1 Dijkstra-run (omgekeerde graaf), per unieke to_node van Q
+              cand_to_n <- candidates$to_node_id[to_check_idx]
+              need_path <- unique(cand_to_n[candidates$seg_idx[to_check_idx] != b_seg & cand_to_n != b_node])
+              path_info <- list()
+              if (length(need_path) > 0) {
+                sp <- shortest_paths(g, from = b_node, to = need_path,
+                                     mode = "in", output = "vpath")$vpath
+                path_info <- lapply(sp, function(p) {
+                  pn <- rev(names(p))                         # to_node_Q ... from_node_P
+                  list(nodes = pn, keys = paste(pn[-length(pn)], pn[-1]))
+                })
+                names(path_info) <- need_path
+              }
+
+              blocked <- vapply(to_check_idx, function(ix) {
+                sQ  <- candidates$seg_idx[ix]
+                aQ  <- candidates$along_m[ix]
+                to_n <- candidates$to_node_id[ix]
+                dQ  <- dis_by_seg[[as.character(sQ)]]
+                if (sQ == b_seg) return(!is.null(dQ) && any(dQ > aQ & dQ <= b_along))
+                if (!is.null(dQ) && any(dQ > aQ)) return(TRUE)
+                dP <- dis_by_seg[[as.character(b_seg)]]
+                if (!is.null(dP) && any(dP <= b_along)) return(TRUE)
+                if (to_n == b_node) return(FALSE)
+                pk <- path_info[[to_n]]
+                any(dis_keys %in% pk$keys) || any(dis_loop_nodes %in% pk$nodes)
+              }, logical(1))
+
               keep_flags <- rep(TRUE, nrow(candidates))
-
-              checks <- sapply(candidates$node_id[to_check_idx], function(cand_node) {
-                if (cand_node == b_node) return(TRUE)
-                path_res <- shortest_paths(g, from = cand_node, to = b_node, mode = "out")
-                intermediate_nodes <- setdiff(names(path_res$vpath[[1]]), c(cand_node, b_node))
-                if (any(intermediate_nodes %in% discharge_nodes)) return(FALSE) else return(TRUE)
-              })
-
-              keep_flags[to_check_idx] <- checks
+              keep_flags[to_check_idx] <- !blocked
               candidates <- candidates[keep_flags, ]
             }
           }
@@ -649,13 +724,11 @@ match_upstream_strahler <- function(biota_sf,
 
             } else if (selection_mode == "aggregate") {
               n_matches_found <- nrow(candidates)
-              # Eerste kandidaat = basis; gekozen kolommen krijgen mean/min/max van alle
-              # kandidaten. Zonder aggr_cols: ALLE numerieke kolommen (behalve technische
-              # kolommen en de VHAS-kolom). Geef best expliciet aggr_cols mee.
               if (!is.null(aggr_cols)) {
                 cols_to_agg <- aggr_cols
               } else {
-                tech_cols <- c("node_id", "river_dist_m", "temp_diff_days", "abs_time_diff",
+                tech_cols <- c("node_id", "to_node_id", "seg_idx", "along_m", "seg_len_m",
+                               "river_dist_m", "temp_diff_days", "abs_time_diff",
                                "strahler_val", "match_group_val", "orig_index_geo",
                                "graph_dist", "down_dist", "is_upstream")
                 num_cols    <- names(candidates %>% select(where(is.numeric)))
@@ -669,10 +742,9 @@ match_upstream_strahler <- function(biota_sf,
               match <- candidates[1, ]
               if (length(cols_to_agg) > 0) {
                 agg_values <- candidates %>% summarise(across(all_of(cols_to_agg), agg_fun))
-                match[, cols_to_agg] <- agg_values
+                match[1, cols_to_agg] <- as.list(agg_values[1, , drop = TRUE])
               }
               match$river_dist_m <- mean(candidates$river_dist_m)
-              # tijdsverschil = gemiddelde van alle kandidaten (niet enkel van de eerste)
               if ("temp_diff_days" %in% names(candidates)) {
                 match$temp_diff_days <- mean(candidates$temp_diff_days)
               }
@@ -681,16 +753,15 @@ match_upstream_strahler <- function(biota_sf,
         }
       }
 
-      # Geen match gevonden -> lege rij
       if (!is.data.frame(match)) match <- empty_match()
     }
 
     match$biota_match_id <- b_id
     match$n_matches      <- n_matches_found
 
-    # Technische hulpkolommen verwijderen
     cols_to_remove <- c("abs_time_diff", "match_group_val", "strahler_val",
-                        "orig_index_geo", "graph_dist", "down_dist", "is_upstream", "via_graph")
+                        "orig_index_geo", "graph_dist", "down_dist", "is_upstream", "via_graph",
+                        "seg_idx", "to_node_id", "along_m", "seg_len_m")
     if (!keep_time_diff) cols_to_remove <- c(cols_to_remove, "temp_diff_days")
     match[, base::intersect(names(match), cols_to_remove)] <- NULL
     results[[i]] <- match
@@ -700,9 +771,8 @@ match_upstream_strahler <- function(biota_sf,
   # 3.5 Resultaten samenvoegen (stap 3/5)
   # ---------------------------------------------------------------------------
   message("3/5 Merging results...")
-  matched_quality_df <- do.call(rbind, results)
+  matched_quality_df <- bind_rows(results)
 
-  # Alle kwaliteitskolommen krijgen prefix "qual_"
   cols_to_rename <- setdiff(names(matched_quality_df), "biota_match_id")
   names(matched_quality_df)[names(matched_quality_df) %in% cols_to_rename] <-
     paste0("qual_", cols_to_rename)
@@ -710,12 +780,12 @@ match_upstream_strahler <- function(biota_sf,
   final_sf <- left_join(biota_sf, matched_quality_df, by = c("tmp_join_id" = "biota_match_id"))
 
   final_sf$tmp_join_id <- NULL
-  if ("match_group_val" %in% names(final_sf)) final_sf$match_group_val <- NULL
-  if ("strahler_val"    %in% names(final_sf)) final_sf$strahler_val    <- NULL
+  for (cc_drop in c("match_group_val", "strahler_val", "seg_idx", "to_node_id", "along_m", "seg_len_m")) {
+    if (cc_drop %in% names(final_sf)) final_sf[[cc_drop]] <- NULL
+  }
 
   return(final_sf)
 }
-
 
 # ==============================================================================
 # 4. VOORBEELDEN
@@ -726,23 +796,23 @@ match_upstream_strahler <- function(biota_sf,
 #   Dichtstbijzijnde nutriëntenmeting op hetzelfde VHAG, max 5 km stroomopwaarts
 #   (of max 200 m stroomafwaarts langs de graaf), van 180 dagen voor tot 14 dagen na het MI-staal.
 # ------------------------------------------------------------------------------
+
 koppeling_mi_nutrient <- match_upstream_strahler(
-  biota_sf         = mi_data,
-  quality_sf       = nutrient_data,
-  network_list     = river_network_fine,
-  use_strahler     = FALSE,
+  biota_sf = mi_data,
+  quality_sf = nutrient_data,
+  network_list = river_network_fine,
+  max_dist_m = 5000,
   max_downstream_m = 200,
-  max_dist_m       = 5000,
-  days_before      = 180,    # kwaliteit mag tot 180 dagen VOOR de biota-meting liggen
-  days_after       = 14,     # kwaliteit mag tot 14 dagen NA de biota-meting liggen
+  max_vhas_snap = Inf,          # bv. 250 m; Inf = geen limiet
+  days_before = 180,
+  days_after = 14,
   col_date_biota   = "monsternamedatum",
   col_date_quality = "monsternamedatum",
-  selection_mode   = "closest_distance",
-  grouping_col     = "VHAG",
+  selection_mode = "closest_distance",
+  grouping_col = "VHAG",
   vhas_col_network = "VHAS",
-  vhas_col_biota   = "vhas",
-  vhas_col_quality = "vhas"
-)
+  vhas_col_biota = "vhas",
+  vhas_col_quality = "vhas")
 
 print(paste("Aantal matches:", sum(!is.na(koppeling_mi_nutrient$qual_meetplaats))))
 
