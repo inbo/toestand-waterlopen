@@ -168,7 +168,7 @@ split_lines_equal_length <- function(lines_sf, max_length = 200) {
 # ------------------------------------------------------------------------------
 # 2b. Gerichte graaf bouwen, met clustering van nodes binnen `snap_tol` meter
 # ------------------------------------------------------------------------------
-build_river_network_auto_nodes <- function(lines_sf, snap_tol = 2) {
+build_river_network_auto_nodes <- function(lines_sf, snap_tol = 1) {
   message("Graaf bouwen: data opschonen en knooppunten genereren...")
 
   # --- STAP 0: data wassen (ongewijzigd) ---
@@ -265,7 +265,7 @@ build_river_network_auto_nodes <- function(lines_sf, snap_tol = 2) {
 # 2c. Netwerk bouwen OF inladen (cache)
 # ------------------------------------------------------------------------------
 max_length <- 200   # m, max. segmentlengte
-snap_tol   <- 2     # m, nodes binnen deze afstand worden samengevoegd
+snap_tol   <- 1     # m, nodes binnen deze afstand worden samengevoegd
 
 pad_netwerk <- here(
   "data", "verwerkt", "koppeling",
@@ -797,7 +797,7 @@ match_upstream_strahler <- function(biota_sf,
 #   (of max 200 m stroomafwaarts langs de graaf), van 180 dagen voor tot 14 dagen na het MI-staal.
 # ------------------------------------------------------------------------------
 
-koppeling_mi_nutrient <- match_upstream_strahler(
+koppeling_mi_nutrient_nieuw <- match_upstream_strahler(
   biota_sf = mi_data,
   quality_sf = nutrient_data,
   network_list = river_network_fine,
